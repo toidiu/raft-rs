@@ -1,11 +1,47 @@
-RAFT guarantees.
+## Rules for servers
+
+### All Servers:
+- If commitIndex > lastApplied: increment lastApplied, apply log[lastApplied] to state machine (§5.3)
+- If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
+
+### Followers (§5.2):
+- Respond to RPCs from candidates and leaders
+- If election timeout elapses without receiving AppendEntries RPC from current leader or granting vote to candidate: convert to candidate
+
+### Candidates (§5.2):
+- On conversion to candidate, start election:
+  - Increment currentTerm
+  - Vote for self
+  - Reset election timer
+  - Send RequestVote RPCs to all other servers
+- If votes received from majority of servers: become leader
+- If AppendEntries RPC received from new leader: convert to follower
+- If election timeout elapses: start new election
+
+### Leaders:
+- Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat during idle periods to prevent election timeouts (§5.2)
+- If command received from client: append entry to local log, respond after entry applied to state machine (§5.3)
+- If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log entries starting at nextIndex
+  - If successful: update nextIndex and matchIndex for follower (§5.3)
+  - If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
+- If there exists an N such that N > commitIndex, a majority of matchIndex[i] ≥ N, and log[N].term == currentTerm: set commitIndex = N (§5.3, §5.4).
+
+
+
+
+## Raft guarantees
 - Election Safety: at most one leader can be elected in a given term. §5.2
 - Leader Append-Only: a leader never overwrites or deletes entries in its log; it only appends new entries. §5.3
 - Log Matching: if two logs contain an entry with the same index and term, then the logs are identical in all entries up through the given index. §5.3
 - Leader Completeness: if a log entry is committed in a given term, then that entry will be present in the logs of the leaders for all higher-numbered terms. §5.4
 - State Machine Safety: if a server has applied a log entry at a given index to its state machine, no other server will ever apply a different log entry for the same index. §5.4.3
 
-[5.2]
+
+
+
+## Citations
+
+### 5.2
 - When servers start up, they begin as followers
 - A server remains in fillower state as long as it receives valid RPCs from a leader or candidate.
 - Leaders send periodic heartbeats (AppendEntries RPCs that carry no log entries) to all followers in order to maintain their authority.
@@ -32,7 +68,7 @@ RAFT guarantees.
 - To prevent split votes in the first place, election timeouts are chosen randomly from a fixed interval (e.g., 150–300ms).
 - Each candidate restarts its randomized election timeout at the start of an election, and it waits for that timeout to elapse before starting the next election; this reduces the likelihood of another split vote in the new election.
 
-[5.3]
+### 5.3
 - Once a leader has been elected, it begins servicing client requests.
 - Each client request contains a command to be executed by the replicated state machines.
 - The leader appends the command to its log as a new entry, then issues AppendEntries RPCs in parallel to each of the other servers to replicate the entry.
@@ -51,9 +87,9 @@ RAFT guarantees.
 - Once a follower learns that a log entry is committed, it applies the entry to its local state machine (in log order).
 
 
-Log Matching Property:
-- If two entries in different logs have the same index and term, then they store the same command.
-- If two entries in different logs have the same index and term, then the logs are identical in all preceding entries.
+- Log Matching Property:
+  - If two entries in different logs have the same index and term, then they store the same command.
+  - If two entries in different logs have the same index and term, then the logs are identical in all preceding entries.
 
 - conflicting entries in follower logs will be overwritten with entries from the leader’s log.
 - To bring a follower’s log into consistency with its own, the leader must find the latest log entry where the two logs agree, delete any entries in the follower’s log after that point, and send the follower all of the leader’s entries after that point.
@@ -68,8 +104,15 @@ Log Matching Property:
 - Once AppendEntries succeeds, the follower’s log is consistent with the leader’s, and it will remain that way for the rest of the term.
 - A leader never overwrites or deletes entries in its own log.
 
-[5.4]
+### 5.4
 - The restriction ensures that the leader for any given term con- tains all of the entries committed in previous terms.
 
-[5.4.1]
+### 5.4.1
+-  This means that log entries only flow in one direction, from leaders to followers, and leaders never overwrite existing entries in their logs.
+- The RequestVote RPC implements this restriction: the RPC includes information about the candidate’s log, and the voter denies its vote if its own log is more up-to-date than that of the candidate.
+- Raft determines which of two logs is more up-to-date by comparing the index and term of the last entries in the logs.
+- If the logs have last entries with different terms, then the log with the later term is more up-to-date.
+- If the logs end with the same term, then whichever log is longer is more up-to-date.
 
+### 5.4.2
+-  Raft never commits log entries from previous terms by counting replicas. Only log entries from the leader’s current term are committed by counting replicas; once an entry from the current term has been committed in this way, then all prior entries are committed indirectly because of the Log Matching Property.
