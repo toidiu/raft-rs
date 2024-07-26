@@ -1,6 +1,8 @@
 #![allow(unused)]
 
-use core::time::Duration;
+use crate::clock::Clock;
+
+mod clock;
 
 fn main() {
     let mut server = Server::new(CandidateId(1));
@@ -9,9 +11,6 @@ fn main() {
         server.poll();
     }
 }
-
-// monotonically increasing clock
-struct Clock(usize);
 
 #[derive(Default)]
 enum State {
