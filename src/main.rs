@@ -1,15 +1,15 @@
 #![allow(unused)]
 
 use crate::clock::Clock;
+use crate::clock::Timer;
+use core::time::Duration;
+use tokio::time::sleep;
 
 mod clock;
 
-fn main() {
-    let mut server = Server::new(CandidateId(1));
-
-    loop {
-        server.poll();
-    }
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
+    let clock = Clock::default();
 }
 
 #[derive(Default)]
