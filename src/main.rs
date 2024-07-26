@@ -1,7 +1,6 @@
 #![allow(unused)]
 
-use crate::clock::Clock;
-use crate::clock::Timer;
+use crate::clock::{Clock, Timer};
 use core::time::Duration;
 use tokio::time::sleep;
 

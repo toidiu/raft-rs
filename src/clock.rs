@@ -1,11 +1,10 @@
-use core::future::Future;
-use core::pin::Pin;
-use core::task::Context;
-use core::task::Poll;
-use core::time::Duration;
-use tokio::time::sleep_until;
-use tokio::time::Instant;
-use tokio::time::Sleep;
+use core::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
+};
+use tokio::time::{sleep_until, Instant, Sleep};
 
 // A monotonically increasing value
 pub struct Clock(Instant);
