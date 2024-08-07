@@ -48,7 +48,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(id: u64) -> Self {
+    pub fn new(_id: u64) -> Self {
         // get list of peers
         // set timer
 

@@ -1,13 +1,5 @@
 #![allow(dead_code)]
 
-use crate::{
-    clock::{Clock, Timer},
-    server::Server,
-};
-use bytes::Bytes;
-use core::time::Duration;
-use std::iter::Iterator;
-
 mod clock;
 mod io;
 mod log;

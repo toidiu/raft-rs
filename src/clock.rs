@@ -1,7 +1,7 @@
 use core::{
     future::Future,
     pin::Pin,
-    task::{Context, Poll},
+    task::Context,
     time::Duration,
 };
 use tokio::time::{sleep_until, Instant, Sleep};
