@@ -35,3 +35,13 @@ every log contains the same commands in the same order.
 - Leader Election
 - Log Repliation: leader manages replicated log
 - Safety: entries added to the state machine are absolute and correct
+
+---
+## Resources
+- https://toidiu.com/reads/In_Search_of_an_Understandable_Consensus_Algorithm_(Extended_Raft).pdf
+- https://www.trueblade.com/blogs/news/implementing-the-raft-consensus-algorithm
+- https://github.com/tikv/raft-rs
+- https://notes.eatonphil.com/2023-05-25-raft.html
+- https://raft.github.io/
+- http://dabeaz.com/raft.html
+
