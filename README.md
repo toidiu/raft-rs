@@ -2,9 +2,13 @@
 
 A toy implementation to better understand the raft consensus protocol
 
-## High-level
 
-Based on TIKV impl: https://github.com/tikv/raft-rs
+## Research
+
+### Design
+![raft_design](./raft_design.jpeg)
+
+### Notes from [TIKV](https://github.com/tikv/raft-rs)
 
 > A complete Raft model contains 4 essential parts:
 >
