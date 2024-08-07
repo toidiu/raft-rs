@@ -1,6 +1,7 @@
-use crate::clock::Clock;
-use core::{task::Context, time::Duration};
-use tokio::time::sleep;
+use crate::{
+    clock::Clock,
+    log::{LogEntry, Term},
+};
 
 #[derive(Default)]
 enum State {
@@ -28,23 +29,7 @@ struct Candidate {
     heartbeat_recv_timeout: Clock,
 }
 
-// A term is a logical clock
-struct Term(u64);
-
 pub struct CandidateId(u64);
-
-struct LogEntry {
-    term: Term,
-    command: Command,
-}
-
-enum Command {
-    // Leader election
-    RequestVote,
-
-    // Add entries and heartbeat
-    AppendEntries,
-}
 
 pub struct Server {
     id: CandidateId,
