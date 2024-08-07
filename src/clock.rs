@@ -6,6 +6,10 @@ use core::{
 };
 use tokio::time::{sleep_until, Instant, Sleep};
 
+trait WithTimeout {
+    fn timers(&self) -> Vec<Timer>;
+}
+
 // A monotonically increasing value
 pub struct Clock(Instant);
 

@@ -1,12 +1,15 @@
 #![allow(unused)]
 
-use crate::server::Server;
-use crate::clock::{Clock};
+use crate::{
+    clock::{Clock, Timer},
+    server::Server,
+};
 use core::time::Duration;
+use std::iter::Iterator;
 use tokio::time::sleep;
 
-mod server;
 mod clock;
+mod server;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -23,4 +26,3 @@ async fn main() {
         // TODO: recv client request
     }
 }
-
