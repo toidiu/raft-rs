@@ -1,16 +1,8 @@
-use core::{
-    future::Future,
-    pin::Pin,
-    task::Context,
-    time::Duration,
-};
+use core::{pin::Pin, task::Context, time::Duration};
+use std::{future::Future, task::Poll};
 use tokio::time::{sleep_until, Instant, Sleep};
 
-trait WithTimeout {
-    fn timers(&self) -> Vec<Timer>;
-}
-
-// A monotonically increasing value
+/// A monotonically increasing clock value for the process
 pub struct Clock(Instant);
 
 impl Default for Clock {
@@ -20,63 +12,64 @@ impl Default for Clock {
 }
 
 impl Clock {
+    fn current_time(&self) -> Instant {
+        self.0 + self.elapsed()
+    }
+
     fn elapsed(&self) -> Duration {
         let elapsed = self.0.elapsed();
         println!("elapsed: {:?}", elapsed);
         elapsed
     }
-
-    pub fn current_time(&self) -> Instant {
-        self.0 + self.elapsed()
-    }
 }
 
+/// A timer can be used to set timeouts
 pub struct Timer {
-    // reference to the server clock
+    // Reference to the server clock
     clock: Clock,
-    // The Instant at which the timer should expire
-    target: Option<Instant>,
 
+    // The Instant at which the timer should expire
+    expire_target: Option<Instant>,
+
+    // The sleep future
     sleep: Pin<Box<Sleep>>,
 }
 
 impl Timer {
-    pub fn new(clock: Clock, target: Duration) -> Self {
-        let target = clock.current_time() + target;
-        let sleep = Box::pin(sleep_until(target));
+    pub fn new(clock: Clock, duration: Duration) -> Self {
+        const MIN_DURATION: Duration = Duration::from_micros(10);
+        let duration = duration.max(MIN_DURATION);
+
+        let expire = clock.current_time() + duration;
+        let sleep = Box::pin(sleep_until(expire));
         Timer {
             clock,
-            target: Some(target),
+            expire_target: Some(expire),
             sleep,
         }
     }
 
-    fn is_ready(&mut self, ctx: &mut Context) -> bool {
+    fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
         dbg!("---{}", self.clock.elapsed());
+
+        // Only poll the inner timer if we have a target set
+        if self.expire_target.is_none() {
+            return Poll::Pending;
+        }
+
         let poll = self.sleep.as_mut().poll(ctx);
 
         if poll.is_ready() {
-            self.target = None;
+            self.expire_target = None;
         }
 
-        poll.is_ready()
-    }
-
-    pub fn sleep_until(&self) -> Option<Sleep> {
-        if let Some(target) = self.target {
-            let until = target + self.clock.elapsed();
-            dbg!("until {}", until);
-            Some(sleep_until(until))
-        } else {
-            None
-        }
+        poll
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::task::Waker;
     use futures_test::task::new_count_waker;
     use tokio::time::sleep;
 
@@ -87,33 +80,16 @@ mod tests {
 
         let (waker, cnt) = new_count_waker();
         let mut ctx = Context::from_waker(&waker);
-        assert!(!timer.is_ready(&mut ctx));
+        assert!(timer.poll_ready(&mut ctx).is_pending());
         assert_eq!(cnt, 0);
 
         // wait less than timer target
         sleep(Duration::from_secs(1)).await;
-        assert!(!timer.is_ready(&mut ctx));
+        assert!(timer.poll_ready(&mut ctx).is_pending());
         assert_eq!(cnt, 0);
 
         sleep(Duration::from_secs(1)).await;
-        assert!(timer.is_ready(&mut ctx));
+        assert!(timer.poll_ready(&mut ctx).is_ready());
         assert_eq!(cnt, 1);
-    }
-
-    #[tokio::test]
-    async fn sleep_until() {
-        let clock = Clock::default();
-        let mut timer = Timer::new(clock, Duration::from_secs(2));
-
-        let (waker, cnt) = new_count_waker();
-        let mut ctx = Context::from_waker(&waker);
-        assert!(!timer.is_ready(&mut ctx));
-        assert_eq!(cnt, 0);
-
-        timer.sleep_until().unwrap().await;
-        assert!(timer.is_ready(&mut ctx));
-        assert_eq!(cnt, 1);
-        // confirm that we did infact wait more than target seconds
-        assert!(timer.clock.elapsed() > Duration::from_secs(2));
     }
 }

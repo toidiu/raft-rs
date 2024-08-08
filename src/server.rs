@@ -3,6 +3,44 @@ use crate::{
     log::{LogEntry, Term},
 };
 
+pub struct Server {
+    id: CandidateId,
+    state: State,
+
+    // ==== persistent state
+    current_term: Term,
+    voted_for: Option<CandidateId>,
+    log: Vec<LogEntry>,
+
+    // ==== volatile state
+    // idx of highest log entry known to be committed
+    commit_idx: u64,
+    // idx of the highest log entry applied to the state machine
+    last_applied: u64,
+}
+
+impl Server {
+    // pub fn new(_id: u64) -> Self {
+    //     // get list of peers
+    //     // set timer
+
+    //     // initialize
+    //     todo!()
+    // }
+
+    // pub fn recv(&mut self) {
+    //     // check for received commands from the peer
+
+    //     todo!()
+    // }
+
+    // pub fn on_timeout(&mut self) {
+    //     // check timers
+
+    //     todo!()
+    // }
+}
+
 #[derive(Default)]
 enum State {
     #[default]
@@ -30,41 +68,3 @@ struct Candidate {
 }
 
 pub struct CandidateId(u64);
-
-pub struct Server {
-    id: CandidateId,
-    state: State,
-
-    // ==== persistent state
-    current_term: Term,
-    voted_for: Option<CandidateId>,
-    log: Vec<LogEntry>,
-
-    // ==== volatile state
-    // idx of highest log entry known to be committed
-    commit_idx: u64,
-    // idx of the highest log entry applied to the state machine
-    last_applied: u64,
-}
-
-impl Server {
-    pub fn new(_id: u64) -> Self {
-        // get list of peers
-        // set timer
-
-        // initialize
-        todo!()
-    }
-
-    pub fn recv(&mut self) {
-        // check for received commands from the peer
-
-        todo!()
-    }
-
-    pub fn on_timeout(&mut self) {
-        // check timers
-
-        todo!()
-    }
-}
