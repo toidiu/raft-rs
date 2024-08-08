@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 // The data type supported by this Raft implementation.
 // TODO: u8 is used for simplification. Eventually support additional types.
 pub type Data = u8;
@@ -51,7 +49,7 @@ impl Entry {
 #[derive(Default, Debug)]
 pub struct Log {
     last_term_idx: Option<TermIdx>,
-    entries: VecDeque<Entry>,
+    entries: Vec<Entry>,
 }
 
 impl Log {
@@ -75,12 +73,12 @@ impl Log {
         };
 
         self.last_term_idx = Some(entry.term_idx);
-        self.entries.push_back(entry);
+        self.entries.push(entry);
         Ok(())
     }
 
     fn pop(&mut self) -> Option<Entry> {
-        let pop = self.entries.pop_front();
+        let pop = self.entries.pop();
         if let Some(last) = self.last_term_idx() {
             self.last_term_idx = Some(last);
         } else {
@@ -109,15 +107,25 @@ mod tests {
     // - adding new entries to Log
     // - removing entries from Log
     #[test]
-    fn log_operations() {
+    fn push_pop() {
         let mut log = Log::default();
         assert_eq!(log.len(), 0);
 
-        let entry = Entry::new(Term(0), Idx(0), 1);
+        let mut entry = Entry::new(Term(0), Idx(0), 1);
         log.push(entry.clone()).unwrap();
-        assert_eq!(log.len(), 1);
+        entry.term_idx.term = Term(2);
+        log.push(entry.clone()).unwrap();
+        assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(2, 0));
+        entry.term_idx.term = Term(3);
+        log.push(entry.clone()).unwrap();
+        entry.term_idx.idx = Idx(1);
+        log.push(entry.clone()).unwrap();
+        assert_eq!(log.len(), 4);
 
-        assert_eq!(log.pop().unwrap(), entry);
+        assert_eq!(log.pop().unwrap(), Entry::new(Term(3), Idx(1), 1));
+        assert_eq!(log.pop().unwrap(), Entry::new(Term(3), Idx(0), 1));
+        assert_eq!(log.pop().unwrap(), Entry::new(Term(2), Idx(0), 1));
+        assert_eq!(log.pop().unwrap(), Entry::new(Term(0), Idx(0), 1));
         assert_eq!(log.len(), 0);
     }
 
@@ -189,29 +197,32 @@ mod tests {
     }
 
     // - ensure last_term_idx when we pop entries
-    // #[test]
-    // fn last_term_idx_accounting() {
-    //     let mut log = Log::default();
+    #[test]
+    fn last_term_idx_accounting() {
+        let mut log = Log::default();
 
-    //     let mut e = Entry::new(Term(1), Idx(0), 1);
-    //     log.push(e.clone()).unwrap();
-    //     assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(1, 0));
+        let mut e = Entry::new(Term(1), Idx(0), 1);
+        log.push(e.clone()).unwrap();
+        assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(1, 0));
 
-    //     // remove last_term_idx
-    //     log.pop();
-    //     assert!(log.last_term_idx().is_none());
+        // remove last_term_idx
+        log.pop();
+        assert!(log.last_term_idx().is_none());
 
-    //     // can push the same entry `e` since we popped it
-    //     log.push(e.clone()).unwrap();
-    //     // push another entry
-    //     e.term_idx.term = Term(2);
-    //     log.push(e.clone()).unwrap();
-    //     assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(2, 0));
+        // can push the same entry `e` since we popped it
+        log.push(e.clone()).unwrap();
 
-    //     // log.pop().unwrap();
-    //     assert_eq!(log.pop().unwrap().term_idx, TermIdx::new(2, 0));
-    //     // assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(0, 0));
-    // }
+        // push 2 more entries
+        e.term_idx.term = Term(2);
+        log.push(e.clone()).unwrap();
+        assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(2, 0));
+        e.term_idx.term = Term(3);
+        log.push(e.clone()).unwrap();
+
+        // ensure that last_term_idx was updated
+        assert_eq!(log.pop().unwrap().term_idx, TermIdx::new(3, 0));
+        assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(2, 0));
+    }
 
     // - get term,idx of last LogEntry
     #[test]
