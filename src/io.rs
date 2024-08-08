@@ -1,13 +1,28 @@
 use bytes::Bytes;
 
+pub trait IO {
+    fn recv() -> Buffer;
+
+    fn send(buf: Buffer);
+}
+
 struct Buffer {
     data: Vec<Bytes>,
 }
 
-trait Io {
-    fn recv() -> Buffer;
+pub struct BufferIO {
+    in_buf: Buffer,
+    out_buf: Buffer,
+}
 
-    fn send(buf: Buffer);
+impl IO for BufferIO {
+    fn recv() -> Buffer {
+        todo!()
+    }
+
+    fn send(buf: Buffer) {
+        todo!()
+    }
 }
 
 #[cfg(test)]

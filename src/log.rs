@@ -9,7 +9,7 @@ pub struct Term(u64);
 pub struct Idx(u64);
 
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-struct TermIdx {
+pub struct TermIdx {
     term: Term,
     idx: Idx,
 }

@@ -1,45 +1,24 @@
-use crate::{
-    clock::Clock,
-    log::{Entry, Term},
-};
+use crate::{clock::Clock, io, log};
 
-pub struct Server {
+pub struct Server<IO: io::IO> {
     id: CandidateId,
     state: State,
 
     // ==== persistent state
-    current_term: Term,
+    current_term: log::Term,
     voted_for: Option<CandidateId>,
-    log: Vec<Entry>,
+    log: log::Log,
 
     // ==== volatile state
     // idx of highest log entry known to be committed
-    commit_idx: u64,
+    commit_idx: log::Idx,
     // idx of the highest log entry applied to the state machine
-    last_applied: u64,
+    last_applied: log::TermIdx,
+
+    io: IO,
 }
 
-impl Server {
-    // pub fn new(_id: u64) -> Self {
-    //     // get list of peers
-    //     // set timer
-
-    //     // initialize
-    //     todo!()
-    // }
-
-    // pub fn recv(&mut self) {
-    //     // check for received commands from the peer
-
-    //     todo!()
-    // }
-
-    // pub fn on_timeout(&mut self) {
-    //     // check timers
-
-    //     todo!()
-    // }
-}
+impl<IO: io::IO> Server<IO> {}
 
 #[derive(Default)]
 enum State {
