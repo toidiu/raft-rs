@@ -1,23 +1,21 @@
+use bytes::Bytes;
 use std::{
     collections::VecDeque,
-    marker::PhantomData,
     sync::{Arc, Mutex},
 };
 
-pub trait IO<T> {
-    fn recv(&mut self) -> Option<T>;
+pub trait Io {
+    fn recv(&mut self) -> Option<Bytes>;
 
-    fn send(&mut self, data: T);
+    fn send(&mut self, data: Bytes);
 }
 
 /// A VecDeque backed IO buffer
 #[derive(Default)]
-pub struct BufferIO<T> {
-    p: PhantomData<T>,
-}
+pub struct BufferIo {}
 
-impl<T> BufferIO<T> {
-    pub fn split(self) -> (Consumer<T>, Producer<T>) {
+impl BufferIo {
+    pub fn split(self) -> (Consumer, Producer) {
         let in_buf = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
         let out_buf = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
         let c = Consumer {
@@ -30,33 +28,33 @@ impl<T> BufferIO<T> {
 }
 
 /// A handle to the underlying BufferIO held by the network interface
-pub struct Consumer<T> {
-    in_buf: Arc<Mutex<VecDeque<T>>>,
-    out_buf: Arc<Mutex<VecDeque<T>>>,
+pub struct Consumer {
+    in_buf: Arc<Mutex<VecDeque<Bytes>>>,
+    out_buf: Arc<Mutex<VecDeque<Bytes>>>,
 }
 
 /// A handle to the underlying BufferIO held by the server process
-pub struct Producer<T> {
-    in_buf: Arc<Mutex<VecDeque<T>>>,
-    out_buf: Arc<Mutex<VecDeque<T>>>,
+pub struct Producer {
+    in_buf: Arc<Mutex<VecDeque<Bytes>>>,
+    out_buf: Arc<Mutex<VecDeque<Bytes>>>,
 }
 
-impl<T> IO<T> for Producer<T> {
-    fn recv(&mut self) -> Option<T> {
+impl Io for Producer {
+    fn recv(&mut self) -> Option<Bytes> {
         self.in_buf.lock().unwrap().pop_front()
     }
 
-    fn send(&mut self, data: T) {
+    fn send(&mut self, data: Bytes) {
         self.out_buf.lock().unwrap().push_back(data);
     }
 }
 
-impl<T> IO<T> for Consumer<T> {
-    fn recv(&mut self) -> Option<T> {
+impl Io for Consumer {
+    fn recv(&mut self) -> Option<Bytes> {
         self.in_buf.lock().unwrap().pop_front()
     }
 
-    fn send(&mut self, data: T) {
+    fn send(&mut self, data: Bytes) {
         self.out_buf.lock().unwrap().push_back(data);
     }
 }
@@ -67,24 +65,24 @@ mod tests {
 
     #[test]
     fn producer_consumer() {
-        let buf = BufferIO::<u8>::default();
+        let buf = BufferIo::default();
         let (mut consumer, mut producer) = buf.split();
 
-        producer.send(1);
-        producer.send(2);
-        producer.send(3);
-        consumer.send(5);
-        consumer.send(6);
-        consumer.send(7);
+        producer.send(Bytes::from_static(&[1]));
+        producer.send(Bytes::from_static(&[2]));
+        producer.send(Bytes::from_static(&[3]));
+        consumer.send(Bytes::from_static(&[5]));
+        consumer.send(Bytes::from_static(&[6]));
+        consumer.send(Bytes::from_static(&[7]));
 
-        assert_eq!(consumer.recv(), Some(1));
-        assert_eq!(consumer.recv(), Some(2));
-        assert_eq!(consumer.recv(), Some(3));
+        assert_eq!(consumer.recv(), Some(Bytes::from_static(&[1])));
+        assert_eq!(consumer.recv(), Some(Bytes::from_static(&[2])));
+        assert_eq!(consumer.recv(), Some(Bytes::from_static(&[3])));
         assert_eq!(consumer.recv(), None);
 
-        assert_eq!(producer.recv(), Some(5));
-        assert_eq!(producer.recv(), Some(6));
-        assert_eq!(producer.recv(), Some(7));
+        assert_eq!(producer.recv(), Some(Bytes::from_static(&[5])));
+        assert_eq!(producer.recv(), Some(Bytes::from_static(&[6])));
+        assert_eq!(producer.recv(), Some(Bytes::from_static(&[7])));
         assert_eq!(producer.recv(), None);
     }
 }

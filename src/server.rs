@@ -1,6 +1,7 @@
-use crate::{clock::Clock, io, log, rpc::Rpc};
+use crate::{clock::Clock, io, log};
 
-pub struct Server<IO: io::IO<Rpc>> {
+#[derive(Debug)]
+pub struct Server<T: io::Io> {
     id: CandidateId,
     state: State,
 
@@ -15,12 +16,26 @@ pub struct Server<IO: io::IO<Rpc>> {
     // idx of the highest log entry applied to the state machine
     last_applied: log::TermIdx,
 
-    io: IO,
+    // IO handle to send and receive Rpc messages
+    io_producer: T,
 }
 
-impl<IO: io::IO<Rpc>> Server<IO> {}
+impl<T: io::Io> Server<T> {
+    fn new(producer: T) -> Server<T> {
+        Server {
+            id: Default::default(),
+            state: Default::default(),
+            current_term: Default::default(),
+            voted_for: Default::default(),
+            log: Default::default(),
+            commit_idx: Default::default(),
+            last_applied: Default::default(),
+            io_producer: producer,
+        }
+    }
+}
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 enum State {
     #[default]
     Follower,
@@ -46,4 +61,17 @@ struct Candidate {
     heartbeat_recv_timeout: Clock,
 }
 
+#[derive(Debug, Default)]
 pub struct CandidateId(u64);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::io::BufferIo;
+
+    #[test]
+    fn create_server() {
+        let (_c, p) = BufferIo::default().split();
+        let _server = Server::new(p);
+    }
+}
