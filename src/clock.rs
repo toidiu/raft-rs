@@ -1,6 +1,13 @@
 use core::{pin::Pin, task::Context, time::Duration};
+use rand::Rng;
 use std::{future::Future, task::Poll};
 use tokio::time::{sleep_until, Instant, Sleep};
+
+// # Compliance: 5.2
+// To prevent split votes in the first place, election timeouts are
+// chosen randomly from a fixed interval (e.g., 150–300ms).
+const MIN_DURATION: Duration = Duration::from_millis(150);
+const MAX_DURATION: Duration = Duration::from_millis(300);
 
 /// A monotonically increasing clock value for the process
 #[derive(Debug)]
@@ -25,6 +32,7 @@ impl Clock {
 }
 
 /// A timer can be used to set timeouts
+#[derive(Debug)]
 pub struct Timer {
     // Reference to the server clock
     clock: Clock,
@@ -37,9 +45,8 @@ pub struct Timer {
 }
 
 impl Timer {
-    pub fn new(clock: Clock, duration: Duration) -> Self {
-        const MIN_DURATION: Duration = Duration::from_micros(10);
-        let duration = duration.max(MIN_DURATION);
+    pub fn new(clock: Clock) -> Self {
+        let duration = rand::thread_rng().gen_range(MIN_DURATION..MAX_DURATION);
 
         let expire = clock.current_time() + duration;
         let sleep = Box::pin(sleep_until(expire));
@@ -77,7 +84,7 @@ mod tests {
     #[tokio::test]
     async fn manual_check_elapsed_time() {
         let clock = Clock::default();
-        let mut timer = Timer::new(clock, Duration::from_millis(100));
+        let mut timer = Timer::new(clock);
 
         let (waker, cnt) = new_count_waker();
         let mut ctx = Context::from_waker(&waker);
@@ -85,11 +92,11 @@ mod tests {
         assert_eq!(cnt, 0);
 
         // wait less than timer target
-        sleep(Duration::from_millis(50)).await;
+        sleep(MIN_DURATION).await;
         assert!(timer.poll_ready(&mut ctx).is_pending());
         assert_eq!(cnt, 0);
 
-        sleep(Duration::from_millis(50)).await;
+        sleep(MAX_DURATION).await;
         assert!(timer.poll_ready(&mut ctx).is_ready());
         assert_eq!(cnt, 1);
     }
