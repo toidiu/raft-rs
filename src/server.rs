@@ -1,6 +1,6 @@
 use crate::{
     clock::Clock,
-    log::{LogEntry, Term},
+    log::{Entry, Term},
 };
 
 pub struct Server {
@@ -10,7 +10,7 @@ pub struct Server {
     // ==== persistent state
     current_term: Term,
     voted_for: Option<CandidateId>,
-    log: Vec<LogEntry>,
+    log: Vec<Entry>,
 
     // ==== volatile state
     // idx of highest log entry known to be committed
