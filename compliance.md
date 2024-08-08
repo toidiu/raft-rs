@@ -116,3 +116,6 @@
 
 ### 5.4.2
 -  Raft never commits log entries from previous terms by counting replicas. Only log entries from the leader’s current term are committed by counting replicas; once an entry from the current term has been committed in this way, then all prior entries are committed indirectly because of the Log Matching Property.
+
+### Figure 6
+An entry is considered committed if it is safe for that entry to be applied to state machines.

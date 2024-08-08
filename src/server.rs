@@ -11,10 +11,12 @@ pub struct Server<T: io::Io> {
     log: log::Log,
 
     // ==== volatile state
+    /// ## Compliance:
+    /// An entry is considered committed if it is safe for that entry to be applied to state machines.
     // idx of highest log entry known to be committed
-    commit_idx: log::Idx,
+    commit_idx: u64,
     // idx of the highest log entry applied to the state machine
-    last_applied: log::TermIdx,
+    last_applied: u64,
 
     // IO handle to send and receive Rpc messages
     io_producer: T,
