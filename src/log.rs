@@ -4,27 +4,53 @@ use std::collections::VecDeque;
 // TODO: u8 is used for simplification. Eventually support additional types.
 pub type Data = u8;
 
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Term(u64);
 
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Idx(u64);
 
-#[derive(Default, Debug, PartialEq, Eq, Clone)]
-pub struct Entry {
+#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+struct TermIdx {
     term: Term,
     idx: Idx,
+}
+
+impl TermIdx {
+    fn new(term: u64, idx: u64) -> Self {
+        TermIdx {
+            term: Term(term),
+            idx: Idx(idx),
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct Entry {
+    term_idx: TermIdx,
     data: Data,
 }
 
+impl PartialEq for Entry {
+    fn eq(&self, other: &Self) -> bool {
+        // Since Raft ensures that only the Leader can commit entries,
+        // it is sufficient to compare the Term and Idx
+        self.term_idx == other.term_idx
+    }
+}
+
+impl Eq for Entry {}
+
 impl Entry {
     fn new(term: Term, idx: Idx, data: Data) -> Self {
-        Entry { term, idx, data }
+        let term_idx = TermIdx { term, idx };
+        Entry { term_idx, data }
     }
 }
 
 #[derive(Default, Debug)]
 pub struct Log {
+    last_term_idx: Option<TermIdx>,
     entries: VecDeque<Entry>,
 }
 
@@ -33,22 +59,44 @@ impl Log {
         self.entries.len()
     }
 
-    fn push(&mut self, entry: Entry) {
-        self.entries.push_back(entry)
+    fn push(&mut self, entry: Entry) -> Result<(), ()> {
+        // validation
+        if let Some(last) = self.last_term_idx {
+            // if term is eq then idx should be +1
+            let valid_curr_term = Idx(last.idx.0 + 1) == entry.term_idx.idx;
+            // term is greater and idx == 0
+            let valid_next_term = (entry.term_idx.term > last.term) && entry.term_idx.idx == Idx(0);
+            let valid_entry = valid_curr_term || valid_next_term;
+
+            if !valid_entry {
+                // TODO specific error. entries must be uniquely increasing
+                return Err(());
+            }
+        };
+
+        self.last_term_idx = Some(entry.term_idx);
+        self.entries.push_back(entry);
+        Ok(())
     }
 
     fn pop(&mut self) -> Option<Entry> {
-        self.entries.pop_front()
+        let pop = self.entries.pop_front();
+        if let Some(last) = self.last_term_idx() {
+            self.last_term_idx = Some(last);
+        } else {
+            self.last_term_idx = None;
+        }
+        pop
     }
 
-    fn last_term_idx(&self) -> Option<(Term, Idx)> {
+    fn last_term_idx(&self) -> Option<TermIdx> {
         let entry = self
             .entries
             .iter()
             .rev()
             .peekable()
             .peek()
-            .map(|entry| (entry.term, entry.idx));
+            .map(|entry| entry.term_idx);
 
         entry
     }
@@ -66,12 +114,104 @@ mod tests {
         assert_eq!(log.len(), 0);
 
         let entry = Entry::new(Term(0), Idx(0), 1);
-        log.push(entry.clone());
+        log.push(entry.clone()).unwrap();
         assert_eq!(log.len(), 1);
 
         assert_eq!(log.pop().unwrap(), entry);
         assert_eq!(log.len(), 0);
     }
+
+    // - ensure new entries.idx are monotonically increasing
+    #[test]
+    fn monotonically_increasing_idx() {
+        let mut log = Log::default();
+
+        let mut e = Entry::new(Term(1), Idx(0), 1);
+        log.push(e.clone()).unwrap();
+
+        // same Idx fails
+        assert!(log.push(e.clone()).is_err());
+
+        // Idx +2 fails
+        e.term_idx.idx = Idx(2);
+        assert!(log.push(e.clone()).is_err());
+
+        // greater Idx succeeds
+        e.term_idx.idx = Idx(1);
+        log.push(e.clone()).unwrap();
+
+        // smaller Idx fails
+        e.term_idx.idx = Idx(0);
+        assert!(log.push(e.clone()).is_err());
+    }
+
+    // - ensure new entries.term are monotonically increasing
+    #[test]
+    fn monotonically_increasing_term() {
+        let mut log = Log::default();
+
+        let mut e = Entry::new(Term(1), Idx(0), 1);
+        log.push(e.clone()).unwrap();
+
+        // same Term fails
+        assert!(log.push(e.clone()).is_err());
+
+        // Term +1 succeeds
+        e.term_idx.term = Term(2);
+        log.push(e.clone()).unwrap();
+
+        // Term +2 succeeds
+        e.term_idx.term = Term(4);
+        log.push(e.clone()).unwrap();
+
+        // smaller Term fails
+        e.term_idx.term = Term(3);
+        assert!(log.push(e.clone()).is_err());
+    }
+
+    // - new term idx should be 0
+    #[test]
+    fn new_term_idx() {
+        let mut log = Log::default();
+
+        let mut e = Entry::new(Term(1), Idx(0), 1);
+        log.push(e.clone()).unwrap();
+
+        // Term +1 fails if idx != 0
+        e.term_idx.term = Term(2);
+        e.term_idx.idx = Idx(2);
+        assert!(log.push(e.clone()).is_err());
+
+        // Term +1 succeeds if idx == 0
+        e.term_idx.term = Term(2);
+        e.term_idx.idx = Idx(0);
+        log.push(e.clone()).unwrap();
+    }
+
+    // - ensure last_term_idx when we pop entries
+    // #[test]
+    // fn last_term_idx_accounting() {
+    //     let mut log = Log::default();
+
+    //     let mut e = Entry::new(Term(1), Idx(0), 1);
+    //     log.push(e.clone()).unwrap();
+    //     assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(1, 0));
+
+    //     // remove last_term_idx
+    //     log.pop();
+    //     assert!(log.last_term_idx().is_none());
+
+    //     // can push the same entry `e` since we popped it
+    //     log.push(e.clone()).unwrap();
+    //     // push another entry
+    //     e.term_idx.term = Term(2);
+    //     log.push(e.clone()).unwrap();
+    //     assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(2, 0));
+
+    //     // log.pop().unwrap();
+    //     assert_eq!(log.pop().unwrap().term_idx, TermIdx::new(2, 0));
+    //     // assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(0, 0));
+    // }
 
     // - get term,idx of last LogEntry
     #[test]
@@ -79,10 +219,31 @@ mod tests {
         let mut log = Log::default();
         assert!(log.last_term_idx().is_none());
 
-        log.push(Entry::new(Term(0), Idx(0), 1));
-        assert_eq!(log.last_term_idx().unwrap(), (Term(0), Idx(0)));
+        log.push(Entry::new(Term(0), Idx(0), 1)).unwrap();
+        assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(0, 0));
 
-        log.push(Entry::new(Term(0), Idx(1), 2));
-        assert_eq!(log.last_term_idx().unwrap(), (Term(0), Idx(1)));
+        log.push(Entry::new(Term(0), Idx(1), 2)).unwrap();
+        log.push(Entry::new(Term(0), Idx(2), 2)).unwrap();
+        assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(0, 2));
+    }
+
+    // - comparing log entry
+    #[test]
+    fn compare_entry() {
+        let e1 = Entry::new(Term(0), Idx(0), 1);
+        let e2 = Entry::new(Term(0), Idx(0), 1);
+        assert_eq!(e1, e2);
+
+        let e1 = Entry::new(Term(0), Idx(0), 1);
+        let e2 = Entry::new(Term(0), Idx(0), 2);
+        assert_eq!(e1, e2);
+
+        let e1 = Entry::new(Term(0), Idx(0), 1);
+        let e2 = Entry::new(Term(0), Idx(1), 2);
+        assert!(e1 != e2);
+
+        let e1 = Entry::new(Term(0), Idx(0), 1);
+        let e2 = Entry::new(Term(1), Idx(0), 2);
+        assert!(e1 != e2);
     }
 }
