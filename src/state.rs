@@ -1,4 +1,5 @@
-use crate::{clock::Clock, rpc::Rpc};
+use crate::rpc::Rpc;
+use uuid::Uuid;
 
 /// Raft state diagram.
 ///
@@ -40,48 +41,80 @@ pub enum State {
 
 impl Default for State {
     fn default() -> Self {
+        // 1: startup
         State::Follower(Follower::default())
     }
 }
 
 impl State {
     pub fn on_timeout(&mut self) {
-        todo!()
+        match self {
+            State::Follower(_) => {
+                // 2: timeout. start election
+                self.on_candidate();
+            }
+            State::Leader(_) => {
+                self.send_heartbeat();
+            }
+            State::Candidate(_) => {
+                // 3: timeout. new election
+                self.on_candidate();
+            }
+        }
     }
 
     pub fn recv_rpc(&mut self, rpc: Rpc) {
-        todo!()
+        match rpc {
+            Rpc::RequestVote(_) => self.on_request_vote(),
+            Rpc::AppendEntries(_) => self.on_append_entry(),
+        }
     }
 
-    #[cfg(test)]
-    fn is_follower(&self) -> bool {
-        matches!(self, State::Follower(_))
+    fn on_candidate(&mut self) {
+        *self = State::Candidate(Candidate::default());
+        // TODO: start new election
+    }
+
+    fn send_heartbeat(&mut self) {
+        *self = State::Candidate(Candidate::default());
+        // TODO send rpc
+    }
+
+    fn on_request_vote(&mut self) {
+        // TODO: recv vote, request for new election
+    }
+
+    fn on_append_entry(&mut self) {
+        // TODO: heartbeat, new entry, discover current leader, discover new term
     }
 }
 
 #[derive(Debug, Default)]
-pub struct Follower {
-    heartbeat_recv_timeout: Clock,
-}
+pub struct Follower {}
 
 #[derive(Debug, Default)]
 pub struct Leader {
-    // ==== volatile state on leaders
-    // for each server, idx of next log entry to send to that server
-    next_idx: Vec<(ServerId, u64)>,
-    // for each server, idx of highest log entry known to be replicated on server
-    match_idx: Vec<(ServerId, u64)>,
+    // // ==== volatile state on leaders
+    // // for each server, idx of next log entry to send to that server
+    // next_idx: Vec<(ServerId, u64)>,
+    // // for each server, idx of highest log entry known to be replicated on server
+    // match_idx: Vec<(ServerId, u64)>,
 
-    heartbeat_send_timeout: Clock,
+    // heartbeat_send_timeout: Clock,
 }
 
 #[derive(Debug, Default)]
-pub struct Candidate {
-    heartbeat_recv_timeout: Clock,
-}
+pub struct Candidate {}
 
-#[derive(Debug, Default)]
-pub struct ServerId(u64);
+#[derive(Debug)]
+pub struct ServerId(String);
+
+impl ServerId {
+    pub fn new() -> Self {
+        let id = Uuid::new_v4();
+        ServerId(id.to_string())
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -90,6 +123,6 @@ mod tests {
     #[test]
     fn default_state() {
         let s = State::default();
-        assert!(s.is_follower());
+        assert!(matches!(s, State::Follower(_)));
     }
 }
