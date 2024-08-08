@@ -1,13 +1,16 @@
-use crate::{clock::Clock, io, log};
+use crate::{
+    io, log,
+    state::{ServerId, State},
+};
 
 #[derive(Debug)]
 pub struct Server<T: io::Io> {
-    id: CandidateId,
+    id: ServerId,
     state: State,
 
     // ==== persistent state
     current_term: log::Term,
-    voted_for: Option<CandidateId>,
+    voted_for: Option<ServerId>,
     log: log::Log,
 
     // ==== volatile state
@@ -36,35 +39,6 @@ impl<T: io::Io> Server<T> {
         }
     }
 }
-
-#[derive(Debug, Default)]
-enum State {
-    #[default]
-    Follower,
-    Leader,
-    Candidate,
-}
-
-struct Follower {
-    heartbeat_recv_timeout: Clock,
-}
-
-struct Leader {
-    // ==== volatile state on leaders
-    // for each server, idx of next log entry to send to that server
-    next_idx: Vec<(CandidateId, u64)>,
-    // for each server, idx of highest log entry known to be replicated on server
-    match_idx: Vec<(CandidateId, u64)>,
-
-    heartbeat_send_timeout: Clock,
-}
-
-struct Candidate {
-    heartbeat_recv_timeout: Clock,
-}
-
-#[derive(Debug, Default)]
-pub struct CandidateId(u64);
 
 #[cfg(test)]
 mod tests {

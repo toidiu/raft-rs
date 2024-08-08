@@ -3,6 +3,7 @@ use std::{future::Future, task::Poll};
 use tokio::time::{sleep_until, Instant, Sleep};
 
 /// A monotonically increasing clock value for the process
+#[derive(Debug)]
 pub struct Clock(Instant);
 
 impl Default for Clock {
@@ -76,7 +77,7 @@ mod tests {
     #[tokio::test]
     async fn manual_check_elapsed_time() {
         let clock = Clock::default();
-        let mut timer = Timer::new(clock, Duration::from_secs(2));
+        let mut timer = Timer::new(clock, Duration::from_millis(100));
 
         let (waker, cnt) = new_count_waker();
         let mut ctx = Context::from_waker(&waker);
@@ -84,11 +85,11 @@ mod tests {
         assert_eq!(cnt, 0);
 
         // wait less than timer target
-        sleep(Duration::from_secs(1)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(timer.poll_ready(&mut ctx).is_pending());
         assert_eq!(cnt, 0);
 
-        sleep(Duration::from_secs(1)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(timer.poll_ready(&mut ctx).is_ready());
         assert_eq!(cnt, 1);
     }
