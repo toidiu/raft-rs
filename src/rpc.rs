@@ -1,5 +1,13 @@
+#[derive(Debug, Clone, Copy)]
+pub enum Rpc {
+    RequestVote(RequestVote),
+    AppendEntries(AppendEntries),
+}
+
 // Leader election
-struct RequestVote {}
+#[derive(Debug, Clone, Copy)]
+pub struct RequestVote {}
 
 // Add entries and heartbeat
-struct AppendEntries {}
+#[derive(Debug, Clone, Copy)]
+pub struct AppendEntries {}

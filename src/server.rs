@@ -1,6 +1,6 @@
-use crate::{clock::Clock, io, log};
+use crate::{clock::Clock, io, log, rpc::Rpc};
 
-pub struct Server<IO: io::IO> {
+pub struct Server<IO: io::IO<Rpc>> {
     id: CandidateId,
     state: State,
 
@@ -18,7 +18,7 @@ pub struct Server<IO: io::IO> {
     io: IO,
 }
 
-impl<IO: io::IO> Server<IO> {}
+impl<IO: io::IO<Rpc>> Server<IO> {}
 
 #[derive(Default)]
 enum State {
