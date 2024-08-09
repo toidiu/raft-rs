@@ -1,8 +1,6 @@
-use crate::rpc::AppendEntries;
-use crate::rpc::RequestVote;
 use crate::{
     clock::{Clock, Timer},
-    rpc::Rpc,
+    rpc::{AppendEntries, RequestVote, Rpc},
 };
 use core::task::{Context, Poll};
 use uuid::Uuid;

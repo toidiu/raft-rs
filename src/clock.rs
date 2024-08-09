@@ -54,10 +54,7 @@ impl Timer {
         let duration = rand::thread_rng().gen_range(MIN_DURATION..MAX_DURATION);
         let expire = clock.current_instance() + duration;
         let sleep = Box::pin(sleep_until(expire));
-        Timer {
-            clock,
-            sleep,
-        }
+        Timer { clock, sleep }
     }
 
     pub fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {

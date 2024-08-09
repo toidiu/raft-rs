@@ -1,11 +1,13 @@
-use crate::rpc::Rpc;
-use core::time::Duration;
 use crate::{
     clock::Clock,
     io, log,
+    rpc::Rpc,
     state::{ServerId, State},
 };
-use core::task::{Context, Poll};
+use core::{
+    task::{Context, Poll},
+    time::Duration,
+};
 
 #[derive(Debug)]
 pub struct Server<T: io::Io> {
@@ -19,7 +21,6 @@ pub struct Server<T: io::Io> {
     // current_term: log::Term,
     // voted_for: Option<ServerId>,
     log: log::Log,
-
     // # Compliance: Figure 6
     // An entry is considered committed if it is safe for that entry to be applied to state machines.
     //
@@ -58,8 +59,8 @@ impl<T: io::Io> Server<T> {
 
         while self.clock.elapsed() < Duration::from_secs(1) {
             // await the timer
-             self.state.timer().await;
-             self.recv();
+            self.state.timer().await;
+            self.recv();
 
             println!("---{i} elapsed: {:?}", self.clock.elapsed());
             i += 1;
@@ -69,15 +70,14 @@ impl<T: io::Io> Server<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::io::Io;
-use super::*;
-    use crate::io::BufferIo;
+    use super::*;
+    use crate::io::{BufferIo, Io};
 
     #[tokio::test]
     async fn start_server() {
         let (mut c, p) = BufferIo::default().split();
         let server = Server::new(p, Clock::default());
-        
+
         tokio::spawn(async move {
             for i in 0..5 {
                 c.send(Rpc::new_request_vote(i).into());
