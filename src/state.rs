@@ -53,7 +53,7 @@ impl State {
         self.timer().poll_ready(ctx)
     }
 
-    fn timer(&mut self) -> &mut Timer {
+    pub fn timer(&mut self) -> &mut Timer {
         match self {
             State::Follower(inner) => &mut inner.timer,
             State::Leader(inner) => &mut inner.timer,

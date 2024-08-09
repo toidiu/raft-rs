@@ -24,14 +24,12 @@ impl Default for Clock {
 }
 
 impl Clock {
-    fn current_time(&self) -> Instant {
+    fn current_instance(&self) -> Instant {
         self.0 + self.elapsed()
     }
 
-    fn elapsed(&self) -> Duration {
-        let elapsed = self.0.elapsed();
-        println!("elapsed: {:?}", elapsed);
-        elapsed
+    pub fn elapsed(&self) -> Duration {
+        self.0.elapsed()
     }
 }
 
@@ -40,9 +38,6 @@ impl Clock {
 pub struct Timer {
     // Reference to the server clock
     clock: Clock,
-
-    // The Instant at which the timer should expire
-    expire_target: Option<Instant>,
 
     // The sleep future
     sleep: Pin<Box<Sleep>>,
@@ -57,28 +52,39 @@ impl Clone for Timer {
 impl Timer {
     pub fn new(clock: Clock) -> Self {
         let duration = rand::thread_rng().gen_range(MIN_DURATION..MAX_DURATION);
-
-        let expire = clock.current_time() + duration;
+        let expire = clock.current_instance() + duration;
         let sleep = Box::pin(sleep_until(expire));
         Timer {
             clock,
-            expire_target: Some(expire),
             sleep,
         }
     }
 
     pub fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
-        // Only poll the inner timer if we have a target set
-        if self.expire_target.is_none() {
-            return Poll::Pending;
-        }
-
         let poll = self.sleep.as_mut().poll(ctx);
 
         if poll.is_ready() {
-            self.expire_target = None;
+            // rearm the timer so we continue to make progress
+            self.rearm();
         }
 
+        poll
+    }
+
+    fn rearm(&mut self) {
+        let duration = rand::thread_rng().gen_range(MIN_DURATION..MAX_DURATION);
+        let expire = self.clock.current_instance() + duration;
+        let sleep = Box::pin(sleep_until(expire));
+
+        self.sleep = sleep;
+    }
+}
+
+impl Future for Timer {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
+        let poll = self.as_mut().poll_ready(ctx);
         poll
     }
 }

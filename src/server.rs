@@ -1,3 +1,4 @@
+use core::time::Duration;
 use crate::rpc::Rpc;
 use crate::{
     clock::Clock,
@@ -9,6 +10,7 @@ use core::task::{Context, Poll};
 #[derive(Debug)]
 pub struct Server<T: io::Io> {
     id: ServerId,
+    clock: Clock,
     state: State,
     // IO handle to send and receive Rpc messages
     io_producer: T,
@@ -33,6 +35,7 @@ impl<T: io::Io> Server<T> {
     fn new(producer: T, clock: Clock) -> Server<T> {
         Server {
             id: ServerId::new(),
+            clock,
             state: State::new(clock),
             log: Default::default(),
             io_producer: producer,
@@ -46,6 +49,18 @@ impl<T: io::Io> Server<T> {
     pub fn recv(&mut self, rpc: Rpc) {
         self.state.recv(rpc);
     }
+
+    async fn start(mut self) {
+        let mut i = 0;
+
+        while self.clock.elapsed() < Duration::from_secs(1) {
+            // await the timer
+             self.state.timer().await;
+
+            println!("---{i} elapsed: {:?}", self.clock.elapsed());
+            i += 1;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -54,8 +69,9 @@ mod tests {
     use crate::io::BufferIo;
 
     #[tokio::test]
-    async fn create_server() {
+    async fn start_server() {
         let (_c, p) = BufferIo::default().split();
-        let _server = Server::new(p, Clock::default());
+        let server = Server::new(p, Clock::default());
+        server.start().await;
     }
 }
