@@ -57,8 +57,8 @@ impl Timer {
         }
     }
 
-    fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
-        dbg!("---{}", self.clock.elapsed());
+    pub fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
+        // dbg!("---{}", self.clock.elapsed());
 
         // Only poll the inner timer if we have a target set
         if self.expire_target.is_none() {
@@ -71,6 +71,24 @@ impl Timer {
             self.expire_target = None;
         }
 
+        poll
+    }
+
+    pub fn reset(&mut self) {
+        let duration = Duration::from_millis(100);
+        let expire = self.clock.current_time() + duration;
+        let sleep = Box::pin(sleep_until(expire));
+
+        self.expire_target = Some(expire);
+        self.sleep = sleep;
+    }
+}
+
+impl Future for Timer {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
+        let poll = self.as_mut().poll_ready(ctx);
         poll
     }
 }

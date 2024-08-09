@@ -42,6 +42,23 @@ impl<T: io::Io> Server<T> {
             io_producer: producer,
         }
     }
+
+    async fn start(mut self) {
+        let mut i = 0;
+        loop {
+            if i == 100 {
+                break;
+            }
+
+            let t = &mut self.timer;
+            t.await;
+
+            self.timer.reset();
+
+            println!("--- {i}");
+            i += 1;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -52,6 +69,7 @@ mod tests {
     #[tokio::test]
     async fn create_server() {
         let (_c, p) = BufferIo::default().split();
-        let _server = Server::new(p, Clock::default());
+        let server = Server::new(p, Clock::default());
+        server.start().await;
     }
 }
