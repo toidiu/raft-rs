@@ -1,6 +1,6 @@
 # raft-rs
 
-A toy implementation to better understand the raft consensus protocol
+A toy implementation to better understand the [Raft](https://toidiu.com/reads/In_Search_of_an_Understandable_Consensus_Algorithm_(Extended_Raft).pdf) consensus protocol
 
 
 ## Research
