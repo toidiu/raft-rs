@@ -3,7 +3,7 @@
 pub type Data = u8;
 
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct Term(u64);
+pub struct Term(pub u64);
 
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Idx(u64);

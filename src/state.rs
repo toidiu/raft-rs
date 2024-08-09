@@ -1,3 +1,5 @@
+use crate::rpc::AppendEntries;
+use crate::rpc::RequestVote;
 use crate::{
     clock::{Clock, Timer},
     rpc::Rpc,
@@ -79,8 +81,8 @@ impl State {
 
     pub fn recv(&mut self, rpc: Rpc) {
         match rpc {
-            Rpc::RequestVote(_) => self.on_request_vote(),
-            Rpc::AppendEntries(_) => self.on_append_entry(),
+            Rpc::RequestVote(rpc) => self.on_request_vote(rpc),
+            Rpc::AppendEntries(rpc) => self.on_append_entry(rpc),
         }
     }
 
@@ -94,12 +96,14 @@ impl State {
         // TODO send rpc
     }
 
-    fn on_request_vote(&mut self) {
+    fn on_request_vote(&mut self, rpc: RequestVote) {
         // TODO: recv vote, request for new election
+        println!("recv RequestVote. {:?}", rpc.term);
     }
 
-    fn on_append_entry(&mut self) {
+    fn on_append_entry(&mut self, rpc: AppendEntries) {
         // TODO: heartbeat, new entry, discover current leader, discover new term
+        println!("recv AppendEntries. {:?}", rpc.term);
     }
 }
 

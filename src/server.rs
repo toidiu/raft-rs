@@ -1,5 +1,5 @@
-use core::time::Duration;
 use crate::rpc::Rpc;
+use core::time::Duration;
 use crate::{
     clock::Clock,
     io, log,
@@ -13,7 +13,7 @@ pub struct Server<T: io::Io> {
     clock: Clock,
     state: State,
     // IO handle to send and receive Rpc messages
-    io_producer: T,
+    producer: T,
 
     // ==== persistent state
     // current_term: log::Term,
@@ -38,7 +38,7 @@ impl<T: io::Io> Server<T> {
             clock,
             state: State::new(clock),
             log: Default::default(),
-            io_producer: producer,
+            producer,
         }
     }
 
@@ -46,8 +46,11 @@ impl<T: io::Io> Server<T> {
         self.state.poll_ready(ctx)
     }
 
-    pub fn recv(&mut self, rpc: Rpc) {
-        self.state.recv(rpc);
+    pub fn recv(&mut self) {
+        while let Some(bytes) = self.producer.recv() {
+            let rpc = Rpc::try_from(bytes).expect("TODO handle error");
+            self.state.recv(rpc);
+        }
     }
 
     async fn start(mut self) {
@@ -56,6 +59,7 @@ impl<T: io::Io> Server<T> {
         while self.clock.elapsed() < Duration::from_secs(1) {
             // await the timer
              self.state.timer().await;
+             self.recv();
 
             println!("---{i} elapsed: {:?}", self.clock.elapsed());
             i += 1;
@@ -65,13 +69,22 @@ impl<T: io::Io> Server<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::io::Io;
+use super::*;
     use crate::io::BufferIo;
 
     #[tokio::test]
     async fn start_server() {
-        let (_c, p) = BufferIo::default().split();
+        let (mut c, p) = BufferIo::default().split();
         let server = Server::new(p, Clock::default());
+        
+        tokio::spawn(async move {
+            for i in 0..5 {
+                c.send(Rpc::new_request_vote(i).into());
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                c.send(Rpc::new_append_entry(i).into());
+            }
+        });
         server.start().await;
     }
 }
