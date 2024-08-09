@@ -1,4 +1,8 @@
-use crate::rpc::Rpc;
+use crate::{
+    clock::{Clock, Timer},
+    rpc::Rpc,
+};
+use core::task::{Context, Poll};
 use uuid::Uuid;
 
 /// Raft state diagram.
@@ -39,31 +43,41 @@ pub enum State {
     Candidate(Candidate),
 }
 
-impl Default for State {
-    fn default() -> Self {
-        // 1: startup
-        State::Follower(Follower::default())
-    }
-}
-
 impl State {
+    pub fn new(clock: Clock) -> Self {
+        // 1: startup
+        State::Follower(Follower::new(clock))
+    }
+
+    pub fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
+        self.timer().poll_ready(ctx)
+    }
+
+    fn timer(&mut self) -> &mut Timer {
+        match self {
+            State::Follower(inner) => &mut inner.timer,
+            State::Leader(inner) => &mut inner.timer,
+            State::Candidate(inner) => &mut inner.timer,
+        }
+    }
+
     pub fn on_timeout(&mut self) {
         match self {
-            State::Follower(_) => {
+            State::Follower(_inner) => {
                 // 2: timeout. start election
                 self.on_candidate();
             }
-            State::Leader(_) => {
+            State::Leader(_inner) => {
                 self.send_heartbeat();
             }
-            State::Candidate(_) => {
+            State::Candidate(_inner) => {
                 // 3: timeout. new election
                 self.on_candidate();
             }
         }
     }
 
-    pub fn recv_rpc(&mut self, rpc: Rpc) {
+    pub fn recv(&mut self, rpc: Rpc) {
         match rpc {
             Rpc::RequestVote(_) => self.on_request_vote(),
             Rpc::AppendEntries(_) => self.on_append_entry(),
@@ -71,12 +85,12 @@ impl State {
     }
 
     fn on_candidate(&mut self) {
-        *self = State::Candidate(Candidate::default());
+        let timer = self.timer().clone();
+        *self = State::Candidate(Candidate::new(timer));
         // TODO: start new election
     }
 
     fn send_heartbeat(&mut self) {
-        *self = State::Candidate(Candidate::default());
         // TODO send rpc
     }
 
@@ -89,11 +103,22 @@ impl State {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct Follower {}
+#[derive(Debug)]
+pub struct Follower {
+    timer: Timer,
+}
 
-#[derive(Debug, Default)]
+impl Follower {
+    fn new(clock: Clock) -> Self {
+        Follower {
+            timer: Timer::new(clock),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Leader {
+    timer: Timer,
     // // ==== volatile state on leaders
     // // for each server, idx of next log entry to send to that server
     // next_idx: Vec<(ServerId, u64)>,
@@ -103,8 +128,16 @@ pub struct Leader {
     // heartbeat_send_timeout: Clock,
 }
 
-#[derive(Debug, Default)]
-pub struct Candidate {}
+#[derive(Debug)]
+pub struct Candidate {
+    timer: Timer,
+}
+
+impl Candidate {
+    fn new(timer: Timer) -> Self {
+        Candidate { timer }
+    }
+}
 
 #[derive(Debug)]
 pub struct ServerId(String);
@@ -120,9 +153,9 @@ impl ServerId {
 mod tests {
     use super::*;
 
-    #[test]
-    fn default_state() {
-        let s = State::default();
+    #[tokio::test]
+    async fn default_state() {
+        let s = State::new(Clock::default());
         assert!(matches!(s, State::Follower(_)));
     }
 }

@@ -1,6 +1,10 @@
-use core::{pin::Pin, task::Context, time::Duration};
+use core::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
+};
 use rand::Rng;
-use std::{future::Future, task::Poll};
 use tokio::time::{sleep_until, Instant, Sleep};
 
 // # Compliance: 5.2
@@ -10,7 +14,7 @@ const MIN_DURATION: Duration = Duration::from_millis(150);
 const MAX_DURATION: Duration = Duration::from_millis(300);
 
 /// A monotonically increasing clock value for the process
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Clock(Instant);
 
 impl Default for Clock {
@@ -44,6 +48,12 @@ pub struct Timer {
     sleep: Pin<Box<Sleep>>,
 }
 
+impl Clone for Timer {
+    fn clone(&self) -> Self {
+        Timer::new(self.clock)
+    }
+}
+
 impl Timer {
     pub fn new(clock: Clock) -> Self {
         let duration = rand::thread_rng().gen_range(MIN_DURATION..MAX_DURATION);
@@ -57,9 +67,7 @@ impl Timer {
         }
     }
 
-    fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
-        dbg!("---{}", self.clock.elapsed());
-
+    pub fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
         // Only poll the inner timer if we have a target set
         if self.expire_target.is_none() {
             return Poll::Pending;
