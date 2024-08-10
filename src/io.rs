@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-pub trait Io: Sized {
+pub trait Io {
     fn status(&self) {}
 
     fn recv(&mut self) -> Option<Bytes>;
@@ -26,6 +26,11 @@ pub trait Io: Sized {
 }
 
 // A handle to check the readiness of the receive queue
+//
+// While all types have an implicit `Sized` by default, traits are
+// `?Sized` by default. The ?Sized marker tells the compiler that
+// it is fine for T to be potentially not Sized. Alternatively we
+// could also have marked `Io: Sized`
 pub struct RxReady<'a, T: ?Sized>(&'a mut T);
 
 impl<'a, T: Io> Future for RxReady<'a, T> {
