@@ -53,7 +53,7 @@ impl<T: io::Io> Server<T> {
     }
 
     async fn poll(&mut self) {
-
+        // FIXME: register the RX future with the runtime
         self.producer.status();
         let fut = ServerFut {
             timeout: self.state.timer(),
