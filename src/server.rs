@@ -6,6 +6,7 @@ use crate::{
 };
 use core::{future::Future, task::Poll};
 use pin_project_lite::pin_project;
+use s2n_codec::{DecoderBuffer, DecoderValue};
 
 #[derive(Debug)]
 pub struct Server {
@@ -35,9 +36,14 @@ impl Server {
     }
 
     pub fn recv(&mut self) {
-        while let Some(bytes) = self.io.recv() {
-            let rpc = Rpc::try_from(bytes).expect("TODO handle error");
-            self.state.recv(&mut self.io, rpc);
+        if let Some(bytes) = self.io.recv() {
+            let mut buf = DecoderBuffer::new(&bytes);
+
+            while !buf.is_empty() {
+                let (rpc, buffer) = Rpc::decode(buf).expect("todo");
+                buf = buffer;
+                self.state.recv(&mut self.io, rpc);
+            }
         }
     }
 
@@ -115,6 +121,7 @@ mod tests {
     use super::*;
     use crate::io::Tx;
     use core::time::Duration;
+    use s2n_codec::{EncoderBuffer, EncoderValue};
 
     #[tokio::test]
     async fn mock_event_loop() {
@@ -124,9 +131,16 @@ mod tests {
         tokio::spawn(async move {
             // simulate receiving a message
             for i in 0..5 {
-                network_io.send(Rpc::new_request_vote(i).into());
+                let mut slice = vec![0; 100];
+                let mut buf = EncoderBuffer::new(&mut slice);
+                Rpc::new_request_vote(i).encode(&mut buf);
+                let (written, rem) = buf.split_mut();
+                network_io.send(written.to_vec().into());
                 tokio::time::sleep(Duration::from_millis(200)).await;
-                network_io.send(Rpc::new_append_entry(100 + i).into());
+
+                let mut buf = EncoderBuffer::new(rem);
+                Rpc::new_append_entry(i + 100).encode(&mut buf);
+                network_io.send(buf.as_mut_slice().to_vec().into());
             }
         });
 

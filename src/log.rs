@@ -5,6 +5,12 @@ pub type Data = u8;
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Term(pub u64);
 
+impl From<u64> for Term {
+    fn from(value: u64) -> Self {
+        Term(value)
+    }
+}
+
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Idx(u64);
 

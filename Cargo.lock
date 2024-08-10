@@ -340,6 +340,7 @@ dependencies = [
  "futures-test",
  "pin-project-lite",
  "rand",
+ "s2n-codec",
  "tokio",
  "uuid",
 ]
@@ -388,6 +389,17 @@ name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f"
+
+[[package]]
+name = "s2n-codec"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f77aca9755b081b6ce182ae3b37c82e7c28c4401ec9b8259141d97ac5a3a0ba0"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "zerocopy",
+]
 
 [[package]]
 name = "scopeguard"

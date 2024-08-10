@@ -1,6 +1,6 @@
 use crate::{
-    clock::Clock,
-    state::{Term, Timer},
+    clock::{Clock, Timer},
+    state::Term,
 };
 
 #[derive(Debug, Default)]

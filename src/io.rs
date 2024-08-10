@@ -66,14 +66,10 @@ mod tests {
         server_io.send(Bytes::from_static(&[6]));
         server_io.send(Bytes::from_static(&[7]));
 
-        assert_eq!(server_io.recv(), Some(Bytes::from_static(&[1])));
-        assert_eq!(server_io.recv(), Some(Bytes::from_static(&[2])));
-        assert_eq!(server_io.recv(), Some(Bytes::from_static(&[3])));
+        assert_eq!(server_io.recv(), Some(Bytes::from_static(&[1, 2, 3])));
         assert_eq!(server_io.recv(), None);
 
-        assert_eq!(network_io.recv(), Some(Bytes::from_static(&[5])));
-        assert_eq!(network_io.recv(), Some(Bytes::from_static(&[6])));
-        assert_eq!(network_io.recv(), Some(Bytes::from_static(&[7])));
+        assert_eq!(network_io.recv(), Some(Bytes::from_static(&[5, 6, 7])));
         assert_eq!(network_io.recv(), None);
     }
 }

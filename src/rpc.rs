@@ -1,5 +1,7 @@
 use crate::log::Term;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use s2n_codec::{DecoderBuffer, DecoderBufferResult, DecoderError, DecoderValue, EncoderValue};
+
+pub const TAG_LEN: usize = 1;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Rpc {
@@ -19,20 +21,20 @@ impl Rpc {
     }
 }
 
-impl TryFrom<Bytes> for Rpc {
-    type Error = ();
+impl<'a> DecoderValue<'a> for Rpc {
+    fn decode(buffer: DecoderBuffer<'a>) -> DecoderBufferResult<'a, Self> {
+        // println!("-------RPC decode. buffer: {:?}", buffer);
+        let (tag, buffer): (u8, _) = buffer.decode().expect("todo");
+        let (term, buffer): (u64, _) = buffer.decode().expect("todo");
 
-    fn try_from(mut value: Bytes) -> std::result::Result<Rpc, ()> {
-        let tag = value.get_u8();
-        match tag {
+        let rpc = match tag {
             RequestVote::TAG => {
-                let term = value.get_u64();
-                let rpc = RequestVote { term: Term(term) };
+                let rpc = RequestVote { term: term.into() };
                 Ok(Rpc::RequestVote(rpc))
             }
             RespRequestVote::TAG => {
-                let term = value.get_u64();
-                let vote_granted = value.get_u8() != 0;
+                let (vote_granted, _buffer): (u8, _) = buffer.decode().expect("todo");
+                let vote_granted = vote_granted != 0;
                 let rpc = RespRequestVote {
                     term: Term(term),
                     vote_granted,
@@ -40,38 +42,32 @@ impl TryFrom<Bytes> for Rpc {
                 Ok(Rpc::RespRequestVote(rpc))
             }
             AppendEntries::TAG => {
-                let term = value.get_u64();
-                let rpc = AppendEntries { term: Term(term) };
+                let rpc = AppendEntries { term: term.into() };
                 Ok(Rpc::AppendEntries(rpc))
             }
-            _ => Err(()),
-        }
+            _tag => Err(DecoderError::InvariantViolation("received unexpected tag")),
+        };
+        rpc.map(|rpc| (rpc, buffer))
     }
 }
 
-impl From<Rpc> for Bytes {
-    fn from(value: Rpc) -> Self {
-        let mut b = BytesMut::with_capacity(10);
-        let b = match value {
+impl EncoderValue for Rpc {
+    fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
+        match self {
             Rpc::RequestVote(inner) => {
-                b.put_u8(RequestVote::TAG);
-                b.put_u64(inner.term.0);
-                b
+                encoder.write_slice(&[RequestVote::TAG]);
+                encoder.write_slice(&inner.term.0.to_be_bytes());
             }
             Rpc::RespRequestVote(inner) => {
-                b.put_u8(RespRequestVote::TAG);
-                b.put_u64(inner.term.0);
-                b.put_u8(inner.vote_granted as u8);
-                b
+                encoder.write_slice(&[RespRequestVote::TAG]);
+                encoder.write_slice(&inner.term.0.to_be_bytes());
+                encoder.write_slice(&(inner.vote_granted as u8).to_be_bytes());
             }
             Rpc::AppendEntries(inner) => {
-                b.put_u8(AppendEntries::TAG);
-                b.put_u64(inner.term.0);
-                b
+                encoder.write_slice(&[AppendEntries::TAG]);
+                encoder.write_slice(&inner.term.0.to_be_bytes());
             }
-        };
-
-        b.freeze()
+        }
     }
 }
 
@@ -84,7 +80,7 @@ pub struct RequestVote {
 }
 
 impl RequestVote {
-    const TAG: u8 = 0;
+    const TAG: u8 = 1;
 }
 
 // Leader election
@@ -95,7 +91,7 @@ pub struct RespRequestVote {
 }
 
 impl RespRequestVote {
-    const TAG: u8 = 1;
+    const TAG: u8 = 2;
 }
 
 // Add entries and heartbeat
@@ -105,5 +101,5 @@ pub struct AppendEntries {
 }
 
 impl AppendEntries {
-    const TAG: u8 = 2;
+    const TAG: u8 = 3;
 }

@@ -33,7 +33,10 @@ impl Clock {
     }
 }
 
-/// A timer can be used to set timeouts
+/// Used for awaiting timeouts.
+///
+/// To ensure Raft continues to make progress, the timer
+/// is automatically rearmed after it expires.
 #[derive(Debug, Default)]
 pub struct Timer {
     // Reference to the server clock
@@ -56,7 +59,11 @@ impl Timer {
         let duration = rand::thread_rng().gen_range(MIN_DURATION..MAX_DURATION);
         let expire = clock.current_instance() + duration;
         let sleep = Some(Box::pin(sleep_until(expire)));
-        Timer { clock, expire: Some(expire), sleep }
+        Timer {
+            clock,
+            expire: Some(expire),
+            sleep,
+        }
     }
 
     pub fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
@@ -88,8 +95,7 @@ impl Future for Timer {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
-        let poll = self.as_mut().poll_ready(ctx);
-        poll
+        self.as_mut().poll_ready(ctx)
     }
 }
 

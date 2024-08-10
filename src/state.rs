@@ -1,11 +1,11 @@
-use crate::rpc::RespRequestVote;
 use crate::{
-    clock::{Clock, Timer},
+    clock::Clock,
     io::Tx,
     log::Term,
-    rpc::{AppendEntries, RequestVote, Rpc},
+    rpc::{AppendEntries, RequestVote, RespRequestVote, Rpc},
     state::inner::Inner,
 };
+use s2n_codec::{EncoderBuffer, EncoderValue};
 use uuid::Uuid;
 
 mod inner;
@@ -129,7 +129,10 @@ impl State {
 
         match rpc {
             Rpc::RequestVote(RequestVote { term: _ }) => {}
-            Rpc::RespRequestVote(RespRequestVote { term: _, vote_granted: _ }) => {}
+            Rpc::RespRequestVote(RespRequestVote {
+                term: _,
+                vote_granted: _,
+            }) => {}
             Rpc::AppendEntries(AppendEntries { term }) => {
                 if inner.common.curr_term == term {
                     inner.common.timer.rearm()
@@ -142,18 +145,29 @@ impl State {
         println!("state: on_candidate");
         convert_to!(self, State::Candidate);
         // TODO: start new election
-        tx.send(Rpc::new_request_vote(self.common().curr_term.0 + 1).into());
+        let term = self.common().curr_term.0 + 1;
+        let mut slice = vec![0; 100];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        Rpc::new_request_vote(term).encode_mut(&mut buf);
+        tx.send(buf.as_mut_slice().to_vec().into());
     }
 
     fn send_heartbeat<T: Tx>(&mut self, tx: &mut T) {
         println!("state: send_heartbeat");
+
         // TODO send rpc
-        tx.send(Rpc::new_append_entry(1).into());
+        // tx.send(Rpc::new_append_entry(1).into());
+        let term = self.common().curr_term.0 + 1;
+        let mut slice = vec![0; 100];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        Rpc::new_append_entry(term).encode_mut(&mut buf);
+        tx.send(buf.as_mut_slice().to_vec().into());
     }
 
     fn on_request_vote(&mut self, rpc: RequestVote) {
         println!("state: recv RequestVote. {:?}", rpc.term);
         // TODO: recv vote, request for new election
+        println!("state: recv RequestVote. {:?}", rpc.term);
     }
 
     fn on_append_entry(&mut self, rpc: AppendEntries) {
@@ -166,6 +180,7 @@ impl State {
 mod tests {
     use super::*;
     use crate::{io::testing::MockIo, rpc::Rpc, testing::cast};
+    use s2n_codec::{DecoderBuffer, DecoderValue};
 
     #[tokio::test]
     async fn default_state() {
@@ -181,7 +196,9 @@ mod tests {
 
         s.on_timeout(&mut io);
         assert!(matches!(s, State::Candidate(_)));
-        let rpc = Rpc::try_from(io.tx.pop_front().unwrap()).unwrap();
+        let bytes = io.tx.pop_front().unwrap();
+        let buf = DecoderBuffer::new(&bytes);
+        let (rpc, _buffer) = Rpc::decode(buf).expect("todo");
         let req = cast!(rpc, Rpc::RequestVote);
         assert_eq!(req.term, Term(1));
     }
@@ -196,7 +213,9 @@ mod tests {
 
         s.on_timeout(&mut io);
         assert!(matches!(s, State::Candidate(_)));
-        let rpc = Rpc::try_from(io.tx.pop_front().unwrap()).unwrap();
+        let bytes = io.tx.pop_front().unwrap();
+        let buf = DecoderBuffer::new(&bytes);
+        let (rpc, _buffer) = Rpc::decode(buf).expect("todo");
         let req = cast!(rpc, Rpc::RequestVote);
         assert_eq!(req.term, Term(1));
     }
