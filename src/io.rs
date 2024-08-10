@@ -1,13 +1,42 @@
 use bytes::Bytes;
+use core::{
+    future::Future,
+    task::{Context, Poll},
+};
 use std::{
     collections::VecDeque,
     sync::{Arc, Mutex},
 };
 
-pub trait Io {
+pub trait Io: Sized {
+    fn status(&self) {}
+
     fn recv(&mut self) -> Option<Bytes>;
 
     fn send(&mut self, data: Bytes);
+
+    fn poll_ready(&mut self, cx: &mut Context) -> Poll<()>;
+
+    // A handle to check if there are messages in the receive queue
+    //
+    // TX is invoked on timeout so we only need to poll the recv queue
+    fn rx_ready(&mut self) -> RxReady<Self> {
+        RxReady(self)
+    }
+}
+
+// A handle to check the readiness of the receive queue
+pub struct RxReady<'a, T: ?Sized>(&'a mut T);
+
+impl<'a, T: Io> Future for RxReady<'a, T> {
+    type Output = ();
+
+    fn poll(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        self.0.poll_ready(cx)
+    }
 }
 
 /// A VecDeque backed IO buffer
@@ -16,46 +45,87 @@ pub struct BufferIo {}
 
 impl BufferIo {
     pub fn split(self) -> (Consumer, Producer) {
-        let in_buf = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
-        let out_buf = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
-        let c = Consumer {
-            in_buf: out_buf.clone(),
-            out_buf: in_buf.clone(),
+        //   Producer                    Consumer
+        //    Server  <- recv [__rx__]  <- send  NetworkInterface/Socket
+        //            send -> [__tx__]  -> recv
+        let rx = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
+        let tx = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
+
+        let p = Producer {
+            rx: rx.clone(),
+            tx: tx.clone(),
         };
-        let p = Producer { in_buf, out_buf };
+        let c = Consumer { rx: tx, tx: rx };
         (c, p)
     }
 }
 
-/// A handle to the underlying BufferIO held by the network interface
+/// Held by the Network interface.
+///
+/// A handle to the underlying BufferIO
 pub struct Consumer {
-    in_buf: Arc<Mutex<VecDeque<Bytes>>>,
-    out_buf: Arc<Mutex<VecDeque<Bytes>>>,
+    rx: Arc<Mutex<VecDeque<Bytes>>>,
+    tx: Arc<Mutex<VecDeque<Bytes>>>,
 }
 
-/// A handle to the underlying BufferIO held by the server process
+/// Held by the Server process.
+///
+/// A handle to the underlying BufferIO
 pub struct Producer {
-    in_buf: Arc<Mutex<VecDeque<Bytes>>>,
-    out_buf: Arc<Mutex<VecDeque<Bytes>>>,
+    rx: Arc<Mutex<VecDeque<Bytes>>>,
+    tx: Arc<Mutex<VecDeque<Bytes>>>,
 }
 
 impl Io for Producer {
     fn recv(&mut self) -> Option<Bytes> {
-        self.in_buf.lock().unwrap().pop_front()
+        self.rx.lock().unwrap().pop_front()
     }
 
     fn send(&mut self, data: Bytes) {
-        self.out_buf.lock().unwrap().push_back(data);
+        self.tx.lock().unwrap().push_back(data);
+    }
+
+    // TX is invoked on timeout so we only need to poll the recv queue
+    fn poll_ready(&mut self, _cx: &mut Context) -> Poll<()> {
+        let rx_rdy = !self.rx.lock().unwrap().is_empty();
+        if rx_rdy {
+            Poll::Ready(())
+        } else {
+            Poll::Pending
+        }
+    }
+
+    fn status(&self) {
+        let rx = self.rx.lock().unwrap().len();
+        let tx = self.tx.lock().unwrap().len();
+        println!("------------- check rx: {}  tx: {}", rx, tx);
     }
 }
 
 impl Io for Consumer {
     fn recv(&mut self) -> Option<Bytes> {
-        self.in_buf.lock().unwrap().pop_front()
+        self.rx.lock().unwrap().pop_front()
     }
 
     fn send(&mut self, data: Bytes) {
-        self.out_buf.lock().unwrap().push_back(data);
+        self.tx.lock().unwrap().push_back(data);
+    }
+
+    // TX is invoked on timeout so we only need to poll the recv queue
+    fn poll_ready(&mut self, _cx: &mut Context) -> Poll<()> {
+        // let rx_rdy = !self.rx.lock().unwrap().is_empty();
+        // if rx_rdy {
+        //     Poll::Ready(())
+        // } else {
+        //     Poll::Pending
+        // }
+        Poll::Ready(())
+    }
+
+    fn status(&self) {
+        let rx = self.rx.lock().unwrap().len();
+        let tx = self.tx.lock().unwrap().len();
+        println!("------------- check rx: {}  tx: {}", rx, tx);
     }
 }
 

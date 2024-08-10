@@ -2,7 +2,6 @@ use crate::{
     clock::{Clock, Timer},
     rpc::{AppendEntries, RequestVote, Rpc},
 };
-use core::task::{Context, Poll};
 use uuid::Uuid;
 
 /// Raft state diagram.
@@ -49,10 +48,6 @@ impl State {
         State::Follower(Follower::new(clock))
     }
 
-    pub fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
-        self.timer().poll_ready(ctx)
-    }
-
     pub fn timer(&mut self) -> &mut Timer {
         match self {
             State::Follower(inner) => &mut inner.timer,
@@ -85,23 +80,25 @@ impl State {
     }
 
     fn on_candidate(&mut self) {
+        println!("state: on_candidate");
         let timer = self.timer().clone();
         *self = State::Candidate(Candidate::new(timer));
         // TODO: start new election
     }
 
     fn send_heartbeat(&mut self) {
+        println!("state: send_heartbeat");
         // TODO send rpc
     }
 
     fn on_request_vote(&mut self, rpc: RequestVote) {
+        println!("state: recv RequestVote. {:?}", rpc.term);
         // TODO: recv vote, request for new election
-        println!("recv RequestVote. {:?}", rpc.term);
     }
 
     fn on_append_entry(&mut self, rpc: AppendEntries) {
-        // TODO: heartbeat, new entry, discover current leader, discover new term
         println!("recv AppendEntries. {:?}", rpc.term);
+        // TODO: heartbeat, new entry, discover current leader, discover new term
     }
 }
 

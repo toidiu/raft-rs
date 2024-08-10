@@ -338,6 +338,7 @@ dependencies = [
  "bytes",
  "futures",
  "futures-test",
+ "pin-project-lite",
  "rand",
  "tokio",
  "uuid",
