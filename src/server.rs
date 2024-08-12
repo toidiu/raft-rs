@@ -126,7 +126,7 @@ mod tests {
     use core::time::Duration;
 
     #[tokio::test]
-    async fn start_server() {
+    async fn mock_event_loop() {
         let (mut c, p) = BufferIo::default().split();
         let clock = Clock::default();
         let mut server = Server::new(p, clock);
@@ -145,5 +145,17 @@ mod tests {
             println!("---{i} elapsed: {:?}", clock.elapsed());
             i += 1;
         }
+    }
+
+    #[tokio::test]
+    async fn recv_rpc() {
+        let (mut c, p) = BufferIo::default().split();
+        let clock = Clock::default();
+        let mut server = Server::new(p, clock);
+
+        c.send(Rpc::new_request_vote(1).into());
+        c.send(Rpc::new_append_entry(1).into());
+
+        server.recv();
     }
 }

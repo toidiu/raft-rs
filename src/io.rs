@@ -56,8 +56,6 @@ impl BufferIo {
         //            send -> [__tx__]  -> recv
         let rx = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
         let tx = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
-        // FIXME: we shouldn't need to share a waker. the consumer and producers should
-        // be able to register individual wakers themselves
         let waker = Arc::new(Mutex::new(None));
 
         let p = Producer {
