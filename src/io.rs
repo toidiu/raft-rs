@@ -9,6 +9,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[cfg(test)]
+pub(crate) mod testing;
+
 pub trait Io {
     fn recv(&mut self) -> Option<Bytes>;
 

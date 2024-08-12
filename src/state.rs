@@ -1,3 +1,5 @@
+use crate::log::Term;
+use crate::io::Io;
 use crate::{
     clock::{Clock, Timer},
     rpc::{AppendEntries, RequestVote, Rpc},
@@ -56,18 +58,26 @@ impl State {
         }
     }
 
-    pub fn on_timeout(&mut self) {
+    pub fn curr_term(&self) -> Term {
+        match self {
+            State::Follower(inner) => inner.curr_term,
+            State::Leader(inner) => inner.curr_term,
+            State::Candidate(inner) => inner.curr_term,
+        }
+    }
+
+    pub fn on_timeout<I: Io>(&mut self, io: &mut I) {
         match self {
             State::Follower(_inner) => {
                 // 2: timeout. start election
-                self.on_candidate();
+                self.on_candidate(io);
             }
             State::Leader(_inner) => {
-                self.send_heartbeat();
+                self.send_heartbeat(io);
             }
             State::Candidate(_inner) => {
                 // 3: timeout. new election
-                self.on_candidate();
+                self.on_candidate(io);
             }
         }
     }
@@ -79,16 +89,18 @@ impl State {
         }
     }
 
-    fn on_candidate(&mut self) {
+    fn on_candidate<I: Io>(&mut self,  io: &mut I) {
         println!("state: on_candidate");
         let timer = self.timer().clone();
-        *self = State::Candidate(Candidate::new(timer));
+        *self = State::Candidate(Candidate::new(timer, self.curr_term()));
         // TODO: start new election
+        io.send(Rpc::new_request_vote(self.curr_term().0 + 1).into());
     }
 
-    fn send_heartbeat(&mut self) {
+    fn send_heartbeat<I: Io>(&mut self,  io:&mut  I) {
         println!("state: send_heartbeat");
         // TODO send rpc
+        io.send(Rpc::new_append_entry(1).into());
     }
 
     fn on_request_vote(&mut self, rpc: RequestVote) {
@@ -104,12 +116,14 @@ impl State {
 
 #[derive(Debug)]
 pub struct Follower {
+    curr_term: Term,
     timer: Timer,
 }
 
 impl Follower {
     fn new(clock: Clock) -> Self {
         Follower {
+            curr_term: Term(0),
             timer: Timer::new(clock),
         }
     }
@@ -117,6 +131,7 @@ impl Follower {
 
 #[derive(Debug)]
 pub struct Leader {
+    curr_term: Term,
     timer: Timer,
     // // ==== volatile state on leaders
     // // for each server, idx of next log entry to send to that server
@@ -129,12 +144,13 @@ pub struct Leader {
 
 #[derive(Debug)]
 pub struct Candidate {
+    curr_term: Term,
     timer: Timer,
 }
 
 impl Candidate {
-    fn new(timer: Timer) -> Self {
-        Candidate { timer }
+    fn new(timer: Timer, curr_term: Term) -> Self {
+        Candidate { curr_term, timer }
     }
 }
 
@@ -150,11 +166,33 @@ impl ServerId {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::testing::cast;
+use super::*;
+    use crate::io::testing::MockIo;
+    use crate::rpc::Rpc;
 
     #[tokio::test]
     async fn default_state() {
         let s = State::new(Clock::default());
         assert!(matches!(s, State::Follower(_)));
+    }
+
+    #[tokio::test]
+    async fn follower_candidate_timeout() {
+        let mut io = MockIo::new();
+        let mut s = State::new(Clock::default());
+        assert!(matches!(s, State::Follower(_)));
+
+        s.on_timeout(&mut io);
+        assert!(matches!(s, State::Candidate(_)));
+        let rpc = Rpc::try_from(io.tx.pop_front().unwrap()).unwrap();
+        let req = cast!(rpc, Rpc::RequestVote);
+        assert_eq!(req.term, Term(1));
+
+        s.on_timeout(&mut io);
+        assert!(matches!(s, State::Candidate(_)));
+        let rpc = Rpc::try_from(io.tx.pop_front().unwrap()).unwrap();
+        let req = cast!(rpc, Rpc::RequestVote);
+        assert_eq!(req.term, Term(1));
     }
 }

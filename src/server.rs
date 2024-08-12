@@ -42,7 +42,7 @@ impl<T: io::Io> Server<T> {
     }
 
     pub fn on_timeout(&mut self) {
-        self.state.on_timeout();
+        self.state.on_timeout(&mut self.producer);
     }
 
     pub fn recv(&mut self) {

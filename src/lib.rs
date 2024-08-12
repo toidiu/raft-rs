@@ -7,6 +7,9 @@ mod rpc;
 mod server;
 mod state;
 
+#[cfg(test)]
+mod testing;
+
 fn start() {
     // let clock = Clock::default();
     // let mut server = Server::new(1);
