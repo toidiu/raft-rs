@@ -1,7 +1,7 @@
-use crate::log::Term;
-use crate::io::Io;
 use crate::{
     clock::{Clock, Timer},
+    io::Tx,
+    log::Term,
     rpc::{AppendEntries, RequestVote, Rpc},
 };
 use uuid::Uuid;
@@ -66,7 +66,7 @@ impl State {
         }
     }
 
-    pub fn on_timeout<I: Io>(&mut self, io: &mut I) {
+    pub fn on_timeout<T: Tx>(&mut self, io: &mut T) {
         match self {
             State::Follower(_inner) => {
                 // 2: timeout. start election
@@ -89,18 +89,18 @@ impl State {
         }
     }
 
-    fn on_candidate<I: Io>(&mut self,  io: &mut I) {
+    fn on_candidate<T: Tx>(&mut self, tx: &mut T) {
         println!("state: on_candidate");
         let timer = self.timer().clone();
         *self = State::Candidate(Candidate::new(timer, self.curr_term()));
         // TODO: start new election
-        io.send(Rpc::new_request_vote(self.curr_term().0 + 1).into());
+        tx.send(Rpc::new_request_vote(self.curr_term().0 + 1).into());
     }
 
-    fn send_heartbeat<I: Io>(&mut self,  io:&mut  I) {
+    fn send_heartbeat<T: Tx>(&mut self, tx: &mut T) {
         println!("state: send_heartbeat");
         // TODO send rpc
-        io.send(Rpc::new_append_entry(1).into());
+        tx.send(Rpc::new_append_entry(1).into());
     }
 
     fn on_request_vote(&mut self, rpc: RequestVote) {
@@ -166,10 +166,8 @@ impl ServerId {
 
 #[cfg(test)]
 mod tests {
-    use crate::testing::cast;
-use super::*;
-    use crate::io::testing::MockIo;
-    use crate::rpc::Rpc;
+    use super::*;
+    use crate::{io::testing::MockIo, rpc::Rpc, testing::cast};
 
     #[tokio::test]
     async fn default_state() {

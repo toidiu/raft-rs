@@ -1,6 +1,9 @@
+use crate::io::BufferIo;
+use crate::io::NetworkIo;
+use crate::io::Rx;
+use crate::io::ServerIo;
 use crate::{
     clock::Clock,
-    io, log,
     rpc::Rpc,
     state::{ServerId, State},
 };
@@ -8,45 +11,31 @@ use core::{future::Future, task::Poll};
 use pin_project_lite::pin_project;
 
 #[derive(Debug)]
-pub struct Server<T: io::Io> {
+pub struct Server {
     id: ServerId,
     clock: Clock,
     state: State,
     // IO handle to send and receive Rpc messages
-    producer: T,
-
-    // ==== persistent state
-    // current_term: log::Term,
-    // voted_for: Option<ServerId>,
-    log: log::Log,
-    // # Compliance: Figure 6
-    // An entry is considered committed if it is safe for that entry to be applied to state machines.
-    //
-    // idx of highest log entry known to be committed
-
-    // ==== volatile state
-    // commit_idx: u64,
-    // idx of the highest log entry applied to the state machine
-    // last_applied: u64,
+    io: ServerIo
 }
 
-impl<T: io::Io> Server<T> {
-    fn new(producer: T, clock: Clock) -> Server<T> {
-        Server {
+impl Server {
+    fn new(clock: Clock) -> (Server, NetworkIo) {
+        let (server_io, network_io) = BufferIo::split();
+        (Server {
             id: ServerId::new(),
             clock,
             state: State::new(clock),
-            log: Default::default(),
-            producer,
-        }
+            io: server_io,
+        }, network_io)
     }
 
     pub fn on_timeout(&mut self) {
-        self.state.on_timeout(&mut self.producer);
+        self.state.on_timeout(&mut self.io);
     }
 
     pub fn recv(&mut self) {
-        while let Some(bytes) = self.producer.recv() {
+        while let Some(bytes) = self.io.recv() {
             let rpc = Rpc::try_from(bytes).expect("TODO handle error");
             self.state.recv(rpc);
         }
@@ -55,7 +44,7 @@ impl<T: io::Io> Server<T> {
     async fn poll(&mut self) {
         let fut = ServerFut {
             timeout: self.state.timer(),
-            recv: self.producer.io_ready()
+            recv: self.io.rx_ready(),
         };
 
         let Outcome {
@@ -67,7 +56,10 @@ impl<T: io::Io> Server<T> {
             return;
         };
 
-        println!("============== timeout_fut: {} recv_fut: {}", timeout_rdy, recv_rdy);
+        println!(
+            "============== timeout_fut: {} recv_fut: {}",
+            timeout_rdy, recv_rdy
+        );
 
         if timeout_rdy {
             self.on_timeout();
@@ -121,21 +113,20 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::io::Io;
-    use crate::io::BufferIo;
+    use crate::io::Tx;
     use core::time::Duration;
 
     #[tokio::test]
     async fn mock_event_loop() {
-        let (mut c, p) = BufferIo::default().split();
         let clock = Clock::default();
-        let mut server = Server::new(p, clock);
+        let (mut server, mut network_io) = Server::new(clock);
 
         tokio::spawn(async move {
+            // simulate receiving a message
             for i in 0..5 {
-                c.send(Rpc::new_request_vote(i).into());
+                network_io.send(Rpc::new_request_vote(i).into());
                 tokio::time::sleep(Duration::from_millis(200)).await;
-                c.send(Rpc::new_append_entry(i).into());
+                network_io.send(Rpc::new_append_entry(100 + i).into());
             }
         });
 
@@ -149,12 +140,11 @@ mod tests {
 
     #[tokio::test]
     async fn recv_rpc() {
-        let (mut c, p) = BufferIo::default().split();
         let clock = Clock::default();
-        let mut server = Server::new(p, clock);
+        let (mut server, mut network_io) = Server::new(clock);
 
-        c.send(Rpc::new_request_vote(1).into());
-        c.send(Rpc::new_append_entry(1).into());
+        network_io.send(Rpc::new_request_vote(1).into());
+        network_io.send(Rpc::new_append_entry(1).into());
 
         server.recv();
     }
