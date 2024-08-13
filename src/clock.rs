@@ -4,6 +4,7 @@ use core::{
     task::{Context, Poll},
     time::Duration,
 };
+use futures::FutureExt;
 use rand::Rng;
 use tokio::time::{sleep_until, Instant, Sleep};
 
@@ -34,13 +35,13 @@ impl Clock {
 }
 
 /// A timer can be used to set timeouts
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Timer {
     // Reference to the server clock
     clock: Clock,
 
     // The sleep future
-    sleep: Pin<Box<Sleep>>,
+    sleep: Option<Pin<Box<Sleep>>>,
 }
 
 impl Clone for Timer {
@@ -53,12 +54,16 @@ impl Timer {
     pub fn new(clock: Clock) -> Self {
         let duration = rand::thread_rng().gen_range(MIN_DURATION..MAX_DURATION);
         let expire = clock.current_instance() + duration;
-        let sleep = Box::pin(sleep_until(expire));
+        let sleep = Some(Box::pin(sleep_until(expire)));
         Timer { clock, sleep }
     }
 
     pub fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
-        let poll = self.sleep.as_mut().poll(ctx);
+        let poll = if let Some(sleep) = &mut self.sleep {
+            sleep.as_mut().poll(ctx)
+        } else {
+            return Poll::Pending;
+        };
 
         if poll.is_ready() {
             // rearm the timer so we continue to make progress
@@ -73,7 +78,7 @@ impl Timer {
         let expire = self.clock.current_instance() + duration;
         let sleep = Box::pin(sleep_until(expire));
 
-        self.sleep = sleep;
+        self.sleep = Some(sleep);
     }
 }
 

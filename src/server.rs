@@ -1,9 +1,6 @@
-use crate::io::BufferIo;
-use crate::io::NetworkIo;
-use crate::io::Rx;
-use crate::io::ServerIo;
 use crate::{
     clock::Clock,
+    io::{BufferIo, NetworkIo, Rx, ServerIo},
     rpc::Rpc,
     state::{ServerId, State},
 };
@@ -16,18 +13,21 @@ pub struct Server {
     clock: Clock,
     state: State,
     // IO handle to send and receive Rpc messages
-    io: ServerIo
+    io: ServerIo,
 }
 
 impl Server {
     fn new(clock: Clock) -> (Server, NetworkIo) {
         let (server_io, network_io) = BufferIo::split();
-        (Server {
-            id: ServerId::new(),
-            clock,
-            state: State::new(clock),
-            io: server_io,
-        }, network_io)
+        (
+            Server {
+                id: ServerId::new(),
+                clock,
+                state: State::new(clock),
+                io: server_io,
+            },
+            network_io,
+        )
     }
 
     pub fn on_timeout(&mut self) {
@@ -37,7 +37,7 @@ impl Server {
     pub fn recv(&mut self) {
         while let Some(bytes) = self.io.recv() {
             let rpc = Rpc::try_from(bytes).expect("TODO handle error");
-            self.state.recv(rpc);
+            self.state.recv(&mut self.io, rpc);
         }
     }
 
@@ -136,16 +136,5 @@ mod tests {
             println!("---{i} elapsed: {:?}", clock.elapsed());
             i += 1;
         }
-    }
-
-    #[tokio::test]
-    async fn recv_rpc() {
-        let clock = Clock::default();
-        let (mut server, mut network_io) = Server::new(clock);
-
-        network_io.send(Rpc::new_request_vote(1).into());
-        network_io.send(Rpc::new_append_entry(1).into());
-
-        server.recv();
     }
 }

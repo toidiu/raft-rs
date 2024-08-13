@@ -3,8 +3,12 @@ use crate::{
     io::Tx,
     log::Term,
     rpc::{AppendEntries, RequestVote, Rpc},
+    state::variants::{Candidate, Follower, Leader},
 };
-use uuid::Uuid;
+
+mod common;
+mod variants;
+pub use variants::ServerId;
 
 /// Raft state diagram.
 ///
@@ -52,17 +56,17 @@ impl State {
 
     pub fn timer(&mut self) -> &mut Timer {
         match self {
-            State::Follower(inner) => &mut inner.timer,
-            State::Leader(inner) => &mut inner.timer,
-            State::Candidate(inner) => &mut inner.timer,
+            State::Follower(inner) => &mut inner.common.timer,
+            State::Leader(inner) => &mut inner.common.timer,
+            State::Candidate(inner) => &mut inner.common.timer,
         }
     }
 
     pub fn curr_term(&self) -> Term {
         match self {
-            State::Follower(inner) => inner.curr_term,
-            State::Leader(inner) => inner.curr_term,
-            State::Candidate(inner) => inner.curr_term,
+            State::Follower(inner) => inner.common.curr_term,
+            State::Leader(inner) => inner.common.curr_term,
+            State::Candidate(inner) => inner.common.curr_term,
         }
     }
 
@@ -82,19 +86,52 @@ impl State {
         }
     }
 
-    pub fn recv(&mut self, rpc: Rpc) {
-        match rpc {
-            Rpc::RequestVote(rpc) => self.on_request_vote(rpc),
-            Rpc::AppendEntries(rpc) => self.on_append_entry(rpc),
+    pub fn recv<T: Tx>(&mut self, tx: &mut T, rpc: Rpc) {
+        match self {
+            State::Follower(_inner) => {
+                // # Compliance:
+                // - Respond to RPCs from candidates and leaders
+                self.on_recv_follower(tx, rpc);
+            }
+            State::Leader(_inner) => {}
+            State::Candidate(_inner) => {}
         }
+    }
+
+    fn on_recv_follower<T: Tx>(&mut self, tx: &mut T, rpc: Rpc) {
+        println!("state: on_recv_follower");
+
+        match rpc {
+            Rpc::RequestVote(RequestVote { term: _ }) => {}
+            Rpc::AppendEntries(AppendEntries { term: _ }) => {}
+        }
+        // let timer = self.timer().clone();
+        // *self = State::Candidate(Candidate::new(timer, self.curr_term()));
+        // TODO: start new election
+        // tx.send(Rpc::new_request_vote(self.curr_term().0 + 1).into());
     }
 
     fn on_candidate<T: Tx>(&mut self, tx: &mut T) {
         println!("state: on_candidate");
-        let timer = self.timer().clone();
-        *self = State::Candidate(Candidate::new(timer, self.curr_term()));
+        self.into_candidate();
         // TODO: start new election
         tx.send(Rpc::new_request_vote(self.curr_term().0 + 1).into());
+    }
+
+    // FIXME: this feels messy. is there a better way to convert to different variants?
+    fn into_candidate(&mut self) {
+        let common = match self {
+            State::Follower(Follower { common }) => {
+                std::mem::take(common)
+            }
+            State::Leader(Leader{common}) => {
+                std::mem::take(common)
+            }
+            State::Candidate(Candidate{common}) => {
+                std::mem::take(common)
+            }
+        };
+        *self = State::Candidate(Candidate::new(common));
     }
 
     fn send_heartbeat<T: Tx>(&mut self, tx: &mut T) {
@@ -111,56 +148,6 @@ impl State {
     fn on_append_entry(&mut self, rpc: AppendEntries) {
         println!("recv AppendEntries. {:?}", rpc.term);
         // TODO: heartbeat, new entry, discover current leader, discover new term
-    }
-}
-
-#[derive(Debug)]
-pub struct Follower {
-    curr_term: Term,
-    timer: Timer,
-}
-
-impl Follower {
-    fn new(clock: Clock) -> Self {
-        Follower {
-            curr_term: Term(0),
-            timer: Timer::new(clock),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Leader {
-    curr_term: Term,
-    timer: Timer,
-    // // ==== volatile state on leaders
-    // // for each server, idx of next log entry to send to that server
-    // next_idx: Vec<(ServerId, u64)>,
-    // // for each server, idx of highest log entry known to be replicated on server
-    // match_idx: Vec<(ServerId, u64)>,
-
-    // heartbeat_send_timeout: Clock,
-}
-
-#[derive(Debug)]
-pub struct Candidate {
-    curr_term: Term,
-    timer: Timer,
-}
-
-impl Candidate {
-    fn new(timer: Timer, curr_term: Term) -> Self {
-        Candidate { curr_term, timer }
-    }
-}
-
-#[derive(Debug)]
-pub struct ServerId(String);
-
-impl ServerId {
-    pub fn new() -> Self {
-        let id = Uuid::new_v4();
-        ServerId(id.to_string())
     }
 }
 
