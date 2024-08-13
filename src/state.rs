@@ -1,14 +1,24 @@
+use uuid::Uuid;
 use crate::{
     clock::{Clock, Timer},
     io::Tx,
     log::Term,
     rpc::{AppendEntries, RequestVote, Rpc},
-    state::variants::{Candidate, Follower, Leader},
+    state::inner::InnerState,
 };
 
-mod common;
-mod variants;
-pub use variants::ServerId;
+mod inner;
+
+#[derive(Debug)]
+pub struct ServerId(String);
+
+impl ServerId {
+    pub fn new() -> Self {
+        let id = Uuid::new_v4();
+        ServerId(id.to_string())
+    }
+}
+
 
 /// Raft state diagram.
 ///
@@ -43,15 +53,15 @@ pub use variants::ServerId;
 
 #[derive(Debug)]
 pub enum State {
-    Follower(Follower),
-    Leader(Leader),
-    Candidate(Candidate),
+    Follower(InnerState),
+    Leader(InnerState),
+    Candidate(InnerState),
 }
 
 impl State {
     pub fn new(clock: Clock) -> Self {
         // 1: startup
-        State::Follower(Follower::new(clock))
+        State::Follower(InnerState::new(clock))
     }
 
     pub fn timer(&mut self) -> &mut Timer {
@@ -113,25 +123,25 @@ impl State {
 
     fn on_candidate<T: Tx>(&mut self, tx: &mut T) {
         println!("state: on_candidate");
-        self.into_candidate();
+        self.convert_to_candidate();
         // TODO: start new election
         tx.send(Rpc::new_request_vote(self.curr_term().0 + 1).into());
     }
 
     // FIXME: this feels messy. is there a better way to convert to different variants?
-    fn into_candidate(&mut self) {
-        let common = match self {
-            State::Follower(Follower { common }) => {
-                std::mem::take(common)
+    fn convert_to_candidate(&mut self) {
+        let inner = match self {
+            State::Follower(inner) => {
+                std::mem::take(inner)
             }
-            State::Leader(Leader{common}) => {
-                std::mem::take(common)
+            State::Leader(inner) => {
+                std::mem::take(inner)
             }
-            State::Candidate(Candidate{common}) => {
-                std::mem::take(common)
+            State::Candidate(inner) => {
+                std::mem::take(inner)
             }
         };
-        *self = State::Candidate(Candidate::new(common));
+        *self = State::Candidate(inner);
     }
 
     fn send_heartbeat<T: Tx>(&mut self, tx: &mut T) {
