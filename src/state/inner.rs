@@ -4,14 +4,14 @@ use crate::{
 };
 
 #[derive(Debug, Default)]
-pub struct InnerState {
+pub struct Inner {
     pub common: Common,
 }
 
-impl InnerState {
+impl Inner {
     pub fn new(clock: Clock) -> Self {
         let common = Common::new(clock);
-        InnerState { common }
+        Inner { common }
     }
 }
 

@@ -4,7 +4,6 @@ use core::{
     task::{Context, Poll},
     time::Duration,
 };
-use futures::FutureExt;
 use rand::Rng;
 use tokio::time::{sleep_until, Instant, Sleep};
 
@@ -40,6 +39,8 @@ pub struct Timer {
     // Reference to the server clock
     clock: Clock,
 
+    expire: Option<Instant>,
+
     // The sleep future
     sleep: Option<Pin<Box<Sleep>>>,
 }
@@ -55,7 +56,7 @@ impl Timer {
         let duration = rand::thread_rng().gen_range(MIN_DURATION..MAX_DURATION);
         let expire = clock.current_instance() + duration;
         let sleep = Some(Box::pin(sleep_until(expire)));
-        Timer { clock, sleep }
+        Timer { clock, expire: Some(expire), sleep }
     }
 
     pub fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
@@ -73,11 +74,12 @@ impl Timer {
         poll
     }
 
-    fn rearm(&mut self) {
+    pub fn rearm(&mut self) {
         let duration = rand::thread_rng().gen_range(MIN_DURATION..MAX_DURATION);
         let expire = self.clock.current_instance() + duration;
         let sleep = Box::pin(sleep_until(expire));
 
+        self.expire = Some(expire);
         self.sleep = Some(sleep);
     }
 }
@@ -99,8 +101,7 @@ mod tests {
 
     #[tokio::test]
     async fn manual_check_elapsed_time() {
-        let clock = Clock::default();
-        let mut timer = Timer::new(clock);
+        let mut timer = Timer::new(Clock::default());
 
         let (waker, cnt) = new_count_waker();
         let mut ctx = Context::from_waker(&waker);
@@ -115,5 +116,26 @@ mod tests {
         sleep(MAX_DURATION).await;
         assert!(timer.poll_ready(&mut ctx).is_ready());
         assert_eq!(cnt, 1);
+    }
+
+    #[tokio::test]
+    async fn rearm() {
+        let mut timer = Timer::new(Clock::default());
+        assert!(timer.expire.is_some());
+        let original_expire = timer.expire.unwrap();
+
+        let (waker, cnt) = new_count_waker();
+        let mut ctx = Context::from_waker(&waker);
+        assert!(timer.poll_ready(&mut ctx).is_pending());
+        assert_eq!(cnt, 0);
+
+        // wait till timer is expired and call poll again
+        sleep(MAX_DURATION).await;
+        assert!(timer.poll_ready(&mut ctx).is_ready());
+        assert_eq!(cnt, 1);
+
+        // timer should have rearmed
+        assert!(timer.expire.is_some());
+        assert!(original_expire < timer.expire.unwrap());
     }
 }

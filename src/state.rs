@@ -1,11 +1,11 @@
-use uuid::Uuid;
 use crate::{
     clock::{Clock, Timer},
     io::Tx,
     log::Term,
     rpc::{AppendEntries, RequestVote, Rpc},
-    state::inner::InnerState,
+    state::inner::Inner,
 };
+use uuid::Uuid;
 
 mod inner;
 
@@ -19,6 +19,19 @@ impl ServerId {
     }
 }
 
+// Trick to convert one enum variant into another with a &mut reference.
+//
+// This is pretty messy but should be safe.
+macro_rules! convert_to {
+    ($state:ident, $new:path) => {
+        let inner = match $state {
+            State::Follower(inner) => std::mem::take(inner),
+            State::Leader(inner) => std::mem::take(inner),
+            State::Candidate(inner) => std::mem::take(inner),
+        };
+        *$state = $new(inner);
+    };
+}
 
 /// Raft state diagram.
 ///
@@ -53,15 +66,15 @@ impl ServerId {
 
 #[derive(Debug)]
 pub enum State {
-    Follower(InnerState),
-    Leader(InnerState),
-    Candidate(InnerState),
+    Follower(Inner),
+    Leader(Inner),
+    Candidate(Inner),
 }
 
 impl State {
     pub fn new(clock: Clock) -> Self {
         // 1: startup
-        State::Follower(InnerState::new(clock))
+        State::Follower(Inner::new(clock))
     }
 
     pub fn timer(&mut self) -> &mut Timer {
@@ -98,50 +111,34 @@ impl State {
 
     pub fn recv<T: Tx>(&mut self, tx: &mut T, rpc: Rpc) {
         match self {
-            State::Follower(_inner) => {
+            State::Follower(inner) => {
                 // # Compliance:
                 // - Respond to RPCs from candidates and leaders
-                self.on_recv_follower(tx, rpc);
+                Self::on_recv_follower(inner, tx, rpc);
             }
             State::Leader(_inner) => {}
             State::Candidate(_inner) => {}
         }
     }
 
-    fn on_recv_follower<T: Tx>(&mut self, tx: &mut T, rpc: Rpc) {
+    fn on_recv_follower<T: Tx>(inner: &mut Inner, tx: &mut T, rpc: Rpc) {
         println!("state: on_recv_follower");
 
         match rpc {
             Rpc::RequestVote(RequestVote { term: _ }) => {}
-            Rpc::AppendEntries(AppendEntries { term: _ }) => {}
+            Rpc::AppendEntries(AppendEntries { term }) => {
+                if inner.common.curr_term == term {
+                    inner.common.timer.rearm()
+                }
+            }
         }
-        // let timer = self.timer().clone();
-        // *self = State::Candidate(Candidate::new(timer, self.curr_term()));
-        // TODO: start new election
-        // tx.send(Rpc::new_request_vote(self.curr_term().0 + 1).into());
     }
 
     fn on_candidate<T: Tx>(&mut self, tx: &mut T) {
         println!("state: on_candidate");
-        self.convert_to_candidate();
+        convert_to!(self, State::Candidate);
         // TODO: start new election
         tx.send(Rpc::new_request_vote(self.curr_term().0 + 1).into());
-    }
-
-    // FIXME: this feels messy. is there a better way to convert to different variants?
-    fn convert_to_candidate(&mut self) {
-        let inner = match self {
-            State::Follower(inner) => {
-                std::mem::take(inner)
-            }
-            State::Leader(inner) => {
-                std::mem::take(inner)
-            }
-            State::Candidate(inner) => {
-                std::mem::take(inner)
-            }
-        };
-        *self = State::Candidate(inner);
     }
 
     fn send_heartbeat<T: Tx>(&mut self, tx: &mut T) {
