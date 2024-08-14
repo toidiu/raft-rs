@@ -5,25 +5,13 @@ use crate::{
 
 #[derive(Debug, Default)]
 pub struct Inner {
-    pub common: Common,
-}
-
-impl Inner {
-    pub fn new(clock: Clock) -> Self {
-        let common = Common::new(clock);
-        Inner { common }
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct Common {
     pub curr_term: Term,
     pub timer: Timer,
 }
 
-impl Common {
+impl Inner {
     pub fn new(clock: Clock) -> Self {
-        Common {
+        Inner {
             curr_term: Term(0),
             timer: Timer::new(clock),
         }

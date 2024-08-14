@@ -10,8 +10,6 @@ use uuid::Uuid;
 
 mod inner;
 
-pub(crate) use inner::Common;
-
 #[derive(Debug)]
 pub struct ServerId(String);
 
@@ -80,19 +78,19 @@ impl State {
         State::Follower(Inner::new(clock))
     }
 
-    pub fn common(&self) -> &Common {
+    pub fn inner(&self) -> &Inner {
         match self {
-            State::Follower(inner) => &inner.common,
-            State::Leader(inner) => &inner.common,
-            State::Candidate(inner) => &inner.common,
+            State::Follower(inner) => inner,
+            State::Leader(inner) => inner,
+            State::Candidate(inner) => inner,
         }
     }
 
-    pub fn common_mut(&mut self) -> &mut Common {
+    pub fn common_mut(&mut self) -> &mut Inner {
         match self {
-            State::Follower(inner) => &mut inner.common,
-            State::Leader(inner) => &mut inner.common,
-            State::Candidate(inner) => &mut inner.common,
+            State::Follower(inner) => inner,
+            State::Leader(inner) =>  inner,
+            State::Candidate(inner) =>  inner,
         }
     }
 
@@ -134,8 +132,8 @@ impl State {
                 vote_granted: _,
             }) => {}
             Rpc::AppendEntries(AppendEntries { term }) => {
-                if inner.common.curr_term == term {
-                    inner.common.timer.rearm()
+                if inner.curr_term == term {
+                    inner.timer.rearm()
                 }
             }
         }
@@ -145,7 +143,7 @@ impl State {
         // println!("state: on_candidate");
         convert_to!(self, State::Candidate);
         // TODO: start new election
-        let term = self.common().curr_term.0 + 1;
+        let term = self.inner().curr_term.0 + 1;
         let mut slice = vec![0; 100];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_request_vote(term).encode_mut(&mut buf);
@@ -156,7 +154,7 @@ impl State {
         // println!("state: send_heartbeat");
 
         // TODO send rpc
-        let term = self.common().curr_term.0 + 1;
+        let term = self.inner().curr_term.0 + 1;
         let mut slice = vec![0; 100];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_append_entry(term).encode_mut(&mut buf);
