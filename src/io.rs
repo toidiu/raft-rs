@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use core::task::Waker;
 use std::{
     collections::VecDeque,
@@ -38,16 +37,16 @@ impl BufferIo {
 /// A handle to the underlying BufferIO
 #[derive(Debug)]
 pub struct ServerIo {
-    rx: Arc<Mutex<VecDeque<Bytes>>>,
-    tx: Arc<Mutex<VecDeque<Bytes>>>,
+    rx: Arc<Mutex<VecDeque<u8>>>,
+    tx: Arc<Mutex<VecDeque<u8>>>,
     waker: Arc<Mutex<Option<Waker>>>,
 }
 
 /// A handle to the underlying BufferIO
 #[derive(Debug)]
 pub struct NetworkIo {
-    rx: Arc<Mutex<VecDeque<Bytes>>>,
-    tx: Arc<Mutex<VecDeque<Bytes>>>,
+    rx: Arc<Mutex<VecDeque<u8>>>,
+    tx: Arc<Mutex<VecDeque<u8>>>,
     waker: Arc<Mutex<Option<Waker>>>,
 }
 
@@ -59,17 +58,23 @@ mod tests {
     fn producer_consumer() {
         let (mut server_io, mut network_io) = BufferIo::split();
 
-        network_io.send(Bytes::from_static(&[1]));
-        network_io.send(Bytes::from_static(&[2]));
-        network_io.send(Bytes::from_static(&[3]));
-        server_io.send(Bytes::from_static(&[5]));
-        server_io.send(Bytes::from_static(&[6]));
-        server_io.send(Bytes::from_static(&[7]));
+        network_io.send(vec![1]);
+        network_io.send(vec![2]);
+        server_io.send(vec![3]);
+        server_io.send(vec![4]);
 
-        assert_eq!(server_io.recv(), Some(Bytes::from_static(&[1, 2, 3])));
+        assert_eq!(server_io.recv(), Some(vec![1, 2]));
         assert_eq!(server_io.recv(), None);
 
-        assert_eq!(network_io.recv(), Some(Bytes::from_static(&[5, 6, 7])));
+        assert_eq!(network_io.recv(), Some(vec![3, 4]));
+        assert_eq!(network_io.recv(), None);
+
+        network_io.send(vec![5]);
+        server_io.send(vec![6]);
+        assert_eq!(server_io.recv(), Some(vec![5]));
+        assert_eq!(server_io.recv(), None);
+
+        assert_eq!(network_io.recv(), Some(vec![6]));
         assert_eq!(network_io.recv(), None);
     }
 }

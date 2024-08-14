@@ -1,13 +1,12 @@
 use crate::io::{NetworkIo, ServerIo};
-use bytes::Bytes;
 use core::{
     future::Future,
     task::{Context, Poll},
 };
-use std::ops::Deref;
+use std::io::Read;
 
 pub trait Rx {
-    fn recv(&mut self) -> Option<Bytes>;
+    fn recv(&mut self) -> Option<Vec<u8>>;
 
     fn poll_ready(&mut self, cx: &mut Context) -> Poll<()>;
 
@@ -32,17 +31,19 @@ impl<'a, T: Rx> Future for RxReady<'a, T> {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        println!("---------- rx rdy {}", 34);
         self.0.poll_ready(cx)
     }
 }
 
 impl Rx for NetworkIo {
-    fn recv(&mut self) -> Option<Bytes> {
-        if let Some(waker) = self.waker.lock().unwrap().deref() {
-            waker.wake_by_ref();
+    fn recv(&mut self) -> Option<Vec<u8>> {
+        let mut buf = [0; 100];
+        let len = self.rx.lock().unwrap().read(&mut buf[0..]).ok()?;
+        if len > 0 {
+            Some(buf[0..len].to_vec())
+        } else {
+            None
         }
-        self.rx.lock().unwrap().pop_front()
     }
 
     fn poll_ready(&mut self, cx: &mut Context) -> Poll<()> {
@@ -57,16 +58,18 @@ impl Rx for NetworkIo {
 }
 
 impl Rx for ServerIo {
-    fn recv(&mut self) -> Option<Bytes> {
-        if let Some(waker) = self.waker.lock().unwrap().deref() {
-            waker.wake_by_ref();
+    fn recv(&mut self) -> Option<Vec<u8>> {
+        let mut buf = [0; 100];
+        let len = self.rx.lock().unwrap().read(&mut buf[0..]).ok()?;
+        if len > 0 {
+            Some(buf[0..len].to_vec())
+        } else {
+            None
         }
-        self.rx.lock().unwrap().pop_front()
     }
 
     fn poll_ready(&mut self, cx: &mut Context) -> Poll<()> {
         let rdy = !self.rx.lock().unwrap().is_empty();
-        println!("---------- rx rdy {}", rdy);
         *self.waker.lock().unwrap() = Some(cx.waker().clone());
         if rdy {
             Poll::Ready(())

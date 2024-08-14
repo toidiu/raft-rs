@@ -125,7 +125,7 @@ impl State {
     }
 
     fn on_recv_follower<T: Tx>(inner: &mut Inner, tx: &mut T, rpc: Rpc) {
-        println!("state: on_recv_follower");
+        // println!("state: on_recv_follower");
 
         match rpc {
             Rpc::RequestVote(RequestVote { term: _ }) => {}
@@ -142,36 +142,34 @@ impl State {
     }
 
     fn on_candidate<T: Tx>(&mut self, tx: &mut T) {
-        println!("state: on_candidate");
+        // println!("state: on_candidate");
         convert_to!(self, State::Candidate);
         // TODO: start new election
         let term = self.common().curr_term.0 + 1;
         let mut slice = vec![0; 100];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_request_vote(term).encode_mut(&mut buf);
-        tx.send(buf.as_mut_slice().to_vec().into());
+        tx.send(buf.as_mut_slice().to_vec());
     }
 
     fn send_heartbeat<T: Tx>(&mut self, tx: &mut T) {
-        println!("state: send_heartbeat");
+        // println!("state: send_heartbeat");
 
         // TODO send rpc
-        // tx.send(Rpc::new_append_entry(1).into());
         let term = self.common().curr_term.0 + 1;
         let mut slice = vec![0; 100];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_append_entry(term).encode_mut(&mut buf);
-        tx.send(buf.as_mut_slice().to_vec().into());
+        tx.send(buf.as_mut_slice().to_vec());
     }
 
     fn on_request_vote(&mut self, rpc: RequestVote) {
-        println!("state: recv RequestVote. {:?}", rpc.term);
+        // println!("state: recv RequestVote. {:?}", rpc.term);
         // TODO: recv vote, request for new election
-        println!("state: recv RequestVote. {:?}", rpc.term);
     }
 
     fn on_append_entry(&mut self, rpc: AppendEntries) {
-        println!("recv AppendEntries. {:?}", rpc.term);
+        // println!("recv AppendEntries. {:?}", rpc.term);
         // TODO: heartbeat, new entry, discover current leader, discover new term
     }
 }

@@ -1,11 +1,10 @@
 use crate::io::{Rx, Tx};
-use bytes::Bytes;
 use core::task::Waker;
 use std::collections::VecDeque;
 
 pub struct MockIo {
-    pub rx: VecDeque<Bytes>,
-    pub tx: VecDeque<Bytes>,
+    pub rx: VecDeque<Vec<u8>>,
+    pub tx: VecDeque<Vec<u8>>,
     pub waker: Option<Waker>,
 }
 
@@ -20,7 +19,7 @@ impl MockIo {
 }
 
 impl Tx for MockIo {
-    fn send(&mut self, data: Bytes) {
+    fn send(&mut self, data: Vec<u8>) {
         self.tx.push_back(data)
     }
 
@@ -30,7 +29,7 @@ impl Tx for MockIo {
 }
 
 impl Rx for MockIo {
-    fn recv(&mut self) -> Option<Bytes> {
+    fn recv(&mut self) -> Option<Vec<u8>> {
         self.rx.pop_front()
     }
 

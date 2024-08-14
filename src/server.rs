@@ -41,6 +41,7 @@ impl Server {
 
             while !buf.is_empty() {
                 let (rpc, buffer) = Rpc::decode(buf).expect("todo");
+                println!("--- rpc: {:?}", rpc);
                 buf = buffer;
                 self.state.recv(&mut self.io, rpc);
             }
@@ -135,12 +136,13 @@ mod tests {
                 let mut buf = EncoderBuffer::new(&mut slice);
                 Rpc::new_request_vote(i).encode(&mut buf);
                 let (written, rem) = buf.split_mut();
-                network_io.send(written.to_vec().into());
+                network_io.send(written.to_vec());
+
                 tokio::time::sleep(Duration::from_millis(200)).await;
 
                 let mut buf = EncoderBuffer::new(rem);
                 Rpc::new_append_entry(i + 100).encode(&mut buf);
-                network_io.send(buf.as_mut_slice().to_vec().into());
+                network_io.send(buf.as_mut_slice().to_vec());
             }
         });
 

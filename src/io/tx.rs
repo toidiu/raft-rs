@@ -1,5 +1,4 @@
 use crate::io::{NetworkIo, ServerIo};
-use bytes::Bytes;
 use core::{
     future::Future,
     task::{Context, Poll},
@@ -7,7 +6,7 @@ use core::{
 use std::ops::Deref;
 
 pub trait Tx {
-    fn send(&mut self, data: Bytes);
+    fn send(&mut self, data: Vec<u8>);
 
     fn poll_ready(&mut self, cx: &mut Context) -> Poll<()>;
 
@@ -37,11 +36,11 @@ impl<'a, T: Tx> Future for TxReady<'a, T> {
 }
 
 impl Tx for NetworkIo {
-    fn send(&mut self, data: Bytes) {
+    fn send(&mut self, data: Vec<u8>) {
         if let Some(waker) = self.waker.lock().unwrap().deref() {
             waker.wake_by_ref();
         }
-        self.tx.lock().unwrap().push_back(data);
+        self.tx.lock().unwrap().extend(data);
     }
 
     fn poll_ready(&mut self, cx: &mut Context) -> Poll<()> {
@@ -56,11 +55,11 @@ impl Tx for NetworkIo {
 }
 
 impl Tx for ServerIo {
-    fn send(&mut self, data: Bytes) {
+    fn send(&mut self, data: Vec<u8>) {
         if let Some(waker) = self.waker.lock().unwrap().deref() {
             waker.wake_by_ref();
         }
-        self.tx.lock().unwrap().push_back(data);
+        self.tx.lock().unwrap().extend(data);
     }
 
     fn poll_ready(&mut self, cx: &mut Context) -> Poll<()> {
