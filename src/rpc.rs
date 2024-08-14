@@ -4,7 +4,9 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 #[derive(Debug, Clone, Copy)]
 pub enum Rpc {
     RequestVote(RequestVote),
+    RespRequestVote(RespRequestVote),
     AppendEntries(AppendEntries),
+    // RespAppendEntries(AppendEntries),
 }
 
 impl Rpc {
@@ -28,6 +30,15 @@ impl TryFrom<Bytes> for Rpc {
                 let rpc = RequestVote { term: Term(term) };
                 Ok(Rpc::RequestVote(rpc))
             }
+            RespRequestVote::TAG => {
+                let term = value.get_u64();
+                let vote_granted = value.get_u8() != 0;
+                let rpc = RespRequestVote {
+                    term: Term(term),
+                    vote_granted,
+                };
+                Ok(Rpc::RespRequestVote(rpc))
+            }
             AppendEntries::TAG => {
                 let term = value.get_u64();
                 let rpc = AppendEntries { term: Term(term) };
@@ -47,6 +58,12 @@ impl From<Rpc> for Bytes {
                 b.put_u64(inner.term.0);
                 b
             }
+            Rpc::RespRequestVote(inner) => {
+                b.put_u8(RespRequestVote::TAG);
+                b.put_u64(inner.term.0);
+                b.put_u8(inner.vote_granted as u8);
+                b
+            }
             Rpc::AppendEntries(inner) => {
                 b.put_u8(AppendEntries::TAG);
                 b.put_u64(inner.term.0);
@@ -62,10 +79,23 @@ impl From<Rpc> for Bytes {
 #[derive(Debug, Clone, Copy)]
 pub struct RequestVote {
     pub term: Term,
+    // pub cnadidate_d: ServerId,
+    // pub last_term_idx: TermIdx,
 }
 
 impl RequestVote {
     const TAG: u8 = 0;
+}
+
+// Leader election
+#[derive(Debug, Clone, Copy)]
+pub struct RespRequestVote {
+    pub term: Term,
+    pub vote_granted: bool,
+}
+
+impl RespRequestVote {
+    const TAG: u8 = 1;
 }
 
 // Add entries and heartbeat
@@ -75,5 +105,5 @@ pub struct AppendEntries {
 }
 
 impl AppendEntries {
-    const TAG: u8 = 1;
+    const TAG: u8 = 2;
 }

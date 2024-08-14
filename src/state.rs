@@ -1,3 +1,4 @@
+use crate::rpc::RespRequestVote;
 use crate::{
     clock::{Clock, Timer},
     io::Tx,
@@ -8,6 +9,8 @@ use crate::{
 use uuid::Uuid;
 
 mod inner;
+
+pub(crate) use inner::Common;
 
 #[derive(Debug)]
 pub struct ServerId(String);
@@ -77,19 +80,19 @@ impl State {
         State::Follower(Inner::new(clock))
     }
 
-    pub fn timer(&mut self) -> &mut Timer {
+    pub fn common(&self) -> &Common {
         match self {
-            State::Follower(inner) => &mut inner.common.timer,
-            State::Leader(inner) => &mut inner.common.timer,
-            State::Candidate(inner) => &mut inner.common.timer,
+            State::Follower(inner) => &inner.common,
+            State::Leader(inner) => &inner.common,
+            State::Candidate(inner) => &inner.common,
         }
     }
 
-    pub fn curr_term(&self) -> Term {
+    pub fn common_mut(&mut self) -> &mut Common {
         match self {
-            State::Follower(inner) => inner.common.curr_term,
-            State::Leader(inner) => inner.common.curr_term,
-            State::Candidate(inner) => inner.common.curr_term,
+            State::Follower(inner) => &mut inner.common,
+            State::Leader(inner) => &mut inner.common,
+            State::Candidate(inner) => &mut inner.common,
         }
     }
 
@@ -126,6 +129,7 @@ impl State {
 
         match rpc {
             Rpc::RequestVote(RequestVote { term: _ }) => {}
+            Rpc::RespRequestVote(RespRequestVote { term: _, vote_granted: _ }) => {}
             Rpc::AppendEntries(AppendEntries { term }) => {
                 if inner.common.curr_term == term {
                     inner.common.timer.rearm()
@@ -138,7 +142,7 @@ impl State {
         println!("state: on_candidate");
         convert_to!(self, State::Candidate);
         // TODO: start new election
-        tx.send(Rpc::new_request_vote(self.curr_term().0 + 1).into());
+        tx.send(Rpc::new_request_vote(self.common().curr_term.0 + 1).into());
     }
 
     fn send_heartbeat<T: Tx>(&mut self, tx: &mut T) {
@@ -170,7 +174,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn follower_candidate_timeout() {
+    async fn follower_timeout() {
         let mut io = MockIo::new();
         let mut s = State::new(Clock::default());
         assert!(matches!(s, State::Follower(_)));
@@ -180,6 +184,15 @@ mod tests {
         let rpc = Rpc::try_from(io.tx.pop_front().unwrap()).unwrap();
         let req = cast!(rpc, Rpc::RequestVote);
         assert_eq!(req.term, Term(1));
+    }
+
+    #[tokio::test]
+    async fn candidate_timeout() {
+        let mut io = MockIo::new();
+        let mut s = State::new(Clock::default());
+        let s_ref = &mut s;
+        convert_to!(s_ref, State::Candidate);
+        assert!(matches!(s, State::Candidate(_)));
 
         s.on_timeout(&mut io);
         assert!(matches!(s, State::Candidate(_)));

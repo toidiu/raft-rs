@@ -16,7 +16,7 @@ impl Inner {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct Common {
+pub struct Common {
     pub curr_term: Term,
     pub timer: Timer,
 }

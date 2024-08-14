@@ -43,7 +43,7 @@ impl Server {
 
     async fn poll(&mut self) {
         let fut = ServerFut {
-            timeout: self.state.timer(),
+            timeout: &mut self.state.common_mut().timer,
             recv: self.io.rx_ready(),
         };
 
