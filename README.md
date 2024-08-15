@@ -2,6 +2,14 @@
 
 A toy implementation to better understand the [Raft](https://toidiu.com/reads/In_Search_of_an_Understandable_Consensus_Algorithm_(Extended_Raft).pdf) consensus protocol
 
+## Tasks
+Remaining tasks to complete:
+- Follower recv (scope)
+- Follower recv impl
+- Follower timeout (scope)
+- Follower timeout impl
+- Candidate
+- Leader
 
 ## Research
 
