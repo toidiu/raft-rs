@@ -2,7 +2,7 @@
 // TODO: u8 is used for simplification. Eventually support additional types.
 pub type Data = u8;
 
-#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Term(pub u64);
 
 impl From<u64> for Term {
@@ -14,7 +14,7 @@ impl From<u64> for Term {
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Idx(u64);
 
-#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct TermIdx {
     term: Term,
     idx: Idx,
@@ -29,7 +29,7 @@ impl TermIdx {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Entry {
     term_idx: TermIdx,
     data: Data,

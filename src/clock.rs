@@ -37,7 +37,7 @@ impl Clock {
 ///
 /// To ensure Raft continues to make progress, the timer
 /// is automatically rearmed after it expires.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Timer {
     // Reference to the server clock
     clock: Clock,

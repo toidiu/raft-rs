@@ -3,7 +3,7 @@ use crate::{
     state::Term,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Inner {
     pub curr_term: Term,
     pub timer: Timer,

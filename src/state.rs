@@ -20,20 +20,6 @@ impl ServerId {
     }
 }
 
-// Trick to convert one enum variant into another with a &mut reference.
-//
-// This is pretty messy but should be safe.
-macro_rules! convert_to {
-    ($state:ident, $new:path) => {
-        let inner = match $state {
-            State::Follower(inner) => std::mem::take(inner),
-            State::Leader(inner) => std::mem::take(inner),
-            State::Candidate(inner) => std::mem::take(inner),
-        };
-        *$state = $new(inner);
-    };
-}
-
 /// Raft state diagram.
 ///
 /// 1: startup
@@ -66,44 +52,37 @@ macro_rules! convert_to {
 /// https://textik.com/#8dbf6540e0dd1676
 
 #[derive(Debug)]
-pub enum State {
-    Follower(Inner),
-    Leader(Inner),
-    Candidate(Inner),
+pub struct State {
+    pub inner: Inner,
+    mode: Mode
+}
+
+#[derive(Debug)]
+ enum Mode {
+    Follower,
+    Leader,
+    Candidate,
 }
 
 impl State {
     pub fn new(clock: Clock) -> Self {
         // 1: startup
-        State::Follower(Inner::new(clock))
-    }
-
-    pub fn inner(&self) -> &Inner {
-        match self {
-            State::Follower(inner) => inner,
-            State::Leader(inner) => inner,
-            State::Candidate(inner) => inner,
-        }
-    }
-
-    pub fn common_mut(&mut self) -> &mut Inner {
-        match self {
-            State::Follower(inner) => inner,
-            State::Leader(inner) =>  inner,
-            State::Candidate(inner) =>  inner,
+        State {
+            inner:     Inner::new(clock),
+            mode: Mode::Follower
         }
     }
 
     pub fn on_timeout<T: Tx>(&mut self, io: &mut T) {
-        match self {
-            State::Follower(_inner) => {
+        match self.mode {
+            Mode::Follower => {
                 // 2: timeout. start election
                 self.on_candidate(io);
             }
-            State::Leader(_inner) => {
+            Mode::Leader => {
                 self.send_heartbeat(io);
             }
-            State::Candidate(_inner) => {
+            Mode::Candidate => {
                 // 3: timeout. new election
                 self.on_candidate(io);
             }
@@ -111,14 +90,14 @@ impl State {
     }
 
     pub fn recv<T: Tx>(&mut self, tx: &mut T, rpc: Rpc) {
-        match self {
-            State::Follower(inner) => {
+        match self.mode {
+            Mode::Follower => {
                 // # Compliance:
                 // - Respond to RPCs from candidates and leaders
-                Self::on_recv_follower(inner, tx, rpc);
+                Self::on_recv_follower(&mut self.inner, tx, rpc);
             }
-            State::Leader(_inner) => {}
-            State::Candidate(_inner) => {}
+            Mode::Leader => {}
+            Mode::Candidate => {}
         }
     }
 
@@ -140,10 +119,10 @@ impl State {
     }
 
     fn on_candidate<T: Tx>(&mut self, tx: &mut T) {
-        // println!("state: on_candidate");
-        convert_to!(self, State::Candidate);
+        self.mode = Mode::Candidate;
+
         // TODO: start new election
-        let term = self.inner().curr_term.0 + 1;
+        let term = self.inner.curr_term.0 + 1;
         let mut slice = vec![0; 100];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_request_vote(term).encode_mut(&mut buf);
@@ -154,7 +133,7 @@ impl State {
         // println!("state: send_heartbeat");
 
         // TODO send rpc
-        let term = self.inner().curr_term.0 + 1;
+        let term = self.inner.curr_term.0 + 1;
         let mut slice = vec![0; 100];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_append_entry(term).encode_mut(&mut buf);
@@ -181,17 +160,17 @@ mod tests {
     #[tokio::test]
     async fn default_state() {
         let s = State::new(Clock::default());
-        assert!(matches!(s, State::Follower(_)));
+        assert!(matches!(s.mode, Mode::Follower));
     }
 
     #[tokio::test]
     async fn follower_timeout() {
         let mut io = MockIo::new();
         let mut s = State::new(Clock::default());
-        assert!(matches!(s, State::Follower(_)));
+        assert!(matches!(s.mode, Mode::Follower));
 
         s.on_timeout(&mut io);
-        assert!(matches!(s, State::Candidate(_)));
+        assert!(matches!(s.mode, Mode::Candidate));
         let bytes = io.tx.pop_front().unwrap();
         let buf = DecoderBuffer::new(&bytes);
         let (rpc, _buffer) = Rpc::decode(buf).expect("todo");
@@ -203,12 +182,10 @@ mod tests {
     async fn candidate_timeout() {
         let mut io = MockIo::new();
         let mut s = State::new(Clock::default());
-        let s_ref = &mut s;
-        convert_to!(s_ref, State::Candidate);
-        assert!(matches!(s, State::Candidate(_)));
+        s.mode = Mode::Candidate;
 
         s.on_timeout(&mut io);
-        assert!(matches!(s, State::Candidate(_)));
+        assert!(matches!(s.mode, Mode::Candidate));
         let bytes = io.tx.pop_front().unwrap();
         let buf = DecoderBuffer::new(&bytes);
         let (rpc, _buffer) = Rpc::decode(buf).expect("todo");
