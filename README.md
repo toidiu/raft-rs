@@ -14,6 +14,7 @@ Remaining tasks to complete:
 ## Research
 
 ### Design
+![io_design](./io_design.jpeg)
 ![raft_design](./raft_design.jpeg)
 
 ### Notes from [TIKV](https://github.com/tikv/raft-rs)
