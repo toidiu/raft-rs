@@ -17,9 +17,9 @@ pub struct BufferIo;
 
 impl BufferIo {
     pub fn split() -> (ServerIo, NetworkIo) {
-        //   Producer                    Consumer
-        //    Server  <- recv [__rx__]  <- send  NetworkInterface/Socket
-        //            send -> [__tx__]  -> recv
+        //   ServerIo                    NetworkIo
+        //    Server   <- pop [__rx__]  <- push  NetworkInterface/Socket
+        //            push -> [__tx__]  -> pop
         let rx = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
         let tx = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
         let waker = Arc::new(Mutex::new(None));
@@ -34,7 +34,7 @@ impl BufferIo {
     }
 }
 
-/// A handle to the underlying BufferIO
+/// A handle to the underlying BufferIo
 #[derive(Debug)]
 pub struct ServerIo {
     rx: Arc<Mutex<VecDeque<u8>>>,
@@ -42,8 +42,8 @@ pub struct ServerIo {
     waker: Arc<Mutex<Option<Waker>>>,
 }
 
-/// A handle to the underlying BufferIO
-#[derive(Debug)]
+/// A handle to the underlying BufferIo
+#[derive(Debug, Clone)]
 pub struct NetworkIo {
     rx: Arc<Mutex<VecDeque<u8>>>,
     tx: Arc<Mutex<VecDeque<u8>>>,
@@ -58,23 +58,23 @@ mod tests {
     fn producer_consumer() {
         let (mut server_io, mut network_io) = BufferIo::split();
 
-        network_io.send(vec![1]);
-        network_io.send(vec![2]);
-        server_io.send(vec![3]);
-        server_io.send(vec![4]);
+        network_io.push(vec![1]);
+        network_io.push(vec![2]);
+        server_io.push(vec![3]);
+        server_io.push(vec![4]);
 
-        assert_eq!(server_io.recv(), Some(vec![1, 2]));
-        assert_eq!(server_io.recv(), None);
+        assert_eq!(server_io.pop(), Some(vec![1, 2]));
+        assert_eq!(server_io.pop(), None);
 
-        assert_eq!(network_io.recv(), Some(vec![3, 4]));
-        assert_eq!(network_io.recv(), None);
+        assert_eq!(network_io.pop(), Some(vec![3, 4]));
+        assert_eq!(network_io.pop(), None);
 
-        network_io.send(vec![5]);
-        server_io.send(vec![6]);
-        assert_eq!(server_io.recv(), Some(vec![5]));
-        assert_eq!(server_io.recv(), None);
+        network_io.push(vec![5]);
+        server_io.push(vec![6]);
+        assert_eq!(server_io.pop(), Some(vec![5]));
+        assert_eq!(server_io.pop(), None);
 
-        assert_eq!(network_io.recv(), Some(vec![6]));
-        assert_eq!(network_io.recv(), None);
+        assert_eq!(network_io.pop(), Some(vec![6]));
+        assert_eq!(network_io.pop(), None);
     }
 }

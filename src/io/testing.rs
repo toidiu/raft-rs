@@ -19,7 +19,7 @@ impl MockIo {
 }
 
 impl Tx for MockIo {
-    fn send(&mut self, data: Vec<u8>) {
+    fn push(&mut self, data: Vec<u8>) {
         self.tx.push_back(data)
     }
 
@@ -29,7 +29,7 @@ impl Tx for MockIo {
 }
 
 impl Rx for MockIo {
-    fn recv(&mut self) -> Option<Vec<u8>> {
+    fn pop(&mut self) -> Option<Vec<u8>> {
         self.rx.pop_front()
     }
 

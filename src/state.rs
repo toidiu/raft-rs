@@ -54,11 +54,11 @@ impl ServerId {
 #[derive(Debug)]
 pub struct State {
     pub inner: Inner,
-    mode: Mode
+    mode: Mode,
 }
 
 #[derive(Debug)]
- enum Mode {
+enum Mode {
     Follower,
     Leader,
     Candidate,
@@ -68,8 +68,8 @@ impl State {
     pub fn new(clock: Clock) -> Self {
         // 1: startup
         State {
-            inner:     Inner::new(clock),
-            mode: Mode::Follower
+            inner: Inner::new(clock),
+            mode: Mode::Follower,
         }
     }
 
@@ -126,7 +126,7 @@ impl State {
         let mut slice = vec![0; 100];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_request_vote(term).encode_mut(&mut buf);
-        tx.send(buf.as_mut_slice().to_vec());
+        tx.push(buf.as_mut_slice().to_vec());
     }
 
     fn send_heartbeat<T: Tx>(&mut self, tx: &mut T) {
@@ -137,7 +137,7 @@ impl State {
         let mut slice = vec![0; 100];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_append_entry(term).encode_mut(&mut buf);
-        tx.send(buf.as_mut_slice().to_vec());
+        tx.push(buf.as_mut_slice().to_vec());
     }
 
     fn on_request_vote(&mut self, rpc: RequestVote) {

@@ -6,7 +6,7 @@ use core::{
 use std::io::Read;
 
 pub trait Rx {
-    fn recv(&mut self) -> Option<Vec<u8>>;
+    fn pop(&mut self) -> Option<Vec<u8>>;
 
     fn poll_ready(&mut self, cx: &mut Context) -> Poll<()>;
 
@@ -36,7 +36,7 @@ impl<'a, T: Rx> Future for RxReady<'a, T> {
 }
 
 impl Rx for NetworkIo {
-    fn recv(&mut self) -> Option<Vec<u8>> {
+    fn pop(&mut self) -> Option<Vec<u8>> {
         let mut buf = [0; 100];
         let len = self.rx.lock().unwrap().read(&mut buf[0..]).ok()?;
         if len > 0 {
@@ -58,7 +58,7 @@ impl Rx for NetworkIo {
 }
 
 impl Rx for ServerIo {
-    fn recv(&mut self) -> Option<Vec<u8>> {
+    fn pop(&mut self) -> Option<Vec<u8>> {
         let mut buf = [0; 100];
         let len = self.rx.lock().unwrap().read(&mut buf[0..]).ok()?;
         if len > 0 {

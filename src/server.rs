@@ -1,3 +1,4 @@
+use crate::io::Tx;
 use crate::{
     clock::Clock,
     io::{BufferIo, NetworkIo, Rx, ServerIo},
@@ -36,7 +37,7 @@ impl Server {
     }
 
     pub fn recv(&mut self) {
-        if let Some(bytes) = self.io.recv() {
+        if let Some(bytes) = self.io.pop() {
             let mut buf = DecoderBuffer::new(&bytes);
 
             while !buf.is_empty() {
@@ -74,6 +75,12 @@ impl Server {
         if recv_rdy {
             self.recv();
         }
+    }
+
+    #[cfg(test)]
+    fn send_test_data(&mut self, data: Vec<u8>) {
+        println!("1-----------32");
+        self.io.push(data);
     }
 }
 
@@ -120,29 +127,54 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::io::Tx;
+    use core::sync::atomic::AtomicBool;
+    use core::sync::atomic::Ordering;
     use core::time::Duration;
     use s2n_codec::{EncoderBuffer, EncoderValue};
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn mock_event_loop() {
         let clock = Clock::default();
         let (mut server, mut network_io) = Server::new(clock);
 
+        let wait_complete = Arc::new(AtomicBool::new(true));
+        let set_wait = wait_complete.clone();
+
+        // // simulate sending a message over the network.
+        let mut tx_network_io = network_io.clone();
         tokio::spawn(async move {
-            // simulate receiving a message
+            loop {
+                // println!("---bYTES--------------------------- POLL");
+                tx_network_io.tx_ready().await;
+                // println!("---bYTES--------------------------- POLL laskjfdklasjdflkjak3o832923923");
+                tokio::time::sleep(Duration::from_millis(1)).await;
+                if let Some(bytes) = tx_network_io.pop() {
+                    println!("---bYTES--------------------------- bytes: {:?}", bytes);
+
+                    if bytes == vec![1, 2, 3] {
+                        set_wait.store(false, Ordering::Relaxed);
+                        break;
+                    }
+                }
+            }
+        });
+
+        // simulate receiving a message over the network
+        let mut rx_network_io = network_io.clone();
+        tokio::spawn(async move {
             for i in 0..5 {
                 let mut slice = vec![0; 100];
                 let mut buf = EncoderBuffer::new(&mut slice);
                 Rpc::new_request_vote(i).encode(&mut buf);
                 let (written, rem) = buf.split_mut();
-                network_io.send(written.to_vec());
+                rx_network_io.push(written.to_vec());
 
                 tokio::time::sleep(Duration::from_millis(200)).await;
 
                 let mut buf = EncoderBuffer::new(rem);
                 Rpc::new_append_entry(i + 100).encode(&mut buf);
-                network_io.send(buf.as_mut_slice().to_vec());
+                rx_network_io.push(buf.as_mut_slice().to_vec());
             }
         });
 
@@ -151,6 +183,14 @@ mod tests {
             server.poll().await;
             println!("---{i} elapsed: {:?}", clock.elapsed());
             i += 1;
+        }
+
+        server.send_test_data(vec![1, 2, 3]);
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        while wait_complete.load(Ordering::SeqCst) {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            println!("---WAIT");
         }
     }
 }
