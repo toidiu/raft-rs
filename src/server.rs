@@ -148,8 +148,6 @@ mod tests {
                 tx_network_io.tx_ready().await;
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 if let Some(bytes) = tx_network_io.send() {
-                    println!("---bYTES--------------------------- bytes: {:?}", bytes);
-
                     // TODO currently we read the entire set of available bytes. instead read
                     // only a single packet. RPC should contain TAG/LEN
                     if bytes.contains(&128) {
@@ -185,11 +183,10 @@ mod tests {
         }
 
         server.send_test_data(vec![128]);
-        // tokio::time::sleep(Duration::from_millis(1000)).await;
 
         while wait_complete.load(Ordering::SeqCst) {
-            tokio::time::sleep(Duration::from_millis(90)).await;
-            println!("---WAIT");
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            println!("---waiting for finish tag");
         }
     }
 }

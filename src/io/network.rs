@@ -61,7 +61,6 @@ impl NetTx for NetworkIo {
     fn send(&mut self) -> Option<Vec<u8>> {
         let mut buf = [0; 100];
         let len = self.tx.lock().unwrap().read(&mut buf[0..]).ok()?;
-        println!("network send()----------- {len}");
         if len > 0 {
             Some(buf[0..len].to_vec())
         } else {

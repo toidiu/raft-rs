@@ -42,7 +42,6 @@ impl ServerRx for ServerIo {
     fn recv(&mut self) -> Option<Vec<u8>> {
         let mut buf = [0; 100];
         let len = self.rx.lock().unwrap().read(&mut buf[0..]).ok()?;
-        // println!("server recv()----------- ");
         if len > 0 {
             Some(buf[0..len].to_vec())
         } else {
@@ -63,14 +62,9 @@ impl ServerRx for ServerIo {
 
 impl ServerTx for ServerIo {
     fn send(&mut self, data: Vec<u8>) {
-        println!("server send()----------- {:?}", data,);
         self.tx.lock().unwrap().extend(data);
 
         if let Some(waker) = self.tx_waker.lock().unwrap().deref() {
-            println!(
-                "server send()----------- WAKE len: {}",
-                self.tx.lock().unwrap().len()
-            );
             waker.wake_by_ref();
         }
     }
