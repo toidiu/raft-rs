@@ -101,7 +101,7 @@ impl State {
         }
     }
 
-    fn on_recv_follower<T: Tx>(inner: &mut Inner, tx: &mut T, rpc: Rpc) {
+    fn on_recv_follower<T: Tx>(inner: &mut Inner, _tx: &mut T, rpc: Rpc) {
         // println!("state: on_recv_follower");
 
         match rpc {
@@ -126,7 +126,7 @@ impl State {
         let mut slice = vec![0; 100];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_request_vote(term).encode_mut(&mut buf);
-        tx.push(buf.as_mut_slice().to_vec());
+        tx.send(buf.as_mut_slice().to_vec());
     }
 
     fn send_heartbeat<T: Tx>(&mut self, tx: &mut T) {
@@ -137,15 +137,15 @@ impl State {
         let mut slice = vec![0; 100];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_append_entry(term).encode_mut(&mut buf);
-        tx.push(buf.as_mut_slice().to_vec());
+        tx.send(buf.as_mut_slice().to_vec());
     }
 
-    fn on_request_vote(&mut self, rpc: RequestVote) {
+    fn on_request_vote(&mut self, _rpc: RequestVote) {
         // println!("state: recv RequestVote. {:?}", rpc.term);
         // TODO: recv vote, request for new election
     }
 
-    fn on_append_entry(&mut self, rpc: AppendEntries) {
+    fn on_append_entry(&mut self, _rpc: AppendEntries) {
         // println!("recv AppendEntries. {:?}", rpc.term);
         // TODO: heartbeat, new entry, discover current leader, discover new term
     }

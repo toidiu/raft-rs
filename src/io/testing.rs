@@ -19,21 +19,21 @@ impl MockIo {
 }
 
 impl Tx for MockIo {
-    fn push(&mut self, data: Vec<u8>) {
+    fn send(&mut self, data: Vec<u8>) {
         self.tx.push_back(data)
     }
 
-    fn poll_ready(&mut self, _cx: &mut std::task::Context) -> std::task::Poll<()> {
+    fn poll_tx_ready(&mut self, _cx: &mut std::task::Context) -> std::task::Poll<()> {
         unimplemented!()
     }
 }
 
 impl Rx for MockIo {
-    fn pop(&mut self) -> Option<Vec<u8>> {
+    fn recv(&mut self) -> Option<Vec<u8>> {
         self.rx.pop_front()
     }
 
-    fn poll_ready(&mut self, _cx: &mut std::task::Context) -> std::task::Poll<()> {
+    fn poll_rx_ready(&mut self, _cx: &mut std::task::Context) -> std::task::Poll<()> {
         unimplemented!()
     }
 }
