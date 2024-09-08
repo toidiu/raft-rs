@@ -1,4 +1,4 @@
-use crate::io::{Rx, Tx};
+use crate::io::{RxReady, TxReady};
 use core::task::{Context, Poll, Waker};
 use std::{
     collections::VecDeque,
@@ -7,18 +7,42 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+pub trait ServerRx {
+    fn recv(&mut self) -> Option<Vec<u8>>;
+
+    fn poll_rx_ready(&mut self, cx: &mut Context) -> Poll<()>;
+
+    // A handle to a Future to check for new messages
+    fn rx_ready(&mut self) -> RxReady<Self> {
+        RxReady(self)
+    }
+}
+
+pub trait ServerTx {
+    fn send(&mut self, data: Vec<u8>);
+
+    fn poll_tx_ready(&mut self, cx: &mut Context) -> Poll<()>;
+
+    // A handle to a Future to check for new messages
+    fn tx_ready(&mut self) -> TxReady<Self> {
+        TxReady(self)
+    }
+}
+
 /// A handle to the underlying BufferIo
 #[derive(Debug)]
 pub struct ServerIo {
     pub rx: Arc<Mutex<VecDeque<u8>>>,
     pub tx: Arc<Mutex<VecDeque<u8>>>,
-    pub waker: Arc<Mutex<Option<Waker>>>,
+    pub rx_waker: Arc<Mutex<Option<Waker>>>,
+    pub tx_waker: Arc<Mutex<Option<Waker>>>,
 }
 
-impl Rx for ServerIo {
+impl ServerRx for ServerIo {
     fn recv(&mut self) -> Option<Vec<u8>> {
         let mut buf = [0; 100];
         let len = self.rx.lock().unwrap().read(&mut buf[0..]).ok()?;
+        // println!("server recv()----------- ");
         if len > 0 {
             Some(buf[0..len].to_vec())
         } else {
@@ -28,7 +52,7 @@ impl Rx for ServerIo {
 
     fn poll_rx_ready(&mut self, cx: &mut Context) -> Poll<()> {
         let rdy = !self.rx.lock().unwrap().is_empty();
-        *self.waker.lock().unwrap() = Some(cx.waker().clone());
+        *self.rx_waker.lock().unwrap() = Some(cx.waker().clone());
         if rdy {
             Poll::Ready(())
         } else {
@@ -37,18 +61,23 @@ impl Rx for ServerIo {
     }
 }
 
-impl Tx for ServerIo {
+impl ServerTx for ServerIo {
     fn send(&mut self, data: Vec<u8>) {
-        if let Some(waker) = self.waker.lock().unwrap().deref() {
-            println!("1-----------32 WAKE");
+        println!("server send()----------- {:?}", data,);
+        self.tx.lock().unwrap().extend(data);
+
+        if let Some(waker) = self.tx_waker.lock().unwrap().deref() {
+            println!(
+                "server send()----------- WAKE len: {}",
+                self.tx.lock().unwrap().len()
+            );
             waker.wake_by_ref();
         }
-        self.tx.lock().unwrap().extend(data);
     }
 
     fn poll_tx_ready(&mut self, cx: &mut Context) -> Poll<()> {
         let rdy = !self.tx.lock().unwrap().is_empty();
-        *self.waker.lock().unwrap() = Some(cx.waker().clone());
+        *self.tx_waker.lock().unwrap() = Some(cx.waker().clone());
         if rdy {
             Poll::Ready(())
         } else {

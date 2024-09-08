@@ -1,6 +1,6 @@
 use crate::{
     clock::Clock,
-    io::Tx,
+    io::ServerTx,
     log::Term,
     rpc::{AppendEntries, RequestVote, RespRequestVote, Rpc},
     state::inner::Inner,
@@ -73,7 +73,7 @@ impl State {
         }
     }
 
-    pub fn on_timeout<T: Tx>(&mut self, io: &mut T) {
+    pub fn on_timeout<T: ServerTx>(&mut self, io: &mut T) {
         match self.mode {
             Mode::Follower => {
                 // 2: timeout. start election
@@ -89,7 +89,7 @@ impl State {
         }
     }
 
-    pub fn recv<T: Tx>(&mut self, tx: &mut T, rpc: Rpc) {
+    pub fn recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc) {
         match self.mode {
             Mode::Follower => {
                 // # Compliance:
@@ -101,7 +101,7 @@ impl State {
         }
     }
 
-    fn on_recv_follower<T: Tx>(inner: &mut Inner, _tx: &mut T, rpc: Rpc) {
+    fn on_recv_follower<T: ServerTx>(inner: &mut Inner, _tx: &mut T, rpc: Rpc) {
         // println!("state: on_recv_follower");
 
         match rpc {
@@ -118,7 +118,7 @@ impl State {
         }
     }
 
-    fn on_candidate<T: Tx>(&mut self, tx: &mut T) {
+    fn on_candidate<T: ServerTx>(&mut self, tx: &mut T) {
         self.mode = Mode::Candidate;
 
         // TODO: start new election
@@ -129,7 +129,7 @@ impl State {
         tx.send(buf.as_mut_slice().to_vec());
     }
 
-    fn send_heartbeat<T: Tx>(&mut self, tx: &mut T) {
+    fn send_heartbeat<T: ServerTx>(&mut self, tx: &mut T) {
         // println!("state: send_heartbeat");
 
         // TODO send rpc
