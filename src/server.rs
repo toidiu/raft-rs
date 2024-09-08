@@ -1,6 +1,6 @@
 use crate::{
     clock::Clock,
-    io::{BufferIo, NetworkIo, ServerRx, ServerIo},
+    io::{BufferIo, NetworkIo, ServerIo, ServerRx},
     rpc::Rpc,
     state::{ServerId, State},
 };
@@ -126,16 +126,13 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::io::NetTx;
     use crate::io::NetRx;
+    use crate::io::NetTx;
     use core::sync::atomic::AtomicBool;
     use core::sync::atomic::Ordering;
     use core::time::Duration;
     use s2n_codec::{EncoderBuffer, EncoderValue};
     use std::sync::Arc;
-
-    // TODO the tx/rx from network is hard to test with the test tokio runtime
-    // figure out different way to test this
     #[tokio::test]
     async fn mock_event_loop() {
         let clock = Clock::default();
@@ -153,7 +150,9 @@ mod tests {
                 if let Some(bytes) = tx_network_io.send() {
                     println!("---bYTES--------------------------- bytes: {:?}", bytes);
 
-                    if bytes == vec![128] {
+                    // TODO currently we read the entire set of available bytes. instead read
+                    // only a single packet. RPC should contain TAG/LEN
+                    if bytes.contains(&128) {
                         set_wait.store(false, Ordering::Relaxed);
                         break;
                     }

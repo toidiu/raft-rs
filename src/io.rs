@@ -53,28 +53,6 @@ impl BufferIo {
 // could also have marked `Rx: Sized`
 pub struct RxReady<'a, T: ?Sized>(pub &'a mut T);
 
-impl<'a> Future for RxReady<'a, ServerIo> {
-    type Output = ();
-
-    fn poll(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        self.0.poll_rx_ready(cx)
-    }
-}
-
-impl<'a> Future for RxReady<'a, NetworkIo> {
-    type Output = ();
-
-    fn poll(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        self.0.poll_rx_ready(cx)
-    }
-}
-
 // A handle to check the readiness of the tx queue.
 //
 // While all types have an implicit `Sized` by default, traits are
@@ -83,27 +61,23 @@ impl<'a> Future for RxReady<'a, NetworkIo> {
 // could also have marked `Tx: Sized`
 pub struct TxReady<'a, T: ?Sized>(pub &'a mut T);
 
-impl<'a> Future for TxReady<'a, ServerIo> {
-    type Output = ();
+macro_rules! impl_io_ready(($io:ident, $fut:ident, $poll_fn:ident) => {
+    impl<'a> Future for $fut<'a, $io> {
+        type Output = ();
 
-    fn poll(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        self.0.poll_tx_ready(cx)
+        fn poll(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Self::Output> {
+            self.0.$poll_fn(cx)
+        }
     }
-}
+});
 
-impl<'a> Future for TxReady<'a, NetworkIo> {
-    type Output = ();
-
-    fn poll(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        self.0.poll_tx_ready(cx)
-    }
-}
+impl_io_ready!(ServerIo, RxReady, poll_rx_ready);
+impl_io_ready!(ServerIo, TxReady, poll_tx_ready);
+impl_io_ready!(NetworkIo, RxReady, poll_rx_ready);
+impl_io_ready!(NetworkIo, TxReady, poll_tx_ready);
 
 #[cfg(test)]
 mod tests {
