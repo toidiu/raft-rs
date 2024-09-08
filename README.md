@@ -4,12 +4,13 @@ A toy implementation to better understand the [Raft](https://toidiu.com/reads/In
 
 ## Tasks
 Remaining tasks to complete:
-- Follower recv (scope)
-- Follower recv impl
-- Follower timeout (scope)
-- Follower timeout impl
-- Candidate
-- Leader
+- [x] IO
+- [ ] Follower recv (scope)
+- [ ] Follower recv impl
+- [ ] Follower timeout (scope)
+- [ ] Follower timeout impl
+- [ ] Candidate
+- [ ] Leader
 
 ## Research
 
