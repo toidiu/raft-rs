@@ -42,7 +42,7 @@ pub struct Timer {
     // Reference to the server clock
     clock: Clock,
 
-    expire: Option<Instant>,
+    pub expire: Option<Instant>,
 
     // The sleep future
     sleep: Option<Pin<Box<Sleep>>>,

@@ -94,14 +94,14 @@ impl State {
             Mode::Follower => {
                 // # Compliance:
                 // - Respond to RPCs from candidates and leaders
-                Self::on_recv_follower(&mut self.inner, tx, rpc);
+                Self::on_follower_recv(&mut self.inner, tx, rpc);
             }
             Mode::Leader => {}
             Mode::Candidate => {}
         }
     }
 
-    fn on_recv_follower<T: ServerTx>(inner: &mut Inner, _tx: &mut T, rpc: Rpc) {
+    fn on_follower_recv<T: ServerTx>(inner: &mut Inner, _tx: &mut T, rpc: Rpc) {
         // println!("state: on_recv_follower");
 
         match rpc {
@@ -112,6 +112,7 @@ impl State {
             }) => {}
             Rpc::AppendEntries(AppendEntries { term }) => {
                 if inner.curr_term == term {
+                    println!("-----------------------i8");
                     inner.timer.rearm()
                 }
             }
@@ -155,6 +156,7 @@ impl State {
 mod tests {
     use super::*;
     use crate::{io::testing::MockIo, rpc::Rpc, testing::cast};
+    use core::time::Duration;
     use s2n_codec::{DecoderBuffer, DecoderValue};
 
     #[tokio::test]
@@ -176,6 +178,20 @@ mod tests {
         let (rpc, _buffer) = Rpc::decode(buf).expect("todo");
         let req = cast!(rpc, Rpc::RequestVote);
         assert_eq!(req.term, Term(1));
+    }
+
+    #[tokio::test]
+    async fn follower_recv_rearm() {
+        let mut io = MockIo::new();
+        let mut s = State::new(Clock::default());
+        assert!(matches!(s.mode, Mode::Follower));
+
+        let prev_expire = s.inner.timer.expire.unwrap();
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        s.recv(&mut io, Rpc::AppendEntries(AppendEntries { term: Term(0) }));
+        let new_expire = s.inner.timer.expire.unwrap();
+        assert!(new_expire > prev_expire);
     }
 
     #[tokio::test]
