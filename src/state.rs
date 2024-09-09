@@ -2,7 +2,7 @@ use crate::{
     clock::Clock,
     io::ServerTx,
     log::Term,
-    rpc::{AppendEntries, RequestVote, RespRequestVote, Rpc},
+    rpc::{AppendEntries, RequestVote, RespAppendEntries, RespRequestVote, Rpc},
     state::inner::Inner,
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
@@ -101,7 +101,7 @@ impl State {
         }
     }
 
-    fn on_follower_recv<T: ServerTx>(inner: &mut Inner, _tx: &mut T, rpc: Rpc) {
+    fn on_follower_recv<T: ServerTx>(inner: &mut Inner, tx: &mut T, rpc: Rpc) {
         // println!("state: on_recv_follower");
 
         match rpc {
@@ -112,10 +112,16 @@ impl State {
             }) => {}
             Rpc::AppendEntries(AppendEntries { term }) => {
                 if inner.curr_term == term {
-                    println!("-----------------------i8");
                     inner.timer.rearm()
                 }
+
+                let term = inner.curr_term.0;
+                let mut slice = vec![0; 100];
+                let mut buf = EncoderBuffer::new(&mut slice);
+                Rpc::new_append_entry_resp(term).encode_mut(&mut buf);
+                tx.send(buf.as_mut_slice().to_vec());
             }
+            Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {}
         }
     }
 
@@ -187,8 +193,8 @@ mod tests {
         assert!(matches!(s.mode, Mode::Follower));
 
         let prev_expire = s.inner.timer.expire.unwrap();
-        tokio::time::sleep(Duration::from_millis(500)).await;
 
+        tokio::time::sleep(Duration::from_millis(500)).await;
         s.recv(&mut io, Rpc::AppendEntries(AppendEntries { term: Term(0) }));
         let new_expire = s.inner.timer.expire.unwrap();
         assert!(new_expire > prev_expire);

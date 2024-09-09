@@ -8,7 +8,7 @@ pub enum Rpc {
     RequestVote(RequestVote),
     RespRequestVote(RespRequestVote),
     AppendEntries(AppendEntries),
-    // RespAppendEntries(AppendEntries),
+    RespAppendEntries(RespAppendEntries),
 }
 
 impl Rpc {
@@ -19,13 +19,16 @@ impl Rpc {
     pub fn new_append_entry(term: u64) -> Rpc {
         Rpc::AppendEntries(AppendEntries { term: Term(term) })
     }
+
+    pub fn new_append_entry_resp(term: u64) -> Rpc {
+        Rpc::RespAppendEntries(RespAppendEntries { term: Term(term) })
+    }
 }
 
 impl<'a> DecoderValue<'a> for Rpc {
     fn decode(buffer: DecoderBuffer<'a>) -> DecoderBufferResult<'a, Self> {
-        // println!("-------RPC decode. buffer: {:?}", buffer);
-        let (tag, buffer): (u8, _) = buffer.decode().expect("todo");
-        let (term, buffer): (u64, _) = buffer.decode().expect("todo");
+        let (tag, buffer): (u8, _) = buffer.decode()?;
+        let (term, buffer): (u64, _) = buffer.decode()?;
 
         let rpc = match tag {
             RequestVote::TAG => {
@@ -33,7 +36,7 @@ impl<'a> DecoderValue<'a> for Rpc {
                 Ok(Rpc::RequestVote(rpc))
             }
             RespRequestVote::TAG => {
-                let (vote_granted, _buffer): (u8, _) = buffer.decode().expect("todo");
+                let (vote_granted, _buffer): (u8, _) = buffer.decode()?;
                 let vote_granted = vote_granted != 0;
                 let rpc = RespRequestVote {
                     term: Term(term),
@@ -65,6 +68,10 @@ impl EncoderValue for Rpc {
             }
             Rpc::AppendEntries(inner) => {
                 encoder.write_slice(&[AppendEntries::TAG]);
+                encoder.write_slice(&inner.term.0.to_be_bytes());
+            }
+            Rpc::RespAppendEntries(inner) => {
+                encoder.write_slice(&[RespAppendEntries::TAG]);
                 encoder.write_slice(&inner.term.0.to_be_bytes());
             }
         }
@@ -102,4 +109,13 @@ pub struct AppendEntries {
 
 impl AppendEntries {
     const TAG: u8 = 3;
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RespAppendEntries {
+    pub term: Term,
+}
+
+impl RespAppendEntries {
+    const TAG: u8 = 4;
 }

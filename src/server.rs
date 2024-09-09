@@ -148,11 +148,22 @@ mod tests {
                 tx_network_io.tx_ready().await;
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 if let Some(bytes) = tx_network_io.send() {
+                    println!("---send {:?}", bytes);
                     // TODO currently we read the entire set of available bytes. instead read
                     // only a single packet. RPC should contain TAG/LEN
                     if bytes.contains(&128) {
                         set_wait.store(false, Ordering::Relaxed);
                         break;
+                    }
+
+                    let mut buf = DecoderBuffer::new(&bytes);
+                    while !buf.is_empty() {
+                        if let Ok((rpc, buffer)) = Rpc::decode(buf) {
+                            println!("---send {:?}", rpc);
+                            buf = buffer;
+                        } else {
+                            break;
+                        }
                     }
                 }
             }

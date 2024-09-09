@@ -5,6 +5,7 @@ A toy implementation to better understand the [Raft](https://toidiu.com/reads/In
 ## Tasks
 Remaining tasks to complete:
 - [x] IO
+- [ ] rpc should be tag/len construction
 - [ ] Follower recv (scope)
 - [ ] Follower recv impl
 - [ ] Follower timeout (scope)
