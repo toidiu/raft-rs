@@ -9,9 +9,9 @@ use tokio::time::{sleep_until, Instant, Sleep};
 // # Compliance: 5.2
 // To prevent split votes in the first place, election timeouts are
 // chosen randomly from a fixed interval (e.g., 150–300ms).
-const MIN_DURATION: Duration = Duration::from_millis(150);
-const MAX_DURATION: Duration = Duration::from_millis(300);
-const TEST_DURATION: Duration = Duration::from_millis(10);
+const MIN_REARM_DURATION: Duration = Duration::from_millis(150);
+const MAX_REARM_DURATION: Duration = Duration::from_millis(300);
+const TEST_REARM_DURATION: Duration = Duration::from_millis(10);
 
 /// A monotonically increasing clock value for the process
 #[derive(Debug, Clone, Copy)]
@@ -99,10 +99,10 @@ impl Timer {
     fn rearm_duration() -> Duration {
         cfg_if::cfg_if! {
                 if #[cfg(test)] {
-                    TEST_DURATION
+                    TEST_REARM_DURATION
                 } else {
                     use rand::Rng;
-                    rand::thread_rng().gen_range(MIN_DURATION..MAX_DURATION)
+                    rand::thread_rng().gen_range(MIN_REARM_DURATION..MAX_REARM_DURATION)
                 }
         }
     }
@@ -132,7 +132,7 @@ mod tests {
         assert_eq!(cnt, 0);
 
         // wait less than timer target
-        advance(TEST_DURATION).await;
+        advance(TEST_REARM_DURATION).await;
         assert!(timer.poll_ready(&mut ctx).is_pending());
         assert_eq!(cnt, 0);
 
@@ -153,12 +153,13 @@ mod tests {
         assert_eq!(cnt, 0);
 
         // wait till timer is expired and call poll again
-        advance(MAX_DURATION).await;
+        let rearm_time_plus_1 = TEST_REARM_DURATION + Duration::from_millis(1);
+        advance(rearm_time_plus_1).await;
         assert!(timer.poll_ready(&mut ctx).is_ready());
         assert_eq!(cnt, 1);
 
         // timer should have rearmed
         assert!(timer.expire.is_some());
-        assert!(original_expire < timer.expire.unwrap());
+        assert_eq!(original_expire + rearm_time_plus_1, timer.expire.unwrap());
     }
 }

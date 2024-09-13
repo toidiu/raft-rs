@@ -183,7 +183,7 @@ mod tests {
         assert!(matches!(s.mode, Mode::Candidate));
         let bytes = io.tx.pop_front().unwrap();
         let buf = DecoderBuffer::new(&bytes);
-        let (rpc, _buffer) = Rpc::decode(buf).expect("todo");
+        let (rpc, _buffer) = Rpc::decode(buf).unwrap();
         let req = cast!(rpc, Rpc::RequestVote);
         assert_eq!(req.term, Term(1));
     }
