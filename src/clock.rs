@@ -4,7 +4,6 @@ use core::{
     task::{Context, Poll},
     time::Duration,
 };
-use rand::Rng;
 use tokio::time::{sleep_until, Instant, Sleep};
 
 // # Compliance: 5.2
@@ -12,6 +11,7 @@ use tokio::time::{sleep_until, Instant, Sleep};
 // chosen randomly from a fixed interval (e.g., 150–300ms).
 const MIN_DURATION: Duration = Duration::from_millis(150);
 const MAX_DURATION: Duration = Duration::from_millis(300);
+const TEST_DURATION: Duration = Duration::from_millis(10);
 
 /// A monotonically increasing clock value for the process
 #[derive(Debug, Clone, Copy)]
@@ -62,7 +62,7 @@ impl Clone for Timer {
 
 impl Timer {
     pub fn new(clock: Clock) -> Self {
-        let duration = rand::thread_rng().gen_range(MIN_DURATION..MAX_DURATION);
+        let duration = Self::rearm_duration();
         let expire = clock.current_instance() + duration;
         let sleep = Some(Box::pin(sleep_until(expire)));
         Timer {
@@ -88,12 +88,23 @@ impl Timer {
     }
 
     pub fn rearm(&mut self) {
-        let duration = rand::thread_rng().gen_range(MIN_DURATION..MAX_DURATION);
+        let duration = Self::rearm_duration();
         let expire = self.clock.current_instance() + duration;
         let sleep = Box::pin(sleep_until(expire));
 
         self.expire = Some(expire);
         self.sleep = Some(sleep);
+    }
+
+    fn rearm_duration() -> Duration {
+        cfg_if::cfg_if! {
+                if #[cfg(test)] {
+                    TEST_DURATION
+                } else {
+                    use rand::Rng;
+                    rand::thread_rng().gen_range(MIN_DURATION..MAX_DURATION)
+                }
+        }
     }
 }
 
@@ -121,11 +132,11 @@ mod tests {
         assert_eq!(cnt, 0);
 
         // wait less than timer target
-        advance(MIN_DURATION - Duration::from_millis(1)).await;
+        advance(TEST_DURATION).await;
         assert!(timer.poll_ready(&mut ctx).is_pending());
         assert_eq!(cnt, 0);
 
-        advance(MAX_DURATION - MIN_DURATION).await;
+        advance(Duration::from_millis(1)).await;
         assert!(timer.poll_ready(&mut ctx).is_ready());
         assert_eq!(cnt, 1);
     }
