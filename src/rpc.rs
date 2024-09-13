@@ -82,7 +82,7 @@ impl EncoderValue for Rpc {
 #[derive(Debug, Clone, Copy)]
 pub struct RequestVote {
     pub term: Term,
-    // pub cnadidate_d: ServerId,
+    // pub candidate_d: ServerId,
     // pub last_term_idx: TermIdx,
 }
 

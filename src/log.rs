@@ -54,18 +54,23 @@ impl Entry {
 
 #[derive(Default, Debug)]
 pub struct Log {
-    last_term_idx: Option<TermIdx>,
     entries: Vec<Entry>,
 }
 
 impl Log {
+    pub fn new() -> Self {
+        Log {
+            entries: Vec::new(),
+        }
+    }
+
     fn len(&self) -> usize {
         self.entries.len()
     }
 
     fn push(&mut self, entry: Entry) -> Result<(), ()> {
         // validation
-        if let Some(last) = self.last_term_idx {
+        if let Some(last) = self.last_term_idx() {
             // if term is eq then idx should be +1
             let valid_curr_term = Idx(last.idx.0 + 1) == entry.term_idx.idx;
             // term is greater and idx == 0
@@ -78,22 +83,15 @@ impl Log {
             }
         };
 
-        self.last_term_idx = Some(entry.term_idx);
         self.entries.push(entry);
         Ok(())
     }
 
     fn pop(&mut self) -> Option<Entry> {
-        let pop = self.entries.pop();
-        if let Some(last) = self.last_term_idx() {
-            self.last_term_idx = Some(last);
-        } else {
-            self.last_term_idx = None;
-        }
-        pop
+        self.entries.pop()
     }
 
-    fn last_term_idx(&self) -> Option<TermIdx> {
+    pub fn last_term_idx(&self) -> Option<TermIdx> {
         let entry = self
             .entries
             .iter()
