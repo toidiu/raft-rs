@@ -9,6 +9,7 @@ pub enum Rpc {
     RespRequestVote(RespRequestVote),
     AppendEntries(AppendEntries),
     RespAppendEntries(RespAppendEntries),
+    Heartbeat(Heartbeat),
 }
 
 impl Rpc {
@@ -22,6 +23,10 @@ impl Rpc {
 
     pub fn new_append_entry_resp(term: u64) -> Rpc {
         Rpc::RespAppendEntries(RespAppendEntries { term: Term(term) })
+    }
+
+    pub fn new_heartbeat(term: u64) -> Rpc {
+        Rpc::Heartbeat(Heartbeat { term: Term(term) })
     }
 }
 
@@ -48,6 +53,10 @@ impl<'a> DecoderValue<'a> for Rpc {
                 let rpc = AppendEntries { term: term.into() };
                 Ok(Rpc::AppendEntries(rpc))
             }
+            Heartbeat::TAG => {
+                let rpc = Heartbeat { term: term.into() };
+                Ok(Rpc::Heartbeat(rpc))
+            }
             _tag => Err(DecoderError::InvariantViolation("received unexpected tag")),
         };
         rpc.map(|rpc| (rpc, buffer))
@@ -72,6 +81,10 @@ impl EncoderValue for Rpc {
             }
             Rpc::RespAppendEntries(inner) => {
                 encoder.write_slice(&[RespAppendEntries::TAG]);
+                encoder.write_slice(&inner.term.0.to_be_bytes());
+            }
+            Rpc::Heartbeat(inner) => {
+                encoder.write_slice(&[Heartbeat::TAG]);
                 encoder.write_slice(&inner.term.0.to_be_bytes());
             }
         }
@@ -101,7 +114,7 @@ impl RespRequestVote {
     const TAG: u8 = 2;
 }
 
-// Add entries and heartbeat
+// Add entries
 #[derive(Debug, Clone, Copy)]
 pub struct AppendEntries {
     pub term: Term,
@@ -118,4 +131,16 @@ pub struct RespAppendEntries {
 
 impl RespAppendEntries {
     const TAG: u8 = 4;
+}
+
+// Heartbeat.
+//
+// Dedicated message since it doesn't need to be committed nor a response.
+#[derive(Debug, Clone, Copy)]
+pub struct Heartbeat {
+    pub term: Term,
+}
+
+impl Heartbeat {
+    const TAG: u8 = 5;
 }

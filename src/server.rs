@@ -126,11 +126,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::io::NetRx;
-    use crate::io::NetTx;
-    use core::sync::atomic::AtomicBool;
-    use core::sync::atomic::Ordering;
-    use core::time::Duration;
+    use crate::io::{NetRx, NetTx};
+    use core::{
+        sync::atomic::{AtomicBool, Ordering},
+        time::Duration,
+    };
     use s2n_codec::{EncoderBuffer, EncoderValue};
     use std::sync::Arc;
     #[tokio::test]

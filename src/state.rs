@@ -2,7 +2,7 @@ use crate::{
     clock::Clock,
     io::ServerTx,
     log::Term,
-    rpc::{AppendEntries, RequestVote, RespAppendEntries, RespRequestVote, Rpc},
+    rpc::{AppendEntries, Heartbeat, RequestVote, RespAppendEntries, RespRequestVote, Rpc},
     state::inner::Inner,
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
@@ -122,6 +122,7 @@ impl State {
                 tx.send(buf.as_mut_slice().to_vec());
             }
             Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {}
+            Rpc::Heartbeat(Heartbeat { term: _ }) => {}
         }
     }
 
@@ -143,7 +144,7 @@ impl State {
         let term = self.inner.curr_term.0 + 1;
         let mut slice = vec![0; 100];
         let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_append_entry(term).encode_mut(&mut buf);
+        Rpc::new_heartbeat(term).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
     }
 
