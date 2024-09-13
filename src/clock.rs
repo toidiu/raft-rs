@@ -19,6 +19,12 @@ pub struct Clock(Instant);
 
 impl Default for Clock {
     fn default() -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(test)] {
+                tokio::time::pause();
+            }
+        }
+
         Clock(Instant::now())
     }
 }
@@ -103,7 +109,7 @@ impl Future for Timer {
 mod tests {
     use super::*;
     use futures_test::task::new_count_waker;
-    use tokio::time::sleep;
+    use tokio::time::advance;
 
     #[tokio::test]
     async fn manual_check_elapsed_time() {
@@ -115,11 +121,11 @@ mod tests {
         assert_eq!(cnt, 0);
 
         // wait less than timer target
-        sleep(MIN_DURATION).await;
+        advance(MIN_DURATION - Duration::from_millis(1)).await;
         assert!(timer.poll_ready(&mut ctx).is_pending());
         assert_eq!(cnt, 0);
 
-        sleep(MAX_DURATION).await;
+        advance(MAX_DURATION - MIN_DURATION).await;
         assert!(timer.poll_ready(&mut ctx).is_ready());
         assert_eq!(cnt, 1);
     }
@@ -136,7 +142,7 @@ mod tests {
         assert_eq!(cnt, 0);
 
         // wait till timer is expired and call poll again
-        sleep(MAX_DURATION).await;
+        advance(MAX_DURATION).await;
         assert!(timer.poll_ready(&mut ctx).is_ready());
         assert_eq!(cnt, 1);
 

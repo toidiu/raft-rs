@@ -165,6 +165,7 @@ mod tests {
     use crate::{io::testing::MockIo, rpc::Rpc, testing::cast};
     use core::time::Duration;
     use s2n_codec::{DecoderBuffer, DecoderValue};
+    use tokio::time::advance;
 
     #[tokio::test]
     async fn default_state() {
@@ -195,7 +196,7 @@ mod tests {
 
         let prev_expire = s.inner.timer.expire.unwrap();
 
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        advance(Duration::from_millis(500)).await;
         s.recv(&mut io, Rpc::AppendEntries(AppendEntries { term: Term(0) }));
         let new_expire = s.inner.timer.expire.unwrap();
         assert!(new_expire > prev_expire);

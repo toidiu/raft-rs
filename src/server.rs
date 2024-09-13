@@ -126,13 +126,17 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::io::{NetRx, NetTx};
+    use crate::{
+        clock::Clock,
+        io::{NetRx, NetTx},
+    };
     use core::{
         sync::atomic::{AtomicBool, Ordering},
         time::Duration,
     };
     use s2n_codec::{EncoderBuffer, EncoderValue};
     use std::sync::Arc;
+    use tokio::time::advance;
     #[tokio::test]
     async fn mock_event_loop() {
         let clock = Clock::default();
@@ -146,7 +150,7 @@ mod tests {
         tokio::spawn(async move {
             loop {
                 tx_network_io.tx_ready().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::advance(Duration::from_millis(100)).await;
                 if let Some(bytes) = tx_network_io.send() {
                     println!("---send {:?}", bytes);
                     // TODO currently we read the entire set of available bytes. instead read
@@ -178,7 +182,7 @@ mod tests {
                 let (written, rem) = buf.split_mut();
                 network_io.recv(written.to_vec());
 
-                tokio::time::sleep(Duration::from_millis(200)).await;
+                advance(Duration::from_millis(200)).await;
 
                 let mut buf = EncoderBuffer::new(rem);
                 Rpc::new_append_entry(i + 100).encode(&mut buf);
@@ -196,7 +200,7 @@ mod tests {
         server.send_test_data(vec![128]);
 
         while wait_complete.load(Ordering::SeqCst) {
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            advance(Duration::from_millis(100)).await;
             println!("---waiting for finish tag");
         }
     }
