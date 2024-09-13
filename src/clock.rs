@@ -48,10 +48,8 @@ pub struct Timer {
     // Reference to the server clock
     clock: Clock,
 
-    pub expire: Option<Instant>,
-
     // The sleep future
-    sleep: Option<Pin<Box<Sleep>>>,
+    sleep: Pin<Box<Sleep>>,
 }
 
 impl Clone for Timer {
@@ -64,20 +62,15 @@ impl Timer {
     pub fn new(clock: Clock) -> Self {
         let duration = Self::rearm_duration();
         let expire = clock.current_instance() + duration;
-        let sleep = Some(Box::pin(sleep_until(expire)));
+        let sleep = Box::pin(sleep_until(expire));
         Timer {
             clock,
-            expire: Some(expire),
             sleep,
         }
     }
 
     pub fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
-        let poll = if let Some(sleep) = &mut self.sleep {
-            sleep.as_mut().poll(ctx)
-        } else {
-            return Poll::Pending;
-        };
+        let poll = self.sleep.as_mut().poll(ctx);
 
         if poll.is_ready() {
             // rearm the timer so we continue to make progress
@@ -90,10 +83,11 @@ impl Timer {
     pub fn rearm(&mut self) {
         let duration = Self::rearm_duration();
         let expire = self.clock.current_instance() + duration;
-        let sleep = Box::pin(sleep_until(expire));
+        self.sleep.as_mut().reset(expire);
+    }
 
-        self.expire = Some(expire);
-        self.sleep = Some(sleep);
+    pub fn expire(&self) -> Instant {
+            self.sleep.deadline()
     }
 
     fn rearm_duration() -> Duration {
@@ -144,8 +138,7 @@ mod tests {
     #[tokio::test]
     async fn rearm() {
         let mut timer = Timer::new(Clock::default());
-        assert!(timer.expire.is_some());
-        let original_expire = timer.expire.unwrap();
+        let original_expire = timer.expire();
 
         let (waker, cnt) = new_count_waker();
         let mut ctx = Context::from_waker(&waker);
@@ -159,7 +152,6 @@ mod tests {
         assert_eq!(cnt, 1);
 
         // timer should have rearmed
-        assert!(timer.expire.is_some());
-        assert_eq!(original_expire + rearm_time_plus_1, timer.expire.unwrap());
+        assert_eq!(original_expire + rearm_time_plus_1, timer.expire());
     }
 }

@@ -194,11 +194,11 @@ mod tests {
         let mut s = State::new(Clock::default());
         assert!(matches!(s.mode, Mode::Follower));
 
-        let prev_expire = s.inner.timer.expire.unwrap();
+        let prev_expire = s.inner.timer.expire();
 
         advance(Duration::from_millis(500)).await;
         s.recv(&mut io, Rpc::AppendEntries(AppendEntries { term: Term(0) }));
-        let new_expire = s.inner.timer.expire.unwrap();
+        let new_expire = s.inner.timer.expire();
         assert!(new_expire > prev_expire);
     }
 
@@ -212,7 +212,7 @@ mod tests {
         assert!(matches!(s.mode, Mode::Candidate));
         let bytes = io.tx.pop_front().unwrap();
         let buf = DecoderBuffer::new(&bytes);
-        let (rpc, _buffer) = Rpc::decode(buf).expect("todo");
+        let (rpc, _buffer) = Rpc::decode(buf).unwrap();
         let req = cast!(rpc, Rpc::RequestVote);
         assert_eq!(req.term, Term(1));
     }
