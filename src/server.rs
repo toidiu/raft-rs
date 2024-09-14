@@ -137,6 +137,9 @@ mod tests {
     use s2n_codec::{EncoderBuffer, EncoderValue};
     use std::sync::Arc;
     use tokio::time::advance;
+
+    const END_MARKER: u8 = 128;
+
     #[tokio::test]
     async fn mock_event_loop() {
         let clock = Clock::default();
@@ -148,25 +151,31 @@ mod tests {
         // network: simulate sending a message
         let mut tx_network_io = network_io.clone();
         tokio::spawn(async move {
-            loop {
+            while set_wait.load(Ordering::SeqCst) {
                 tx_network_io.tx_ready().await;
                 tokio::time::advance(Duration::from_millis(100)).await;
                 if let Some(bytes) = tx_network_io.send() {
-                    println!("---send {:?}", bytes);
-                    // TODO currently we read the entire set of available bytes. instead read
-                    // only a single packet. RPC should contain TAG/LEN
-                    if bytes.contains(&128) {
-                        set_wait.store(false, Ordering::Relaxed);
-                        break;
-                    }
+                    println!("---network send bytes {:?}", bytes);
 
-                    let mut buf = DecoderBuffer::new(&bytes);
-                    while !buf.is_empty() {
-                        if let Ok((rpc, buffer)) = Rpc::decode(buf) {
+                    let mut bytes = DecoderBuffer::new(&bytes);
+                    while !bytes.is_empty() {
+                        if let Ok((rpc, buffer)) = Rpc::decode(bytes) {
                             println!("---send {:?}", rpc);
-                            buf = buffer;
+                            bytes = buffer;
                         } else {
-                            break;
+                            if let Ok(end_marker) = bytes.peek_byte(0) {
+                                if end_marker == END_MARKER {
+                                    set_wait.store(false, Ordering::Relaxed);
+                                    println!(
+                                        "-o-o-o-o-o--oo-o--o-o-o--o-o-o--o END {:?} {:?}",
+                                        bytes.peek_byte(0),
+                                        bytes
+                                    );
+                                    break;
+                                }
+                            }
+
+                            panic!("received unexpected bytes {:?}", bytes);
                         }
                     }
                 }
@@ -200,7 +209,7 @@ mod tests {
         }
 
         // server: send data
-        server.send_test_data(vec![128]);
+        server.send_test_data(vec![END_MARKER]);
         while wait_complete.load(Ordering::SeqCst) {
             advance(Duration::from_millis(100)).await;
             println!("---waiting for finish tag");
