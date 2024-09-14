@@ -1,4 +1,4 @@
-use crate::io::{RxReady, TxReady};
+use crate::io::{RxReady, TxReady, IO_BUF_LEN};
 use core::task::{Context, Poll, Waker};
 use std::{
     collections::VecDeque,
@@ -40,7 +40,7 @@ pub struct ServerIo {
 
 impl ServerRx for ServerIo {
     fn recv(&mut self) -> Option<Vec<u8>> {
-        let mut buf = [0; 100];
+        let mut buf = [0; IO_BUF_LEN];
         let len = self.rx.lock().unwrap().read(&mut buf[0..]).ok()?;
         if len > 0 {
             Some(buf[0..len].to_vec())

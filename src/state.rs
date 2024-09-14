@@ -1,3 +1,4 @@
+use crate::io::IO_BUF_LEN;
 use crate::{
     clock::Clock,
     io::ServerTx,
@@ -116,7 +117,7 @@ impl State {
                 }
 
                 let term = inner.curr_term.0;
-                let mut slice = vec![0; 100];
+                let mut slice = vec![0; IO_BUF_LEN];
                 let mut buf = EncoderBuffer::new(&mut slice);
                 Rpc::new_append_entry_resp(term).encode_mut(&mut buf);
                 tx.send(buf.as_mut_slice().to_vec());
@@ -131,7 +132,7 @@ impl State {
 
         // TODO: start new election
         let term = self.inner.curr_term.0 + 1;
-        let mut slice = vec![0; 100];
+        let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_request_vote(term).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
@@ -142,7 +143,7 @@ impl State {
 
         // TODO send rpc
         let term = self.inner.curr_term.0 + 1;
-        let mut slice = vec![0; 100];
+        let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_heartbeat(term).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
