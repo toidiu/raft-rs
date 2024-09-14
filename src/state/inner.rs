@@ -7,8 +7,8 @@ use crate::{
 #[derive(Debug)]
 pub struct Inner {
     // # Compliance: Fig 2
-    // currentTerm: latest term server has seen (initialized to 0
-    // on first boot, increases monotonically)
+    // currentTerm: latest term server has seen (initialized to 0 on first boot, increases
+    // monotonically)
     pub curr_term: Term,
 
     // # Compliance: Fig 2
@@ -20,6 +20,10 @@ pub struct Inner {
     // received by leader (first index is 1)
     log: Log,
 
+    // TODO
+    // lastApplied: index of highest log entry applied to state machine (initialized to 0, increases
+    // monotonically)
+    // last_applied: todo!(),
     pub timer: Timer,
 }
 
@@ -37,6 +41,6 @@ impl Inner {
     // commitIndex: index of highest log entry known to be committed (initialized to 0, increases
     // monotonically)
     fn commit_idx(&self) -> Option<TermIdx> {
-        self.log.last_term_idx()
+        self.log.last_committed_term_idx()
     }
 }

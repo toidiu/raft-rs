@@ -115,7 +115,7 @@ impl Log {
 
     fn push(&mut self, entry: Entry) -> Result<(), ()> {
         // validation
-        if let Some(last) = self.last_term_idx() {
+        if let Some(last) = self.last_committed_term_idx() {
             // if term is eq then idx should be +1
             let valid_curr_term = Idx(last.idx.0 + 1) == entry.term_idx.idx;
             // term is greater and idx == 0
@@ -136,7 +136,9 @@ impl Log {
         self.entries.pop()
     }
 
-    pub fn last_term_idx(&self) -> Option<TermIdx> {
+    // An entry is committed to the Log if the leader sends an AppendEntries to followers and get a
+    // response from majority of the followers
+    pub fn last_committed_term_idx(&self) -> Option<TermIdx> {
         let entry = self
             .entries
             .iter()
@@ -164,7 +166,7 @@ mod tests {
         log.push(entry.clone()).unwrap();
         entry.term_idx.term = Term(2);
         log.push(entry.clone()).unwrap();
-        assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(2, 0));
+        assert_eq!(log.last_committed_term_idx().unwrap(), TermIdx::new(2, 0));
         entry.term_idx.term = Term(3);
         log.push(entry.clone()).unwrap();
         entry.term_idx.idx = Idx(1);
@@ -252,11 +254,11 @@ mod tests {
 
         let mut e = Entry::new(Term(1), Idx(0), 1);
         log.push(e.clone()).unwrap();
-        assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(1, 0));
+        assert_eq!(log.last_committed_term_idx().unwrap(), TermIdx::new(1, 0));
 
         // remove last_term_idx
         log.pop();
-        assert!(log.last_term_idx().is_none());
+        assert!(log.last_committed_term_idx().is_none());
 
         // can push the same entry `e` since we popped it
         log.push(e.clone()).unwrap();
@@ -264,27 +266,27 @@ mod tests {
         // push 2 more entries
         e.term_idx.term = Term(2);
         log.push(e.clone()).unwrap();
-        assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(2, 0));
+        assert_eq!(log.last_committed_term_idx().unwrap(), TermIdx::new(2, 0));
         e.term_idx.term = Term(3);
         log.push(e.clone()).unwrap();
 
         // ensure that last_term_idx was updated
         assert_eq!(log.pop().unwrap().term_idx, TermIdx::new(3, 0));
-        assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(2, 0));
+        assert_eq!(log.last_committed_term_idx().unwrap(), TermIdx::new(2, 0));
     }
 
     // - get term,idx of last LogEntry
     #[test]
     fn last_entry() {
         let mut log = Log::default();
-        assert!(log.last_term_idx().is_none());
+        assert!(log.last_committed_term_idx().is_none());
 
         log.push(Entry::new(Term(0), Idx(0), 1)).unwrap();
-        assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(0, 0));
+        assert_eq!(log.last_committed_term_idx().unwrap(), TermIdx::new(0, 0));
 
         log.push(Entry::new(Term(0), Idx(1), 2)).unwrap();
         log.push(Entry::new(Term(0), Idx(2), 2)).unwrap();
-        assert_eq!(log.last_term_idx().unwrap(), TermIdx::new(0, 2));
+        assert_eq!(log.last_committed_term_idx().unwrap(), TermIdx::new(0, 2));
     }
 
     // - comparing log entry
