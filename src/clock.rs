@@ -11,7 +11,7 @@ use tokio::time::{sleep_until, Instant, Sleep};
 // chosen randomly from a fixed interval (e.g., 150–300ms).
 const MIN_REARM_DURATION: Duration = Duration::from_millis(150);
 const MAX_REARM_DURATION: Duration = Duration::from_millis(300);
-const TEST_REARM_DURATION: Duration = Duration::from_millis(10);
+const TEST_REARM_DURATION: Duration = Duration::from_millis(200);
 
 /// A monotonically increasing clock value for the process
 #[derive(Debug, Clone, Copy)]

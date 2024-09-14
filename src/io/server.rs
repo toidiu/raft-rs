@@ -62,6 +62,8 @@ impl ServerRx for ServerIo {
 
 impl ServerTx for ServerIo {
     fn send(&mut self, data: Vec<u8>) {
+        println!("  server ---> {:?}", data);
+
         self.tx.lock().unwrap().extend(data);
 
         if let Some(waker) = self.tx_waker.lock().unwrap().deref() {

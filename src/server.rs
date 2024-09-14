@@ -40,7 +40,7 @@ impl Server {
             let mut buf = DecoderBuffer::new(&bytes);
             while !buf.is_empty() {
                 let (rpc, buffer) = Rpc::decode(buf).unwrap();
-                println!("--- rpc: {:?}", rpc);
+                println!("  server <--- {:?}", rpc);
                 buf = buffer;
                 self.state.recv(&mut self.io, rpc);
             }
@@ -78,6 +78,7 @@ impl Server {
     #[cfg(test)]
     fn send_test_data(&mut self, data: Vec<u8>) {
         use crate::io::ServerTx;
+        println!("---send test data: {:?}", data);
         self.io.send(data);
     }
 }
@@ -153,14 +154,15 @@ mod tests {
         tokio::spawn(async move {
             while set_wait.load(Ordering::SeqCst) {
                 tx_network_io.tx_ready().await;
-                tokio::time::advance(Duration::from_millis(100)).await;
+
+                tokio::time::advance(Duration::from_millis(10)).await;
                 if let Some(bytes) = tx_network_io.send() {
-                    println!("---network send bytes {:?}", bytes);
+                    println!("  ---> network {:?}", bytes);
 
                     let mut bytes = DecoderBuffer::new(&bytes);
                     while !bytes.is_empty() {
                         if let Ok((rpc, buffer)) = Rpc::decode(bytes) {
-                            println!("---send {:?}", rpc);
+                            println!("  ---> network {:?}", rpc);
                             bytes = buffer;
                         } else {
                             if let Ok(end_marker) = bytes.peek_byte(0) {
@@ -184,18 +186,18 @@ mod tests {
 
         // network: simulate receiving a message over the network
         tokio::spawn(async move {
-            for i in 0..5 {
+            for _i in 0..5 {
                 let mut slice = vec![0; 100];
 
                 let mut buf = EncoderBuffer::new(&mut slice);
-                Rpc::new_request_vote(i).encode(&mut buf);
+                Rpc::new_request_vote(1).encode(&mut buf);
                 let (written, buf) = buf.split_mut();
                 network_io.recv(written.to_vec());
 
-                advance(Duration::from_millis(200)).await;
+                advance(Duration::from_millis(30)).await;
 
                 let mut buf = EncoderBuffer::new(buf);
-                Rpc::new_append_entry(i + 100, TermIdx::new(3, 1)).encode(&mut buf);
+                Rpc::new_append_entry(1, TermIdx::new(3, 1)).encode(&mut buf);
                 network_io.recv(buf.as_mut_slice().to_vec());
             }
         });
@@ -204,15 +206,16 @@ mod tests {
         let mut i = 0;
         while clock.elapsed() < Duration::from_secs(1) {
             server.poll().await;
-            println!("---{i} elapsed: {:?}", clock.elapsed());
+            // println!("---{i} elapsed: {:?}", clock.elapsed());
             i += 1;
         }
 
         // server: send data
         server.send_test_data(vec![END_MARKER]);
         while wait_complete.load(Ordering::SeqCst) {
-            advance(Duration::from_millis(100)).await;
-            println!("---waiting for finish tag");
+            advance(Duration::from_millis(300)).await;
+            // println!("---waiting for finish tag");
+            // println!("---{i} elapsed: {:?}", clock.elapsed());
         }
     }
 }

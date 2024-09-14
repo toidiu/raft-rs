@@ -32,6 +32,7 @@ impl ServerId {
 ///
 ///
 /// ```none
+///
 ///     |                       ------
 ///     | 1                    |  3   |
 ///     v             2        |      v
@@ -91,6 +92,11 @@ impl State {
     }
 
     pub fn recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc) {
+        // println!("---------------asdlfaksdfaslkdf  {:?}", self.inner.curr_term);
+        if rpc.term() > &self.inner.curr_term {
+            // self.inner.curr_term = *rpc.term();
+            // self.on_follower();
+        }
         match self.mode {
             Mode::Follower => {
                 // # Compliance:
@@ -136,6 +142,11 @@ impl State {
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_request_vote(term).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
+    }
+
+    fn on_follower(&mut self) {
+        self.mode = Mode::Follower;
+
     }
 
     fn send_heartbeat<T: ServerTx>(&mut self, tx: &mut T) {

@@ -40,6 +40,8 @@ pub struct NetworkIo {
 
 impl NetRx for NetworkIo {
     fn recv(&mut self, data: Vec<u8>) {
+        println!("  network <--- {:?}", data);
+
         self.rx.lock().unwrap().extend(data);
         if let Some(waker) = self.rx_waker.lock().unwrap().deref() {
             waker.wake_by_ref();

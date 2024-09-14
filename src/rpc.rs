@@ -29,6 +29,16 @@ impl Rpc {
     pub fn new_heartbeat(term: u64) -> Rpc {
         Rpc::Heartbeat(Heartbeat { term: Term(term) })
     }
+
+    pub fn term(&self) -> &Term {
+        match self {
+            Rpc::RequestVote(RequestVote { term, .. }) => term,
+            Rpc::RespRequestVote(RespRequestVote { term, .. }) => term,
+            Rpc::AppendEntries(AppendEntries { term, .. }) => term,
+            Rpc::RespAppendEntries(RespAppendEntries { term, .. }) => term,
+            Rpc::Heartbeat(Heartbeat { term, .. }) => term,
+        }
+    }
 }
 
 impl<'a> DecoderValue<'a> for Rpc {
@@ -54,6 +64,10 @@ impl<'a> DecoderValue<'a> for Rpc {
                     prev_term_idx,
                 };
                 Ok((Rpc::AppendEntries(rpc), buffer))
+            }
+            RespAppendEntries::TAG => {
+                let rpc = RespAppendEntries { term };
+                Ok((Rpc::RespAppendEntries(rpc), buffer))
             }
             Heartbeat::TAG => {
                 let rpc = Heartbeat { term };
