@@ -63,10 +63,7 @@ impl Timer {
         let duration = Self::rearm_duration();
         let expire = clock.current_instance() + duration;
         let sleep = Box::pin(sleep_until(expire));
-        Timer {
-            clock,
-            sleep,
-        }
+        Timer { clock, sleep }
     }
 
     pub fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
@@ -87,7 +84,7 @@ impl Timer {
     }
 
     pub fn expire(&self) -> Instant {
-            self.sleep.deadline()
+        self.sleep.deadline()
     }
 
     fn rearm_duration() -> Duration {

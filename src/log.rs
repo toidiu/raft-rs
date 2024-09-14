@@ -1,5 +1,7 @@
 // The data type supported by this Raft implementation.
 // TODO: u8 is used for simplification. Eventually support additional types.
+use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
+
 pub type Data = u8;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
@@ -11,8 +13,36 @@ impl From<u64> for Term {
     }
 }
 
+impl<'a> DecoderValue<'a> for Term {
+    fn decode(buffer: s2n_codec::DecoderBuffer<'a>) -> DecoderBufferResult<'a, Self> {
+        let (term, buffer): (u64, _) = buffer.decode()?;
+        let term = Term(term);
+        Ok((term, buffer))
+    }
+}
+
+impl EncoderValue for Term {
+    fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
+        encoder.write_slice(&self.0.to_be_bytes());
+    }
+}
+
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Idx(u64);
+
+impl<'a> DecoderValue<'a> for Idx {
+    fn decode(buffer: s2n_codec::DecoderBuffer<'a>) -> DecoderBufferResult<'a, Self> {
+        let (idx, buffer): (u64, _) = buffer.decode()?;
+        let idx = Idx(idx);
+        Ok((idx, buffer))
+    }
+}
+
+impl EncoderValue for Idx {
+    fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
+        encoder.write_slice(&self.0.to_be_bytes());
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct TermIdx {
@@ -20,8 +50,23 @@ pub struct TermIdx {
     idx: Idx,
 }
 
+impl<'a> DecoderValue<'a> for TermIdx {
+    fn decode(buffer: s2n_codec::DecoderBuffer<'a>) -> DecoderBufferResult<'a, Self> {
+        let (term, buffer): (Term, _) = buffer.decode()?;
+        let (idx, buffer): (Idx, _) = buffer.decode()?;
+        Ok((TermIdx { term, idx }, buffer))
+    }
+}
+
+impl EncoderValue for TermIdx {
+    fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
+        encoder.encode(&self.term);
+        encoder.encode(&self.idx);
+    }
+}
+
 impl TermIdx {
-    fn new(term: u64, idx: u64) -> Self {
+    pub fn new(term: u64, idx: u64) -> Self {
         TermIdx {
             term: Term(term),
             idx: Idx(idx),

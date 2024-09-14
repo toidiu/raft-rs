@@ -1,7 +1,5 @@
-use crate::log::Term;
+use crate::log::{Term, TermIdx};
 use s2n_codec::{DecoderBuffer, DecoderBufferResult, DecoderError, DecoderValue, EncoderValue};
-
-pub const TAG_LEN: usize = 1;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Rpc {
@@ -17,8 +15,11 @@ impl Rpc {
         Rpc::RequestVote(RequestVote { term: Term(term) })
     }
 
-    pub fn new_append_entry(term: u64) -> Rpc {
-        Rpc::AppendEntries(AppendEntries { term: Term(term) })
+    pub fn new_append_entry(leader_term: u64, prev_term_idx: TermIdx) -> Rpc {
+        Rpc::AppendEntries(AppendEntries {
+            term: Term(leader_term),
+            prev_term_idx,
+        })
     }
 
     pub fn new_append_entry_resp(term: u64) -> Rpc {
@@ -33,33 +34,33 @@ impl Rpc {
 impl<'a> DecoderValue<'a> for Rpc {
     fn decode(buffer: DecoderBuffer<'a>) -> DecoderBufferResult<'a, Self> {
         let (tag, buffer): (u8, _) = buffer.decode()?;
-        let (term, buffer): (u64, _) = buffer.decode()?;
+        let (term, buffer) = buffer.decode()?;
 
-        let rpc = match tag {
+        match tag {
             RequestVote::TAG => {
-                let rpc = RequestVote { term: term.into() };
-                Ok(Rpc::RequestVote(rpc))
+                let rpc = RequestVote { term };
+                Ok((Rpc::RequestVote(rpc), buffer))
             }
             RespRequestVote::TAG => {
-                let (vote_granted, _buffer): (u8, _) = buffer.decode()?;
+                let (vote_granted, buffer): (u8, _) = buffer.decode()?;
                 let vote_granted = vote_granted != 0;
-                let rpc = RespRequestVote {
-                    term: Term(term),
-                    vote_granted,
-                };
-                Ok(Rpc::RespRequestVote(rpc))
+                let rpc = RespRequestVote { term, vote_granted };
+                Ok((Rpc::RespRequestVote(rpc), buffer))
             }
             AppendEntries::TAG => {
-                let rpc = AppendEntries { term: term.into() };
-                Ok(Rpc::AppendEntries(rpc))
+                let (prev_term_idx, buffer): (TermIdx, _) = buffer.decode()?;
+                let rpc = AppendEntries {
+                    term,
+                    prev_term_idx,
+                };
+                Ok((Rpc::AppendEntries(rpc), buffer))
             }
             Heartbeat::TAG => {
-                let rpc = Heartbeat { term: term.into() };
-                Ok(Rpc::Heartbeat(rpc))
+                let rpc = Heartbeat { term };
+                Ok((Rpc::Heartbeat(rpc), buffer))
             }
             _tag => Err(DecoderError::InvariantViolation("received unexpected tag")),
-        };
-        rpc.map(|rpc| (rpc, buffer))
+        }
     }
 }
 
@@ -68,24 +69,25 @@ impl EncoderValue for Rpc {
         match self {
             Rpc::RequestVote(inner) => {
                 encoder.write_slice(&[RequestVote::TAG]);
-                encoder.write_slice(&inner.term.0.to_be_bytes());
+                encoder.encode(&inner.term);
             }
             Rpc::RespRequestVote(inner) => {
                 encoder.write_slice(&[RespRequestVote::TAG]);
-                encoder.write_slice(&inner.term.0.to_be_bytes());
+                encoder.encode(&inner.term);
                 encoder.write_slice(&(inner.vote_granted as u8).to_be_bytes());
             }
             Rpc::AppendEntries(inner) => {
                 encoder.write_slice(&[AppendEntries::TAG]);
-                encoder.write_slice(&inner.term.0.to_be_bytes());
+                encoder.encode(&inner.term);
+                encoder.encode(&inner.prev_term_idx);
             }
             Rpc::RespAppendEntries(inner) => {
                 encoder.write_slice(&[RespAppendEntries::TAG]);
-                encoder.write_slice(&inner.term.0.to_be_bytes());
+                encoder.encode(&inner.term);
             }
             Rpc::Heartbeat(inner) => {
                 encoder.write_slice(&[Heartbeat::TAG]);
-                encoder.write_slice(&inner.term.0.to_be_bytes());
+                encoder.encode(&inner.term);
             }
         }
     }
@@ -117,11 +119,34 @@ impl RespRequestVote {
 // Add entries
 #[derive(Debug, Clone, Copy)]
 pub struct AppendEntries {
-    pub term: Term,
+    // # Compliance: Fig 2
+    // term leader’s term
+    term: Term,
+    // # Compliance: Fig 2
+    // prevLogIndex index of log entry immediately preceding
+    // new ones
+    //
+    // # Compliance: Fig 2
+    // prevLogTerm term of prevLogIndex entry
+    prev_term_idx: TermIdx,
+    //
+    // # Compliance: Fig 2
+    // TODO leaderId so follower can redirect clients
+    //
+    // # Compliance: Fig 2
+    // TODO entries[] log entries to store (empty for heartbeat; may send more than one for
+    // efficiency)
+    //
+    // # Compliance: Fig 2
+    // TODO leaderCommit leader’s commitIndex
 }
 
 impl AppendEntries {
     const TAG: u8 = 3;
+
+    pub fn term(&self) -> Term {
+        self.term
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -110,8 +110,8 @@ impl State {
                 term: _,
                 vote_granted: _,
             }) => {}
-            Rpc::AppendEntries(AppendEntries { term }) => {
-                if inner.curr_term == term {
+            Rpc::AppendEntries(entery) => {
+                if inner.curr_term == entery.term() {
                     inner.timer.rearm()
                 }
 
@@ -162,7 +162,7 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{io::testing::MockIo, rpc::Rpc, testing::cast};
+    use crate::{io::testing::MockIo, log::TermIdx, rpc::Rpc, testing::cast};
     use core::time::Duration;
     use s2n_codec::{DecoderBuffer, DecoderValue};
     use tokio::time::advance;
@@ -197,7 +197,7 @@ mod tests {
         let prev_expire = s.inner.timer.expire();
 
         advance(Duration::from_millis(500)).await;
-        s.recv(&mut io, Rpc::AppendEntries(AppendEntries { term: Term(0) }));
+        s.recv(&mut io, Rpc::new_append_entry(0, TermIdx::new(0, 1)));
         let new_expire = s.inner.timer.expire();
         assert!(new_expire > prev_expire);
     }

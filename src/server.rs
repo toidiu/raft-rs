@@ -38,9 +38,8 @@ impl Server {
     pub fn recv(&mut self) {
         if let Some(bytes) = self.io.recv() {
             let mut buf = DecoderBuffer::new(&bytes);
-
             while !buf.is_empty() {
-                let (rpc, buffer) = Rpc::decode(buf).expect("todo");
+                let (rpc, buffer) = Rpc::decode(buf).unwrap();
                 println!("--- rpc: {:?}", rpc);
                 buf = buffer;
                 self.state.recv(&mut self.io, rpc);
@@ -129,6 +128,7 @@ mod tests {
     use crate::{
         clock::Clock,
         io::{NetRx, NetTx},
+        log::TermIdx,
     };
     use core::{
         sync::atomic::{AtomicBool, Ordering},
@@ -145,7 +145,7 @@ mod tests {
         let wait_complete = Arc::new(AtomicBool::new(true));
         let set_wait = wait_complete.clone();
 
-        // simulate sending a message over the network.
+        // network: simulate sending a message
         let mut tx_network_io = network_io.clone();
         tokio::spawn(async move {
             loop {
@@ -173,23 +173,25 @@ mod tests {
             }
         });
 
-        // simulate receiving a message over the network
+        // network: simulate receiving a message over the network
         tokio::spawn(async move {
             for i in 0..5 {
                 let mut slice = vec![0; 100];
+
                 let mut buf = EncoderBuffer::new(&mut slice);
                 Rpc::new_request_vote(i).encode(&mut buf);
-                let (written, rem) = buf.split_mut();
+                let (written, buf) = buf.split_mut();
                 network_io.recv(written.to_vec());
 
                 advance(Duration::from_millis(200)).await;
 
-                let mut buf = EncoderBuffer::new(rem);
-                Rpc::new_append_entry(i + 100).encode(&mut buf);
+                let mut buf = EncoderBuffer::new(buf);
+                Rpc::new_append_entry(i + 100, TermIdx::new(3, 1)).encode(&mut buf);
                 network_io.recv(buf.as_mut_slice().to_vec());
             }
         });
 
+        // server: recv data
         let mut i = 0;
         while clock.elapsed() < Duration::from_secs(1) {
             server.poll().await;
@@ -197,8 +199,8 @@ mod tests {
             i += 1;
         }
 
+        // server: send data
         server.send_test_data(vec![128]);
-
         while wait_complete.load(Ordering::SeqCst) {
             advance(Duration::from_millis(100)).await;
             println!("---waiting for finish tag");
