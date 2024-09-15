@@ -62,10 +62,10 @@ impl Server {
             return;
         };
 
-        println!(
-            "============== timeout_fut: {} recv_fut: {}",
-            timeout_rdy, recv_rdy
-        );
+        // println!(
+        //     "============== timeout_fut: {} recv_fut: {}",
+        //     timeout_rdy, recv_rdy
+        // );
 
         if timeout_rdy {
             self.on_timeout();
@@ -78,7 +78,7 @@ impl Server {
     #[cfg(test)]
     fn send_test_data(&mut self, data: Vec<u8>) {
         use crate::io::ServerTx;
-        println!("---send test data: {:?}", data);
+        // println!("---send test data: {:?}", data);
         self.io.send(data);
     }
 }
@@ -168,11 +168,11 @@ mod tests {
                             if let Ok(end_marker) = bytes.peek_byte(0) {
                                 if end_marker == END_MARKER {
                                     set_wait.store(false, Ordering::Relaxed);
-                                    println!(
-                                        "-o-o-o-o-o--oo-o--o-o-o--o-o-o--o END {:?} {:?}",
-                                        bytes.peek_byte(0),
-                                        bytes
-                                    );
+                                    // println!(
+                                    //     "-o-o-o-o-o-o-o-o-o-o-o-o-o-o END {:?} {:?}",
+                                    //     bytes.peek_byte(0),
+                                    //     bytes
+                                    // );
                                     break;
                                 }
                             }
@@ -206,7 +206,7 @@ mod tests {
         let mut i = 0;
         while clock.elapsed() < Duration::from_secs(1) {
             server.poll().await;
-            // println!("---{i} elapsed: {:?}", clock.elapsed());
+            println!("---{i} elapsed: {:?}", clock.elapsed());
             i += 1;
         }
 
