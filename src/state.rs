@@ -141,10 +141,29 @@ impl State {
         println!("on_candidate");
         self.mode = Mode::Candidate;
 
-        // TODO: start new election
-        let term = self.inner.curr_term.0 + 1;
+        // # Compliance:
+        // On conversion to candidate, start election:
+        self.start_new_election(tx)
+    }
+
+    fn start_new_election<T: ServerTx>(&mut self, tx: &mut T) {
+        // # Compliance:
+        // Increment currentTerm
+        self.inner.curr_term += 1;
+
+        // # Compliance:
+        // Vote for self
+        self.inner.voted_for = Some(self.id);
+
+        // # Compliance:
+        // Reset election timer
+        self.inner.timer.rearm();
+
+        // # Compliance:
+        // Send RequestVote RPCs to all other servers
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
+        let term = self.inner.curr_term.0;
         let last_log_term_idx = self.inner.last_committed_term_idx();
         Rpc::new_request_vote(term, self.id, last_log_term_idx).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());

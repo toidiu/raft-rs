@@ -1,6 +1,6 @@
 // The data type supported by this Raft implementation.
 // TODO: u8 is used for simplification. Eventually support additional types.
-use core::cmp::Ordering;
+use core::{cmp::Ordering, ops::AddAssign};
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 
 // Initial entry indicative of an empty log.
@@ -13,6 +13,12 @@ pub type Data = u8;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Term(pub u64);
+
+impl AddAssign<u64> for Term {
+    fn add_assign(&mut self, rhs: u64) {
+        self.0 += rhs;
+    }
+}
 
 impl From<u64> for Term {
     fn from(value: u64) -> Self {

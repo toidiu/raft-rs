@@ -35,11 +35,11 @@ Remaining tasks to complete:
   current leader or granting vote to candidate: convert to candidate
 
 **Candidates (§5.2):**
-- [ ] On conversion to candidate, start election:
-  - [ ] Increment currentTerm
-  - [ ] Vote for self
-  - [ ] Reset election timer
-  - [ ] Send RequestVote RPCs to all other servers
+- [x] On conversion to candidate, start election:
+  - [x] Increment currentTerm
+  - [x] Vote for self
+  - [x] Reset election timer
+  - [x] Send RequestVote RPCs to all other servers
 - [ ] If votes received from majority of servers: become leader
 - [ ] If AppendEntries RPC received from new leader: convert to follower
 - [ ] If election timeout elapses: start new election
