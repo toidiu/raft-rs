@@ -1,4 +1,7 @@
-use crate::log::{Term, TermIdx};
+use crate::{
+    log::{Term, TermIdx},
+    state::ServerId,
+};
 use s2n_codec::{DecoderBuffer, DecoderBufferResult, DecoderError, DecoderValue, EncoderValue};
 
 #[derive(Debug, Clone, Copy)]
@@ -11,8 +14,11 @@ pub enum Rpc {
 }
 
 impl Rpc {
-    pub fn new_request_vote(term: u64) -> Rpc {
-        Rpc::RequestVote(RequestVote { term: Term(term) })
+    pub fn new_request_vote(term: u64, candidate_id: ServerId) -> Rpc {
+        Rpc::RequestVote(RequestVote {
+            term: Term(term),
+            candidate_id,
+        })
     }
 
     pub fn new_request_vote_resp(term: u64, vote_granted: bool) -> Rpc {
@@ -55,7 +61,13 @@ impl<'a> DecoderValue<'a> for Rpc {
 
         match tag {
             RequestVote::TAG => {
-                let rpc = RequestVote { term };
+                let (candidate_id, buffer): (_, _) = buffer.decode_slice(16)?;
+                let a = candidate_id
+                    .into_less_safe_slice()
+                    .try_into()
+                    .expect("already decoded 16 bytes");
+                let candidate_id = ServerId(a);
+                let rpc = RequestVote { term, candidate_id };
                 Ok((Rpc::RequestVote(rpc), buffer))
             }
             RespRequestVote::TAG => {
@@ -91,6 +103,7 @@ impl EncoderValue for Rpc {
             Rpc::RequestVote(inner) => {
                 encoder.write_slice(&[RequestVote::TAG]);
                 encoder.encode(&inner.term);
+                encoder.write_slice(&inner.candidate_id.0);
             }
             Rpc::RespRequestVote(inner) => {
                 encoder.write_slice(&[RespRequestVote::TAG]);
@@ -118,7 +131,7 @@ impl EncoderValue for Rpc {
 #[derive(Debug, Clone, Copy)]
 pub struct RequestVote {
     pub term: Term,
-    // pub candidate_d: ServerId,
+    pub candidate_id: ServerId,
     // pub last_term_idx: TermIdx,
 }
 
@@ -135,6 +148,15 @@ pub struct RespRequestVote {
 
 impl RespRequestVote {
     const TAG: u8 = 2;
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RespAppendEntries {
+    pub term: Term,
+}
+
+impl RespAppendEntries {
+    const TAG: u8 = 4;
 }
 
 // Add entries
@@ -168,15 +190,6 @@ impl AppendEntries {
     pub fn term(&self) -> Term {
         self.term
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct RespAppendEntries {
-    pub term: Term,
-}
-
-impl RespAppendEntries {
-    const TAG: u8 = 4;
 }
 
 // Heartbeat.

@@ -10,7 +10,6 @@ use s2n_codec::{DecoderBuffer, DecoderValue};
 
 #[derive(Debug)]
 pub struct Server {
-    id: ServerId,
     clock: Clock,
     state: State,
     // IO handle to send and receive Rpc messages
@@ -22,7 +21,6 @@ impl Server {
         let (server_io, network_io) = BufferIo::split();
         (
             Server {
-                id: ServerId::new(),
                 clock,
                 state: State::new(clock),
                 io: server_io,
@@ -33,6 +31,10 @@ impl Server {
 
     pub fn on_timeout(&mut self) {
         self.state.on_timeout(&mut self.io);
+    }
+
+    fn id(&self) -> ServerId {
+        self.state.id
     }
 
     pub fn recv(&mut self) {
@@ -184,13 +186,14 @@ mod tests {
             }
         });
 
+        let server_id = server.id();
         // network: simulate receiving a message over the network
         tokio::spawn(async move {
             for i in 0..5 {
                 let mut slice = vec![0; 100];
 
                 let mut buf = EncoderBuffer::new(&mut slice);
-                Rpc::new_request_vote(i).encode(&mut buf);
+                Rpc::new_request_vote(i, server_id).encode(&mut buf);
                 let (written, buf) = buf.split_mut();
                 network_io.recv(written.to_vec());
 

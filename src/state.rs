@@ -42,24 +42,19 @@ mod inner;
 /// ```
 /// https://textik.com/#8dbf6540e0dd1676
 
-#[derive(Debug)]
-pub struct ServerId(String);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ServerId(pub [u8; 16]);
 
 impl ServerId {
     pub fn new() -> Self {
         let id = Uuid::new_v4();
-        ServerId(id.to_string())
-    }
-}
-
-impl PartialEq<str> for ServerId {
-    fn eq(&self, other: &str) -> bool {
-        self.0 == other
+        ServerId(id.into_bytes())
     }
 }
 
 #[derive(Debug)]
 pub struct State {
+    pub id: ServerId,
     pub inner: Inner,
     mode: Mode,
 }
@@ -75,6 +70,7 @@ impl State {
     pub fn new(clock: Clock) -> Self {
         // 1: startup
         State {
+            id: ServerId::new(),
             inner: Inner::new(clock),
             mode: Mode::Follower,
         }
@@ -125,19 +121,26 @@ impl State {
     }
 
     fn on_follower_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc) {
-        // println!("state: on_recv_follower");
-
         match rpc {
-            Rpc::RequestVote(RequestVote { term: _, .. }) => {
+            Rpc::RequestVote(RequestVote {
+                term: _,
+                candidate_id,
+            }) => {
                 let term = self.inner.curr_term.0;
                 let mut slice = vec![0; IO_BUF_LEN];
                 let mut buf = EncoderBuffer::new(&mut slice);
-                // TODO
-                let rpc_candiate_id: &str = "TODO";
                 #[allow(clippy::match_like_matches_macro)]
+
+                // # Compliance:
+                // If votedFor is null or candidateId, grant vote (§5.2, §5.4)
+                // TODO on_request_vote
                 let voted_for = match &self.inner.voted_for {
-                    Some(voted_for) if voted_for == rpc_candiate_id => true,
-                    _ => false,
+                    Some(voted_for) if voted_for == &candidate_id => true,
+                    None => {
+                        self.inner.voted_for = Some(candidate_id);
+                        true
+                    }
+                    _ => false
                 };
 
                 Rpc::new_request_vote_resp(term, voted_for).encode_mut(&mut buf);
@@ -167,7 +170,7 @@ impl State {
         let term = self.inner.curr_term.0 + 1;
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_request_vote(term).encode_mut(&mut buf);
+        Rpc::new_request_vote(term, self.id).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
     }
 

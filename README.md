@@ -18,7 +18,10 @@ Remaining tasks to complete:
 - TODO
 
 ### RequestVote
-- TODO
+- [ ] Reply false if term < currentTerm (§5.1)
+- [x] If votedFor is null or candidateId, grant vote (§5.2, §5.4)
+  - [ ] and candidate’s log is at least as up-to-date as receiver’s log, grant
+    vote (§5.2, §5.4)
 
 ### Rules for Servers **All Servers:**
 - [ ] If commitIndex > lastApplied: increment lastApplied, apply
