@@ -159,8 +159,6 @@ mod tests {
 
                 tokio::time::advance(Duration::from_millis(10)).await;
                 if let Some(bytes) = tx_network_io.send() {
-                    println!("  ---> network {:?}", bytes);
-
                     let mut bytes = DecoderBuffer::new(&bytes);
                     while !bytes.is_empty() {
                         if let Ok((rpc, buffer)) = Rpc::decode(bytes) {
@@ -190,14 +188,14 @@ mod tests {
         // network: simulate receiving a message over the network
         tokio::spawn(async move {
             for i in 0..5 {
-                let mut slice = vec![0; 100];
+                advance(Duration::from_millis(30)).await;
 
+                let mut slice = vec![0; 100];
                 let mut buf = EncoderBuffer::new(&mut slice);
-                Rpc::new_request_vote(i, server_id).encode(&mut buf);
+                let last_log_term_idx = TermIdx::new(8, 1);
+                Rpc::new_request_vote(i, server_id, last_log_term_idx).encode(&mut buf);
                 let (written, buf) = buf.split_mut();
                 network_io.recv(written.to_vec());
-
-                advance(Duration::from_millis(30)).await;
 
                 let mut buf = EncoderBuffer::new(buf);
                 Rpc::new_append_entry(i, TermIdx::new(3, 1)).encode(&mut buf);

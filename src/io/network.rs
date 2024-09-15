@@ -64,6 +64,7 @@ impl NetTx for NetworkIo {
         let mut buf = [0; IO_BUF_LEN];
         let len = self.tx.lock().unwrap().read(&mut buf[0..]).ok()?;
         if len > 0 {
+            println!("  ---> network {:?}", &buf[0..len]);
             Some(buf[0..len].to_vec())
         } else {
             None

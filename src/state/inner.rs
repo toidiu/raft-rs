@@ -40,7 +40,7 @@ impl Inner {
     // # Compliance: Fig 2
     // commitIndex: index of highest log entry known to be committed (initialized to 0, increases
     // monotonically)
-    fn commit_idx(&self) -> Option<TermIdx> {
+    pub fn last_committed_term_idx(&self) -> TermIdx {
         self.log.last_committed_term_idx()
     }
 }

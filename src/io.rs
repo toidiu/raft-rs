@@ -13,7 +13,7 @@ pub use network::{NetRx, NetTx, NetworkIo};
 pub use server::{ServerIo, ServerRx, ServerTx};
 
 // The size of the buffer used to send/recv from the IO queues
-pub const IO_BUF_LEN: usize = 50;
+pub const IO_BUF_LEN: usize = 1024;
 
 /// A VecDeque backed IO buffer
 pub struct BufferIo;

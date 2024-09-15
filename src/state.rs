@@ -145,7 +145,8 @@ impl State {
         let term = self.inner.curr_term.0 + 1;
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_request_vote(term, self.id).encode_mut(&mut buf);
+        let last_log_term_idx = self.inner.last_committed_term_idx();
+        Rpc::new_request_vote(term, self.id, last_log_term_idx).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
     }
 
@@ -172,6 +173,7 @@ impl State {
             // (§5.2, §5.4)
             term: _,
             candidate_id,
+            last_log_term_idx,
         } = request_vote;
         let term = self.inner.curr_term.0;
         let mut slice = vec![0; IO_BUF_LEN];

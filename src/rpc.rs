@@ -14,10 +14,11 @@ pub enum Rpc {
 }
 
 impl Rpc {
-    pub fn new_request_vote(term: u64, candidate_id: ServerId) -> Rpc {
+    pub fn new_request_vote(term: u64, candidate_id: ServerId, last_term_idx: TermIdx) -> Rpc {
         Rpc::RequestVote(RequestVote {
             term: Term(term),
             candidate_id,
+            last_log_term_idx: last_term_idx,
         })
     }
 
@@ -61,13 +62,19 @@ impl<'a> DecoderValue<'a> for Rpc {
 
         match tag {
             RequestVote::TAG => {
-                let (candidate_id, buffer): (_, _) = buffer.decode_slice(16)?;
-                let a = candidate_id
+                let (candidate_id, buffer) = buffer.decode_slice(16)?;
+                let candidate_id = candidate_id
                     .into_less_safe_slice()
                     .try_into()
                     .expect("already decoded 16 bytes");
-                let candidate_id = ServerId(a);
-                let rpc = RequestVote { term, candidate_id };
+                let candidate_id = ServerId(candidate_id);
+                let (last_log_term_idx, buffer) = buffer.decode()?;
+
+                let rpc = RequestVote {
+                    term,
+                    candidate_id,
+                    last_log_term_idx,
+                };
                 Ok((Rpc::RequestVote(rpc), buffer))
             }
             RespRequestVote::TAG => {
@@ -104,6 +111,7 @@ impl EncoderValue for Rpc {
                 encoder.write_slice(&[RequestVote::TAG]);
                 encoder.encode(&inner.term);
                 encoder.write_slice(&inner.candidate_id.0);
+                encoder.encode(&inner.last_log_term_idx);
             }
             Rpc::RespRequestVote(inner) => {
                 encoder.write_slice(&[RespRequestVote::TAG]);
@@ -132,7 +140,7 @@ impl EncoderValue for Rpc {
 pub struct RequestVote {
     pub term: Term,
     pub candidate_id: ServerId,
-    // pub last_term_idx: TermIdx,
+    pub last_log_term_idx: TermIdx,
 }
 
 impl RequestVote {
@@ -202,4 +210,74 @@ pub struct Heartbeat {
 
 impl Heartbeat {
     const TAG: u8 = 5;
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        io::{BufferIo, NetTx, ServerTx, IO_BUF_LEN},
+        rpc::{Rpc, TermIdx},
+        state::ServerId,
+    };
+    use s2n_codec::{EncoderBuffer, EncoderValue};
+
+    #[test]
+    fn encode_decode_heartbeat() {
+        let (mut server_io, mut network_io) = BufferIo::split();
+
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        Rpc::new_heartbeat(1).encode_mut(&mut buf);
+        server_io.send(buf.as_mut_slice().to_vec());
+
+        network_io.send().unwrap();
+    }
+
+    #[test]
+    fn encode_decode_request_vote() {
+        let (mut server_io, mut network_io) = BufferIo::split();
+
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        Rpc::new_request_vote(0, ServerId::new(), TermIdx::new(2, 3)).encode_mut(&mut buf);
+        server_io.send(buf.as_mut_slice().to_vec());
+
+        network_io.send().unwrap();
+    }
+
+    #[test]
+    fn encode_decode_request_vote_res() {
+        let (mut server_io, mut network_io) = BufferIo::split();
+
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        Rpc::new_request_vote_resp(0, true).encode_mut(&mut buf);
+        server_io.send(buf.as_mut_slice().to_vec());
+
+        network_io.send().unwrap();
+    }
+
+    #[test]
+    fn encode_decode_append_entry() {
+        let (mut server_io, mut network_io) = BufferIo::split();
+
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        Rpc::new_append_entry(0, TermIdx::new(8, 9)).encode_mut(&mut buf);
+        server_io.send(buf.as_mut_slice().to_vec());
+
+        network_io.send().unwrap();
+    }
+
+    #[test]
+    fn encode_decode_append_entry_res() {
+        let (mut server_io, mut network_io) = BufferIo::split();
+
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        Rpc::new_append_entry_resp(0).encode_mut(&mut buf);
+        server_io.send(buf.as_mut_slice().to_vec());
+
+        network_io.send().unwrap();
+    }
 }
