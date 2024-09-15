@@ -15,6 +15,13 @@ impl Rpc {
         Rpc::RequestVote(RequestVote { term: Term(term) })
     }
 
+    pub fn new_request_vote_resp(term: u64, vote_granted: bool) -> Rpc {
+        Rpc::RespRequestVote(RespRequestVote {
+            term: Term(term),
+            vote_granted,
+        })
+    }
+
     pub fn new_append_entry(leader_term: u64, prev_term_idx: TermIdx) -> Rpc {
         Rpc::AppendEntries(AppendEntries {
             term: Term(leader_term),

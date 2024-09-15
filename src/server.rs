@@ -62,10 +62,10 @@ impl Server {
             return;
         };
 
-        // println!(
-        //     "============== timeout_fut: {} recv_fut: {}",
-        //     timeout_rdy, recv_rdy
-        // );
+        println!(
+            "============== timeout_fut: {} recv_fut: {}",
+            timeout_rdy, recv_rdy
+        );
 
         if timeout_rdy {
             self.on_timeout();
@@ -186,18 +186,18 @@ mod tests {
 
         // network: simulate receiving a message over the network
         tokio::spawn(async move {
-            for _i in 0..5 {
+            for i in 0..5 {
                 let mut slice = vec![0; 100];
 
                 let mut buf = EncoderBuffer::new(&mut slice);
-                Rpc::new_request_vote(1).encode(&mut buf);
+                Rpc::new_request_vote(i).encode(&mut buf);
                 let (written, buf) = buf.split_mut();
                 network_io.recv(written.to_vec());
 
                 advance(Duration::from_millis(30)).await;
 
                 let mut buf = EncoderBuffer::new(buf);
-                Rpc::new_append_entry(1, TermIdx::new(3, 1)).encode(&mut buf);
+                Rpc::new_append_entry(i, TermIdx::new(3, 1)).encode(&mut buf);
                 network_io.recv(buf.as_mut_slice().to_vec());
             }
         });

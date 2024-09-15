@@ -1,7 +1,6 @@
-use crate::io::IO_BUF_LEN;
 use crate::{
     clock::Clock,
-    io::ServerTx,
+    io::{ServerTx, IO_BUF_LEN},
     log::Term,
     rpc::{AppendEntries, Heartbeat, RequestVote, RespAppendEntries, RespRequestVote, Rpc},
     state::inner::Inner,
@@ -10,16 +9,6 @@ use s2n_codec::{EncoderBuffer, EncoderValue};
 use uuid::Uuid;
 
 mod inner;
-
-#[derive(Debug)]
-pub struct ServerId(String);
-
-impl ServerId {
-    pub fn new() -> Self {
-        let id = Uuid::new_v4();
-        ServerId(id.to_string())
-    }
-}
 
 /// Raft state diagram.
 ///
@@ -54,6 +43,22 @@ impl ServerId {
 /// https://textik.com/#8dbf6540e0dd1676
 
 #[derive(Debug)]
+pub struct ServerId(String);
+
+impl ServerId {
+    pub fn new() -> Self {
+        let id = Uuid::new_v4();
+        ServerId(id.to_string())
+    }
+}
+
+impl PartialEq<str> for ServerId {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
+    }
+}
+
+#[derive(Debug)]
 pub struct State {
     pub inner: Inner,
     mode: Mode,
@@ -78,51 +83,72 @@ impl State {
     pub fn on_timeout<T: ServerTx>(&mut self, io: &mut T) {
         match self.mode {
             Mode::Follower => {
-                // 2: timeout. start election
+                // # Compliance:
+                // If election timeout elapses without receiving AppendEntries RPC from current
+                // leader or granting vote to candidate: convert to candidate
                 self.on_candidate(io);
             }
             Mode::Leader => {
                 self.send_heartbeat(io);
             }
             Mode::Candidate => {
-                // 3: timeout. new election
+                // # Compliance:
+                // If election timeout elapses without receiving AppendEntries RPC from current
+                // leader or granting vote to candidate: convert to candidate
                 self.on_candidate(io);
             }
         }
     }
 
     pub fn recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc) {
-        // println!("---------------asdlfaksdfaslkdf  {:?}", self.inner.curr_term);
-        if rpc.term() > &self.inner.curr_term {
-            // self.inner.curr_term = *rpc.term();
-            // self.on_follower();
+        if rpc.term() >= &self.inner.curr_term {
+            self.inner.timer.rearm();
         }
+
+        // # Compliance:
+        // If RPC request or response contains term T > currentTerm: set currentTerm = T, convert
+        // to follower (§5.1)
+        if rpc.term() > &self.inner.curr_term {
+            self.inner.curr_term = *rpc.term();
+            self.on_follower();
+        }
+
         match self.mode {
             Mode::Follower => {
                 // # Compliance:
                 // - Respond to RPCs from candidates and leaders
-                Self::on_follower_recv(&mut self.inner, tx, rpc);
+                Self::on_follower_recv(self, tx, rpc);
             }
             Mode::Leader => {}
             Mode::Candidate => {}
         }
     }
 
-    fn on_follower_recv<T: ServerTx>(inner: &mut Inner, tx: &mut T, rpc: Rpc) {
+    fn on_follower_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc) {
         // println!("state: on_recv_follower");
 
         match rpc {
-            Rpc::RequestVote(RequestVote { term: _ }) => {}
+            Rpc::RequestVote(RequestVote { term: _, .. }) => {
+                let term = self.inner.curr_term.0;
+                let mut slice = vec![0; IO_BUF_LEN];
+                let mut buf = EncoderBuffer::new(&mut slice);
+                // TODO
+                let rpc_candiate_id: &str = "TODO";
+                #[allow(clippy::match_like_matches_macro)]
+                let voted_for = match &self.inner.voted_for {
+                    Some(voted_for) if voted_for == rpc_candiate_id => true,
+                    _ => false,
+                };
+
+                Rpc::new_request_vote_resp(term, voted_for).encode_mut(&mut buf);
+                tx.send(buf.as_mut_slice().to_vec());
+            }
             Rpc::RespRequestVote(RespRequestVote {
                 term: _,
                 vote_granted: _,
             }) => {}
-            Rpc::AppendEntries(entery) => {
-                if inner.curr_term == entery.term() {
-                    inner.timer.rearm()
-                }
-
-                let term = inner.curr_term.0;
+            Rpc::AppendEntries(_entery) => {
+                let term = self.inner.curr_term.0;
                 let mut slice = vec![0; IO_BUF_LEN];
                 let mut buf = EncoderBuffer::new(&mut slice);
                 Rpc::new_append_entry_resp(term).encode_mut(&mut buf);
@@ -134,6 +160,7 @@ impl State {
     }
 
     fn on_candidate<T: ServerTx>(&mut self, tx: &mut T) {
+        println!("on_candidate");
         self.mode = Mode::Candidate;
 
         // TODO: start new election
@@ -145,8 +172,8 @@ impl State {
     }
 
     fn on_follower(&mut self) {
+        println!("on_follower");
         self.mode = Mode::Follower;
-
     }
 
     fn send_heartbeat<T: ServerTx>(&mut self, tx: &mut T) {

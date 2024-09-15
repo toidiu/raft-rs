@@ -13,7 +13,7 @@ pub struct Inner {
 
     // # Compliance: Fig 2
     // votedFor: candidateId that received vote in current
-    voted_for: Option<ServerId>,
+    pub voted_for: Option<ServerId>,
 
     // # Compliance: Fig 2
     // log[]: log entries; each entry contains command for state machine, and term when entry was
