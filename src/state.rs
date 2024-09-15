@@ -122,40 +122,15 @@ impl State {
 
     fn on_follower_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc) {
         match rpc {
-            Rpc::RequestVote(RequestVote {
-                term: _,
-                candidate_id,
-            }) => {
-                let term = self.inner.curr_term.0;
-                let mut slice = vec![0; IO_BUF_LEN];
-                let mut buf = EncoderBuffer::new(&mut slice);
-                #[allow(clippy::match_like_matches_macro)]
-
-                // # Compliance:
-                // If votedFor is null or candidateId, grant vote (§5.2, §5.4)
-                // TODO on_request_vote
-                let voted_for = match &self.inner.voted_for {
-                    Some(voted_for) if voted_for == &candidate_id => true,
-                    None => {
-                        self.inner.voted_for = Some(candidate_id);
-                        true
-                    }
-                    _ => false
-                };
-
-                Rpc::new_request_vote_resp(term, voted_for).encode_mut(&mut buf);
-                tx.send(buf.as_mut_slice().to_vec());
+            Rpc::RequestVote(request_vote) => {
+                self.on_request_vote(request_vote, tx);
             }
             Rpc::RespRequestVote(RespRequestVote {
                 term: _,
                 vote_granted: _,
             }) => {}
-            Rpc::AppendEntries(_entery) => {
-                let term = self.inner.curr_term.0;
-                let mut slice = vec![0; IO_BUF_LEN];
-                let mut buf = EncoderBuffer::new(&mut slice);
-                Rpc::new_append_entry_resp(term).encode_mut(&mut buf);
-                tx.send(buf.as_mut_slice().to_vec());
+            Rpc::AppendEntries(append_entry) => {
+                self.on_append_entry(append_entry, tx);
             }
             Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {}
             Rpc::Heartbeat(Heartbeat { term: _ }) => {}
@@ -181,8 +156,6 @@ impl State {
 
     fn send_heartbeat<T: ServerTx>(&mut self, tx: &mut T) {
         // println!("state: send_heartbeat");
-
-        // TODO send rpc
         let term = self.inner.curr_term.0 + 1;
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
@@ -190,14 +163,38 @@ impl State {
         tx.send(buf.as_mut_slice().to_vec());
     }
 
-    fn on_request_vote(&mut self, _rpc: RequestVote) {
-        // println!("state: recv RequestVote. {:?}", rpc.term);
-        // TODO: recv vote, request for new election
+    // # Compliance:
+    // If votedFor is null or candidateId, grant vote (§5.2, §5.4)
+    fn on_request_vote<T: ServerTx>(&mut self, request_vote: RequestVote, tx: &mut T) {
+        let RequestVote {
+            // # Compliance:
+            // TODO and candidate’s log is at least as up-to-date as receiver’s log, grant vote
+            // (§5.2, §5.4)
+            term: _,
+            candidate_id,
+        } = request_vote;
+        let term = self.inner.curr_term.0;
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
+
+        let voted_for = match &self.inner.voted_for {
+            Some(voted_for) if voted_for == &candidate_id => true,
+            None => {
+                self.inner.voted_for = Some(candidate_id);
+                true
+            }
+            _ => false,
+        };
+        Rpc::new_request_vote_resp(term, voted_for).encode_mut(&mut buf);
+        tx.send(buf.as_mut_slice().to_vec());
     }
 
-    fn on_append_entry(&mut self, _rpc: AppendEntries) {
-        // println!("recv AppendEntries. {:?}", rpc.term);
-        // TODO: heartbeat, new entry, discover current leader, discover new term
+    fn on_append_entry<T: ServerTx>(&mut self, _rpc: AppendEntries, tx: &mut T) {
+        let term = self.inner.curr_term.0;
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        Rpc::new_append_entry_resp(term).encode_mut(&mut buf);
+        tx.send(buf.as_mut_slice().to_vec());
     }
 }
 
