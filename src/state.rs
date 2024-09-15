@@ -164,22 +164,23 @@ impl State {
         tx.send(buf.as_mut_slice().to_vec());
     }
 
-    // # Compliance:
-    // If votedFor is null or candidateId, grant vote (§5.2, §5.4)
     fn on_request_vote<T: ServerTx>(&mut self, request_vote: RequestVote, tx: &mut T) {
         let RequestVote {
-            // # Compliance:
-            // TODO and candidate’s log is at least as up-to-date as receiver’s log, grant vote
-            // (§5.2, §5.4)
-            term: _,
+            term: rpc_term,
             candidate_id,
-            last_log_term_idx,
+            last_log_term_idx: rpc_last_log_term_idx,
         } = request_vote;
-        let term = self.inner.curr_term.0;
-        let mut slice = vec![0; IO_BUF_LEN];
-        let mut buf = EncoderBuffer::new(&mut slice);
+        // # Compliance:
+        // Reply false if term < currentTerm (§5.1)
+        let term_up_to_date = rpc_term >= self.inner.curr_term;
 
-        let voted_for = match &self.inner.voted_for {
+        // # Compliance:
+        // and candidate’s log is at least as up-to-date as receiver’s log, grant vote (§5.2, §5.4)
+        let logs_up_to_date = rpc_last_log_term_idx >= self.inner.last_committed_term_idx();
+
+        // # Compliance:
+        // If votedFor is null or candidateId, grant vote (§5.2, §5.4)
+        let give_vote = match &self.inner.voted_for {
             Some(voted_for) if voted_for == &candidate_id => true,
             None => {
                 self.inner.voted_for = Some(candidate_id);
@@ -187,6 +188,12 @@ impl State {
             }
             _ => false,
         };
+
+        let voted_for = term_up_to_date && logs_up_to_date && give_vote;
+
+        let term = self.inner.curr_term.0;
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_request_vote_resp(term, voted_for).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
     }

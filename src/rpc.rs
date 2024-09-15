@@ -138,8 +138,17 @@ impl EncoderValue for Rpc {
 // Leader election
 #[derive(Debug, Clone, Copy)]
 pub struct RequestVote {
+    // # Compliance: Fig 2
+    // term: candidate’s term
     pub term: Term,
+
+    // # Compliance: Fig 2
+    // candidateId: candidate requesting vote
     pub candidate_id: ServerId,
+
+    // # Compliance: Fig 2
+    // lastLogIndex: index of candidate’s last log entry (§5.4)
+    // lastLogTerm: term of candidate’s last log entry (§5.4
     pub last_log_term_idx: TermIdx,
 }
 
@@ -150,7 +159,12 @@ impl RequestVote {
 // Leader election
 #[derive(Debug, Clone, Copy)]
 pub struct RespRequestVote {
+    // # Compliance: Fig 2
+    // term: currentTerm, for candidate to update itself
     pub term: Term,
+
+    // # Compliance: Fig 2
+    // voteGranted: true means candidate received vote
     pub vote_granted: bool,
 }
 

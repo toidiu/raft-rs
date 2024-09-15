@@ -1,5 +1,6 @@
 // The data type supported by this Raft implementation.
 // TODO: u8 is used for simplification. Eventually support additional types.
+use core::cmp::Ordering;
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 
 // Initial entry indicative of an empty log.
@@ -50,10 +51,34 @@ impl EncoderValue for Idx {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct TermIdx {
     term: Term,
     idx: Idx,
+}
+
+impl PartialOrd for TermIdx {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TermIdx {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // compare term
+        let term = self.term.cmp(&other.term);
+
+        // compare idx
+        let idx = self.idx.cmp(&other.idx);
+
+        match (term, idx) {
+            (Ordering::Less, _) => Ordering::Less,
+            (Ordering::Equal, Ordering::Less) => Ordering::Less,
+            (Ordering::Equal, Ordering::Equal) => Ordering::Equal,
+            (Ordering::Equal, Ordering::Greater) => Ordering::Greater,
+            (Ordering::Greater, _) => Ordering::Greater,
+        }
+    }
 }
 
 impl<'a> DecoderValue<'a> for TermIdx {
