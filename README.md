@@ -42,7 +42,7 @@ Remaining tasks to complete:
   - [x] Send RequestVote RPCs to all other servers
 - [ ] If votes received from majority of servers: become leader
 - [ ] If AppendEntries RPC received from new leader: convert to follower
-- [ ] If election timeout elapses: start new election
+- [x] If election timeout elapses: start new election
 
 **Leaders:**
 - [ ] Upon election: send initial empty AppendEntries RPCs (heartbeat) to each

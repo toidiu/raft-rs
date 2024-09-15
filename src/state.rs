@@ -62,8 +62,8 @@ pub struct State {
 #[derive(Debug)]
 enum Mode {
     Follower,
-    Leader,
     Candidate,
+    Leader,
 }
 
 impl State {
@@ -84,14 +84,13 @@ impl State {
                 // leader or granting vote to candidate: convert to candidate
                 self.on_candidate(io);
             }
-            Mode::Leader => {
-                self.send_heartbeat(io);
-            }
             Mode::Candidate => {
                 // # Compliance:
-                // If election timeout elapses without receiving AppendEntries RPC from current
-                // leader or granting vote to candidate: convert to candidate
+                // If election timeout elapses: start new election
                 self.on_candidate(io);
+            }
+            Mode::Leader => {
+                self.send_heartbeat(io);
             }
         }
     }
@@ -115,8 +114,8 @@ impl State {
                 // - Respond to RPCs from candidates and leaders
                 Self::on_follower_recv(self, tx, rpc);
             }
-            Mode::Leader => {}
             Mode::Candidate => {}
+            Mode::Leader => {}
         }
     }
 
