@@ -277,17 +277,39 @@ mod tests {
         let mut io = testing::Io::new();
         let mut s = State::new(Clock::default());
 
+        // same term maintains current mode
         s.mode = Mode::Candidate;
         s.recv(&mut io, Rpc::new_append_entry(0, TermIdx::new(0, 1)));
         assert!(matches!(s.mode, Mode::Candidate));
 
-        // higher term
+        // higher term switch to follower
         s.recv(&mut io, Rpc::new_append_entry(1, TermIdx::new(0, 1)));
         assert!(matches!(s.mode, Mode::Follower));
 
+        // same term maintains current mode
         s.mode = Mode::Leader;
+        s.recv(&mut io, Rpc::new_append_entry(1, TermIdx::new(0, 1)));
+        assert!(matches!(s.mode, Mode::Leader));
+
+        // higher term switch to follower
         s.recv(&mut io, Rpc::new_append_entry(2, TermIdx::new(0, 1)));
         assert!(matches!(s.mode, Mode::Follower));
+    }
+
+    #[tokio::test]
+    async fn on_follower_recv() {
+        let mut io = testing::Io::new();
+        let mut s = State::new(Clock::default());
+        assert!(matches!(s.mode, Mode::Follower));
+
+        // recv AppendEntries as a follower
+        s.recv(&mut io, Rpc::new_append_entry(0, TermIdx::new(0, 1)));
+
+        // expect follower to respond with RespAppendEntries
+        let bytes = io.tx.pop_front().unwrap();
+        let buf = DecoderBuffer::new(&bytes);
+        let (recv_rpc, _buf) = Rpc::decode(buf).unwrap();
+        cast_unsafe!(recv_rpc, Rpc::RespAppendEntries);
     }
 
     #[tokio::test]

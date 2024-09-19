@@ -20,6 +20,7 @@ impl Io {
 
 impl ServerTx for Io {
     fn send(&mut self, data: Vec<u8>) {
+        println!("  -------> {:?}", data);
         self.tx.push_back(data)
     }
 
@@ -30,7 +31,9 @@ impl ServerTx for Io {
 
 impl ServerRx for Io {
     fn recv(&mut self) -> Option<Vec<u8>> {
-        self.rx.pop_front()
+        let data = self.rx.pop_front();
+        println!("  <------- {:?}", data);
+        data
     }
 
     fn poll_rx_ready(&mut self, _cx: &mut std::task::Context) -> std::task::Poll<()> {
