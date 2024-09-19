@@ -145,6 +145,7 @@ mod tests {
 
     #[tokio::test]
     async fn mock_event_loop() {
+        tokio::time::pause();
         let clock = Clock::default();
         let (mut server, mut network_io) = Server::new(clock);
 

@@ -19,12 +19,6 @@ pub struct Clock(Instant);
 
 impl Default for Clock {
     fn default() -> Self {
-        cfg_if::cfg_if! {
-            if #[cfg(test)] {
-                tokio::time::pause();
-            }
-        }
-
         Clock(Instant::now())
     }
 }
@@ -115,6 +109,7 @@ mod tests {
 
     #[tokio::test]
     async fn manual_check_elapsed_time() {
+        tokio::time::pause();
         let mut timer = Timer::new(Clock::default());
 
         let (waker, cnt) = new_count_waker();
@@ -134,6 +129,7 @@ mod tests {
 
     #[tokio::test]
     async fn rearm() {
+        tokio::time::pause();
         let mut timer = Timer::new(Clock::default());
         let original_expire = timer.expire();
 

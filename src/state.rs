@@ -256,6 +256,7 @@ mod tests {
 
     #[tokio::test]
     async fn recv_rearm() {
+        tokio::time::pause();
         let mut io = testing::Io::new();
         let mut s = State::new(Clock::default());
 
@@ -287,7 +288,6 @@ mod tests {
         s.mode = Mode::Leader;
         s.recv(&mut io, Rpc::new_append_entry(2, TermIdx::new(0, 1)));
         assert!(matches!(s.mode, Mode::Follower));
-
     }
 
     #[tokio::test]
