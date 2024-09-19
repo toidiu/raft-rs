@@ -5,10 +5,7 @@ A toy implementation to better understand the [Raft](https://toidiu.com/reads/In
 ## Tasks
 Remaining tasks to complete:
 - [x] IO
-- [ ] implement rules for All servers
-- [ ] implement rules for Candidates
-- [ ] implement rules for Follower
-- [ ] implement rules for Leader
+- [ ] implement leader election
 
 ## Fig 2
 ### State

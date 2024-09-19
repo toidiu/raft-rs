@@ -156,7 +156,7 @@ impl Log {
 
         // A placeholder TERM_IDX indicative of an empty log
         if last != INITIAL_LAST_TERM_IDX {
-            // new enties should not have a smaller term
+            // new entries should not have a smaller term
             debug_assert!(entry.term_idx.term >= last.term);
 
             // term is greater, then idx == 0
@@ -168,11 +168,6 @@ impl Log {
             let valid_entry = valid_curr_term || valid_next_term;
 
             if !valid_entry {
-                debug_assert!(
-                    false,
-                    "attempted to push an invalid entry. last: {:?} new: {:?}",
-                    last, entry
-                );
                 // specific error. entries must be uniquely increasing
                 return Err(());
             }
@@ -272,10 +267,19 @@ mod tests {
         // Term +2 succeeds
         e.term_idx.term = Term(4);
         log.push(e.clone()).unwrap();
+    }
+
+    #[should_panic]
+    #[test]
+    fn monotonically_smaller_term() {
+        let mut log = Log::default();
+
+        let mut e = Entry::new(Term(4), Idx(0), 1);
+        log.push(e.clone()).unwrap();
 
         // smaller Term fails
         e.term_idx.term = Term(3);
-        assert!(log.push(e.clone()).is_err());
+        let _ = log.push(e.clone());
     }
 
     // - new term idx should be 0
