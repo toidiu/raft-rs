@@ -2,15 +2,15 @@ use crate::io::{ServerRx, ServerTx};
 use core::task::Waker;
 use std::collections::VecDeque;
 
-pub struct MockIo {
+pub struct Io {
     pub rx: VecDeque<Vec<u8>>,
     pub tx: VecDeque<Vec<u8>>,
     pub waker: Option<Waker>,
 }
 
-impl MockIo {
+impl Io {
     pub fn new() -> Self {
-        MockIo {
+        Io {
             rx: VecDeque::new(),
             tx: VecDeque::new(),
             waker: None,
@@ -18,7 +18,7 @@ impl MockIo {
     }
 }
 
-impl ServerTx for MockIo {
+impl ServerTx for Io {
     fn send(&mut self, data: Vec<u8>) {
         self.tx.push_back(data)
     }
@@ -28,7 +28,7 @@ impl ServerTx for MockIo {
     }
 }
 
-impl ServerRx for MockIo {
+impl ServerRx for Io {
     fn recv(&mut self) -> Option<Vec<u8>> {
         self.rx.pop_front()
     }

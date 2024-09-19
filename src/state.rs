@@ -228,7 +228,7 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{io::testing::MockIo, log::TermIdx, rpc::Rpc, testing::cast_unsafe};
+    use crate::{io::testing, log::TermIdx, rpc::Rpc, testing::cast_unsafe};
     use core::time::Duration;
     use s2n_codec::{DecoderBuffer, DecoderValue};
     use tokio::time::advance;
@@ -241,7 +241,7 @@ mod tests {
 
     #[tokio::test]
     async fn follower_timeout() {
-        let mut io = MockIo::new();
+        let mut io = testing::Io::new();
         let mut s = State::new(Clock::default());
         assert!(matches!(s.mode, Mode::Follower));
 
@@ -255,22 +255,44 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn follower_recv_rearm() {
-        let mut io = MockIo::new();
+    async fn recv_rearm() {
+        let mut io = testing::Io::new();
         let mut s = State::new(Clock::default());
+
+        let modes = [Mode::Follower, Mode::Candidate, Mode::Leader];
+        for mode in modes {
+            s.mode = mode;
+            let prev_expire = s.inner.timer.expire();
+
+            advance(Duration::from_millis(500)).await;
+            s.recv(&mut io, Rpc::new_append_entry(0, TermIdx::new(0, 1)));
+            let new_expire = s.inner.timer.expire();
+            assert!(new_expire > prev_expire);
+        }
+    }
+
+    #[tokio::test]
+    async fn recv_higher_term() {
+        let mut io = testing::Io::new();
+        let mut s = State::new(Clock::default());
+
+        s.mode = Mode::Candidate;
+        s.recv(&mut io, Rpc::new_append_entry(0, TermIdx::new(0, 1)));
+        assert!(matches!(s.mode, Mode::Candidate));
+
+        // higher term
+        s.recv(&mut io, Rpc::new_append_entry(1, TermIdx::new(0, 1)));
         assert!(matches!(s.mode, Mode::Follower));
 
-        let prev_expire = s.inner.timer.expire();
+        s.mode = Mode::Leader;
+        s.recv(&mut io, Rpc::new_append_entry(2, TermIdx::new(0, 1)));
+        assert!(matches!(s.mode, Mode::Follower));
 
-        advance(Duration::from_millis(500)).await;
-        s.recv(&mut io, Rpc::new_append_entry(0, TermIdx::new(0, 1)));
-        let new_expire = s.inner.timer.expire();
-        assert!(new_expire > prev_expire);
     }
 
     #[tokio::test]
     async fn candidate_timeout() {
-        let mut io = MockIo::new();
+        let mut io = testing::Io::new();
         let mut s = State::new(Clock::default());
         s.mode = Mode::Candidate;
 
