@@ -228,7 +228,7 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{io::testing::MockIo, log::TermIdx, rpc::Rpc, testing::cast};
+    use crate::{io::testing::MockIo, log::TermIdx, rpc::Rpc, testing::cast_unsafe};
     use core::time::Duration;
     use s2n_codec::{DecoderBuffer, DecoderValue};
     use tokio::time::advance;
@@ -250,7 +250,7 @@ mod tests {
         let bytes = io.tx.pop_front().unwrap();
         let buf = DecoderBuffer::new(&bytes);
         let (rpc, _buffer) = Rpc::decode(buf).unwrap();
-        let req = cast!(rpc, Rpc::RequestVote);
+        let req = cast_unsafe!(rpc, Rpc::RequestVote);
         assert_eq!(req.term, Term(1));
     }
 
@@ -279,7 +279,7 @@ mod tests {
         let bytes = io.tx.pop_front().unwrap();
         let buf = DecoderBuffer::new(&bytes);
         let (rpc, _buffer) = Rpc::decode(buf).unwrap();
-        let req = cast!(rpc, Rpc::RequestVote);
+        let req = cast_unsafe!(rpc, Rpc::RequestVote);
         assert_eq!(req.term, Term(1));
     }
 }

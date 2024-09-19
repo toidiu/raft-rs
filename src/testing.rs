@@ -1,4 +1,4 @@
-macro_rules! cast {
+macro_rules! cast_unsafe {
     ($target: expr, $pat: path) => {{
         if let $pat(a) = $target {
             // #1
@@ -9,4 +9,4 @@ macro_rules! cast {
     }};
 }
 
-pub(crate) use cast;
+pub(crate) use cast_unsafe;

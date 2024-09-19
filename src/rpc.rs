@@ -232,8 +232,9 @@ mod tests {
         io::{BufferIo, NetTx, ServerTx, IO_BUF_LEN},
         rpc::{Rpc, TermIdx},
         state::ServerId,
+        testing::cast_unsafe,
     };
-    use s2n_codec::{EncoderBuffer, EncoderValue};
+    use s2n_codec::{DecoderBuffer, DecoderValue, EncoderBuffer, EncoderValue};
 
     #[test]
     fn encode_decode_heartbeat() {
@@ -241,10 +242,14 @@ mod tests {
 
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_heartbeat(1).encode_mut(&mut buf);
+        let mut sent_rpc = Rpc::new_heartbeat(1);
+        sent_rpc.encode_mut(&mut buf);
         server_io.send(buf.as_mut_slice().to_vec());
 
-        network_io.send().unwrap();
+        let bytes = network_io.send().unwrap();
+        let buf = DecoderBuffer::new(&bytes);
+        let (recv_rpc, _buf) = Rpc::decode(buf).unwrap();
+        cast_unsafe!(recv_rpc, Rpc::Heartbeat);
     }
 
     #[test]
@@ -253,10 +258,14 @@ mod tests {
 
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_request_vote(0, ServerId::new(), TermIdx::new(2, 3)).encode_mut(&mut buf);
+        let mut sent_rpc = Rpc::new_request_vote(0, ServerId::new(), TermIdx::new(2, 3));
+        sent_rpc.encode_mut(&mut buf);
         server_io.send(buf.as_mut_slice().to_vec());
 
-        network_io.send().unwrap();
+        let bytes = network_io.send().unwrap();
+        let buf = DecoderBuffer::new(&bytes);
+        let (recv_rpc, _buf) = Rpc::decode(buf).unwrap();
+        cast_unsafe!(recv_rpc, Rpc::RequestVote);
     }
 
     #[test]
