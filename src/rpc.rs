@@ -10,7 +10,6 @@ pub enum Rpc {
     RespRequestVote(RespRequestVote),
     AppendEntries(AppendEntries),
     RespAppendEntries(RespAppendEntries),
-    Heartbeat(Heartbeat),
 }
 
 impl Rpc {
@@ -40,17 +39,12 @@ impl Rpc {
         Rpc::RespAppendEntries(RespAppendEntries { term: Term(term) })
     }
 
-    pub fn new_heartbeat(term: u64) -> Rpc {
-        Rpc::Heartbeat(Heartbeat { term: Term(term) })
-    }
-
     pub fn term(&self) -> &Term {
         match self {
             Rpc::RequestVote(RequestVote { term, .. }) => term,
             Rpc::RespRequestVote(RespRequestVote { term, .. }) => term,
             Rpc::AppendEntries(AppendEntries { term, .. }) => term,
             Rpc::RespAppendEntries(RespAppendEntries { term, .. }) => term,
-            Rpc::Heartbeat(Heartbeat { term, .. }) => term,
         }
     }
 }
@@ -95,10 +89,6 @@ impl<'a> DecoderValue<'a> for Rpc {
                 let rpc = RespAppendEntries { term };
                 Ok((Rpc::RespAppendEntries(rpc), buffer))
             }
-            Heartbeat::TAG => {
-                let rpc = Heartbeat { term };
-                Ok((Rpc::Heartbeat(rpc), buffer))
-            }
             _tag => Err(DecoderError::InvariantViolation("received unexpected tag")),
         }
     }
@@ -125,10 +115,6 @@ impl EncoderValue for Rpc {
             }
             Rpc::RespAppendEntries(inner) => {
                 encoder.write_slice(&[RespAppendEntries::TAG]);
-                encoder.encode(&inner.term);
-            }
-            Rpc::Heartbeat(inner) => {
-                encoder.write_slice(&[Heartbeat::TAG]);
                 encoder.encode(&inner.term);
             }
         }
@@ -214,18 +200,6 @@ impl AppendEntries {
     }
 }
 
-// Heartbeat.
-//
-// Dedicated message since it doesn't need to be committed nor a response.
-#[derive(Debug, Clone, Copy)]
-pub struct Heartbeat {
-    pub term: Term,
-}
-
-impl Heartbeat {
-    const TAG: u8 = 5;
-}
-
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -235,22 +209,6 @@ mod tests {
         testing::cast_unsafe,
     };
     use s2n_codec::{DecoderBuffer, DecoderValue, EncoderBuffer, EncoderValue};
-
-    #[test]
-    fn encode_decode_heartbeat() {
-        let (mut server_io, mut network_io) = BufferIo::split();
-
-        let mut slice = vec![0; IO_BUF_LEN];
-        let mut buf = EncoderBuffer::new(&mut slice);
-        let mut sent_rpc = Rpc::new_heartbeat(1);
-        sent_rpc.encode_mut(&mut buf);
-        server_io.send(buf.as_mut_slice().to_vec());
-
-        let bytes = network_io.send().unwrap();
-        let buf = DecoderBuffer::new(&bytes);
-        let (recv_rpc, _buf) = Rpc::decode(buf).unwrap();
-        cast_unsafe!(recv_rpc, Rpc::Heartbeat);
-    }
 
     #[test]
     fn encode_decode_request_vote() {

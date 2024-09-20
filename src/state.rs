@@ -2,7 +2,7 @@ use crate::{
     clock::Clock,
     io::{ServerTx, IO_BUF_LEN},
     log::Term,
-    rpc::{AppendEntries, Heartbeat, RequestVote, RespAppendEntries, RespRequestVote, Rpc},
+    rpc::{AppendEntries, RequestVote, RespAppendEntries, RespRequestVote, Rpc},
     state::inner::Inner,
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
@@ -90,7 +90,6 @@ impl State {
                 self.on_candidate(io);
             }
             Mode::Leader => {
-                self.send_heartbeat(io);
             }
         }
     }
@@ -134,7 +133,6 @@ impl State {
                 self.on_append_entry(append_entry, tx);
             }
             Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {}
-            Rpc::Heartbeat(Heartbeat { term: _ }) => {}
         }
     }
 
@@ -157,7 +155,6 @@ impl State {
                 }
             }
             Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {}
-            Rpc::Heartbeat(Heartbeat { term: _ }) => {}
         }
     }
 
@@ -196,15 +193,6 @@ impl State {
     fn on_follower(&mut self) {
         println!("on_follower");
         self.mode = Mode::Follower;
-    }
-
-    fn send_heartbeat<T: ServerTx>(&mut self, tx: &mut T) {
-        // println!("state: send_heartbeat");
-        let term = self.inner.curr_term.0 + 1;
-        let mut slice = vec![0; IO_BUF_LEN];
-        let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_heartbeat(term).encode_mut(&mut buf);
-        tx.send(buf.as_mut_slice().to_vec());
     }
 
     fn on_request_vote<T: ServerTx>(&mut self, request_vote: RequestVote, tx: &mut T) {
