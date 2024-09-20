@@ -149,7 +149,7 @@ impl State {
                 let rpc_term = append_entry.term();
                 // # Compliance:
                 // If AppendEntries RPC received from new leader: convert to follower
-                let new_leader_detected = rpc_term >= self.inner.curr_term;
+                let new_leader_detected = rpc_term > self.inner.curr_term;
                 if new_leader_detected {
                     self.on_follower();
                 }

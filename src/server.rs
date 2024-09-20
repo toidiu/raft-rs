@@ -17,7 +17,7 @@ pub struct Server {
 }
 
 impl Server {
-    fn new(clock: Clock) -> (Server, NetworkIo) {
+    fn new(clock: Clock, server_list: Vec<ServerId>) -> (Server, NetworkIo) {
         let (server_io, network_io) = BufferIo::split();
         (
             Server {
@@ -147,7 +147,7 @@ mod tests {
     async fn mock_event_loop() {
         tokio::time::pause();
         let clock = Clock::default();
-        let (mut server, mut network_io) = Server::new(clock);
+        let (mut server, mut network_io) = Server::new(clock, vec![]);
 
         let wait_complete = Arc::new(AtomicBool::new(true));
         let set_wait = wait_complete.clone();
