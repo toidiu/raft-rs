@@ -22,7 +22,7 @@ impl Server {
         (
             Server {
                 clock,
-                state: State::new(clock),
+                state: State::new(clock, server_list),
                 io: server_io,
             },
             network_io,

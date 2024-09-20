@@ -11,6 +11,9 @@ pub struct Inner {
     // monotonically)
     pub curr_term: Term,
 
+    // list of all raft servers
+    server_list: Vec<ServerId>,
+
     // # Compliance: Fig 2
     // votedFor: candidateId that received vote in current
     pub voted_for: Option<ServerId>,
@@ -28,9 +31,10 @@ pub struct Inner {
 }
 
 impl Inner {
-    pub fn new(clock: Clock) -> Self {
+    pub fn new(clock: Clock, server_list: Vec<ServerId>) -> Self {
         Inner {
             curr_term: Term(0),
+            server_list,
             voted_for: None,
             log: Log::new(),
             timer: Timer::new(clock),

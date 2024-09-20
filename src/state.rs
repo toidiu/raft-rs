@@ -67,11 +67,11 @@ enum Mode {
 }
 
 impl State {
-    pub fn new(clock: Clock) -> Self {
+    pub fn new(clock: Clock, server_list: Vec<ServerId>) -> Self {
         // 1: startup
         State {
             id: ServerId::new(),
-            inner: Inner::new(clock),
+            inner: Inner::new(clock, server_list),
             mode: Mode::Follower,
         }
     }
@@ -252,14 +252,14 @@ mod tests {
 
     #[tokio::test]
     async fn default_state() {
-        let s = State::new(Clock::default());
+        let s = State::new(Clock::default(), vec![]);
         assert!(matches!(s.mode, Mode::Follower));
     }
 
     #[tokio::test]
     async fn follower_timeout() {
         let mut io = testing::Io::new();
-        let mut s = State::new(Clock::default());
+        let mut s = State::new(Clock::default(), vec![]);
         assert!(matches!(s.mode, Mode::Follower));
 
         s.on_timeout(&mut io);
@@ -275,7 +275,7 @@ mod tests {
     async fn recv_rearm() {
         tokio::time::pause();
         let mut io = testing::Io::new();
-        let mut s = State::new(Clock::default());
+        let mut s = State::new(Clock::default(), vec![]);
 
         let modes = [Mode::Follower, Mode::Candidate, Mode::Leader];
         for mode in modes {
@@ -292,7 +292,7 @@ mod tests {
     #[tokio::test]
     async fn recv_higher_term() {
         let mut io = testing::Io::new();
-        let mut s = State::new(Clock::default());
+        let mut s = State::new(Clock::default(), vec![]);
 
         // same term maintains current mode
         s.mode = Mode::Candidate;
@@ -316,7 +316,7 @@ mod tests {
     #[tokio::test]
     async fn on_follower_recv() {
         let mut io = testing::Io::new();
-        let mut s = State::new(Clock::default());
+        let mut s = State::new(Clock::default(), vec![]);
         assert!(matches!(s.mode, Mode::Follower));
 
         // recv AppendEntries as a follower
@@ -332,7 +332,7 @@ mod tests {
     #[tokio::test]
     async fn candidate_timeout() {
         let mut io = testing::Io::new();
-        let mut s = State::new(Clock::default());
+        let mut s = State::new(Clock::default(), vec![]);
         s.mode = Mode::Candidate;
 
         s.on_timeout(&mut io);
