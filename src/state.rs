@@ -343,4 +343,11 @@ mod tests {
         let req = cast_unsafe!(rpc, Rpc::RequestVote);
         assert_eq!(req.term, Term(1));
     }
+
+    #[tokio::test]
+    async fn majority_of_votes() {
+        let mut io = testing::Io::new();
+        let server_list = vec![ServerId::new(), ServerId::new(), ServerId::new(), ServerId::new()];
+        let mut s = State::new(Clock::default(), server_list);
+    }
 }

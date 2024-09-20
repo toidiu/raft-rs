@@ -47,4 +47,29 @@ impl Inner {
     pub fn last_committed_term_idx(&self) -> TermIdx {
         self.log.last_committed_term_idx()
     }
+
+    pub fn quorum(&self) -> usize {
+        let half = self.server_list.len() / 2;
+        half + 1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn quorum_test() {
+        let inner = Inner::new(Clock::default(), vec![ServerId::new()]);
+        assert_eq!(inner.quorum(), 1);
+
+        let inner = Inner::new(Clock::default(), vec![ServerId::new(), ServerId::new()]);
+        assert_eq!(inner.quorum(), 2);
+
+        let inner = Inner::new(
+            Clock::default(),
+            vec![ServerId::new(), ServerId::new(), ServerId::new()],
+        );
+        assert_eq!(inner.quorum(), 2);
+    }
 }
