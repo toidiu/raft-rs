@@ -193,15 +193,21 @@ impl State {
         let term_up_to_date = rpc_term >= self.inner.curr_term;
 
         // # Compliance:
-        // and candidate’s log is at least as up-to-date as receiver’s log, grant vote (§5.2, §5.4)
+        // If candidate’s log is at least as up-to-date as receiver’s log
         let logs_up_to_date = rpc_last_log_term_idx >= self.inner.last_committed_term_idx();
 
         // # Compliance:
         // If votedFor is null or candidateId, grant vote (§5.2, §5.4)
         let give_vote = match &self.inner.voted_for {
-            Some(voted_for) if voted_for == &candidate_id => true,
+            Some(voted_for) if voted_for == &candidate_id => {
+                // # Compliance:
+                // and votedFor is null , grant vote (§5.2, §5.4)
+                true
+            }
             None => {
                 self.inner.voted_for = Some(candidate_id);
+                // # Compliance:
+                // and votedFor is null , grant vote (§5.2, §5.4)
                 true
             }
             _ => false,

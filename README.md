@@ -16,13 +16,13 @@ Remaining tasks to complete:
 
 ### RequestVote
 - [x] Reply false if term < currentTerm (§5.1)
-- [x] If votedFor is null or candidateId, grant vote (§5.2, §5.4)
-  - [x] and candidate’s log is at least as up-to-date as receiver’s log, grant
-    vote (§5.2, §5.4)
+- [x] If candidate’s log is at least as up-to-date as receiver’s log
+    - [x] and votedFor is null , grant vote (§5.2, §5.4)
+    - [x] and votedFor is candidateId , grant vote (§5.2, §5.4)
 
 ### Rules for Servers **All Servers:**
-- [ ] If commitIndex > lastApplied: increment lastApplied, apply
-  log[lastApplied] to state machine (§5.3)
+- [ ] If commitIndex > lastApplied: increment lastApplied
+    - [ ] apply log[lastApplied] to state machine (§5.3)
 - [x] If RPC request or response contains term T > currentTerm: set currentTerm
   = T, convert to follower (§5.1)
 
