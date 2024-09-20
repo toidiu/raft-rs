@@ -114,7 +114,9 @@ impl State {
                 // - Respond to RPCs from candidates and leaders
                 Self::on_follower_recv(self, tx, rpc);
             }
-            Mode::Candidate => {}
+            Mode::Candidate => {
+                Self::on_candidate_recv(self, tx, rpc);
+            }
             Mode::Leader => {}
         }
     }
@@ -130,6 +132,29 @@ impl State {
             }) => {}
             Rpc::AppendEntries(append_entry) => {
                 self.on_append_entry(append_entry, tx);
+            }
+            Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {}
+            Rpc::Heartbeat(Heartbeat { term: _ }) => {}
+        }
+    }
+
+    fn on_candidate_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc) {
+        match rpc {
+            Rpc::RequestVote(request_vote) => {
+                self.on_request_vote(request_vote, tx)
+            }
+            Rpc::RespRequestVote(RespRequestVote {
+                term: _,
+                vote_granted: _,
+            }) => {}
+            Rpc::AppendEntries(append_entry) => {
+                let rpc_term = append_entry.term();
+                // # Compliance:
+                // If AppendEntries RPC received from new leader: convert to follower
+                let new_leader_detected = rpc_term >= self.inner.curr_term;
+                if new_leader_detected {
+                    self.on_follower();
+                }
             }
             Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {}
             Rpc::Heartbeat(Heartbeat { term: _ }) => {}
@@ -163,8 +188,8 @@ impl State {
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
         let term = self.inner.curr_term.0;
-        let last_log_term_idx = self.inner.last_committed_term_idx();
-        Rpc::new_request_vote(term, self.id, last_log_term_idx).encode_mut(&mut buf);
+        let last_committed_term_idx = self.inner.last_committed_term_idx();
+        Rpc::new_request_vote(term, self.id, last_committed_term_idx).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
     }
 
@@ -196,12 +221,10 @@ impl State {
         // If candidate’s log is at least as up-to-date as receiver’s log
         let logs_up_to_date = rpc_last_log_term_idx >= self.inner.last_committed_term_idx();
 
-        // # Compliance:
-        // If votedFor is null or candidateId, grant vote (§5.2, §5.4)
         let give_vote = match &self.inner.voted_for {
             Some(voted_for) if voted_for == &candidate_id => {
                 // # Compliance:
-                // and votedFor is null , grant vote (§5.2, §5.4)
+                // and votedFor is candidateId , grant vote (§5.2, §5.4)
                 true
             }
             None => {

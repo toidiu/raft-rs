@@ -22,7 +22,7 @@ Remaining tasks to complete:
 
 ### Rules for Servers **All Servers:**
 - [ ] If commitIndex > lastApplied: increment lastApplied
-    - [ ] apply log[lastApplied] to state machine (§5.3)
+- [ ] If commitIndex > lastApplied: apply log[lastApplied] to state machine (§5.3)
 - [x] If RPC request or response contains term T > currentTerm: set currentTerm
   = T, convert to follower (§5.1)
 
@@ -38,7 +38,7 @@ Remaining tasks to complete:
   - [x] Reset election timer
   - [x] Send RequestVote RPCs to all other servers
 - [ ] If votes received from majority of servers: become leader
-- [ ] If AppendEntries RPC received from new leader: convert to follower
+- [x] If AppendEntries RPC received from new leader: convert to follower
 - [x] If election timeout elapses: start new election
 
 **Leaders:**
