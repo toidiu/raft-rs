@@ -34,7 +34,7 @@ impl Server {
     }
 
     fn id(&self) -> ServerId {
-        self.state.id
+        self.state.inner.id
     }
 
     pub fn recv(&mut self) {

@@ -54,7 +54,6 @@ impl ServerId {
 
 #[derive(Debug)]
 pub struct State {
-    pub id: ServerId,
     pub inner: Inner,
     mode: Mode,
 }
@@ -70,7 +69,6 @@ impl State {
     pub fn new(clock: Clock, server_list: Vec<ServerId>) -> Self {
         // 1: startup
         State {
-            id: ServerId::new(),
             inner: Inner::new(clock, server_list),
             mode: Mode::Follower,
         }
@@ -89,8 +87,7 @@ impl State {
                 // If election timeout elapses: start new election
                 self.on_candidate(io);
             }
-            Mode::Leader => {
-            }
+            Mode::Leader => {}
         }
     }
 
@@ -128,23 +125,27 @@ impl State {
             Rpc::RespRequestVote(RespRequestVote {
                 term: _,
                 vote_granted: _,
-            }) => {}
+            }) => {
+                todo!()
+            }
             Rpc::AppendEntries(append_entry) => {
                 self.on_append_entry(append_entry, tx);
             }
-            Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {}
+            Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {
+                todo!()
+            }
         }
     }
 
     fn on_candidate_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc) {
         match rpc {
-            Rpc::RequestVote(request_vote) => {
-                self.on_request_vote(request_vote, tx)
-            }
+            Rpc::RequestVote(request_vote) => self.on_request_vote(request_vote, tx),
             Rpc::RespRequestVote(RespRequestVote {
                 term: _,
                 vote_granted: _,
-            }) => {}
+            }) => {
+                todo!()
+            }
             Rpc::AppendEntries(append_entry) => {
                 let rpc_term = append_entry.term();
                 // # Compliance:
@@ -154,7 +155,9 @@ impl State {
                     self.on_follower();
                 }
             }
-            Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {}
+            Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {
+                todo!()
+            }
         }
     }
 
@@ -174,7 +177,7 @@ impl State {
 
         // # Compliance:
         // Vote for self
-        self.inner.voted_for = Some(self.id);
+        self.inner.cast_vote(self.inner.id);
 
         // # Compliance:
         // Reset election timer
@@ -186,7 +189,7 @@ impl State {
         let mut buf = EncoderBuffer::new(&mut slice);
         let term = self.inner.curr_term.0;
         let last_committed_term_idx = self.inner.last_committed_term_idx();
-        Rpc::new_request_vote(term, self.id, last_committed_term_idx).encode_mut(&mut buf);
+        Rpc::new_request_vote(term, self.inner.id, last_committed_term_idx).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
     }
 
@@ -209,27 +212,27 @@ impl State {
         // If candidate’s log is at least as up-to-date as receiver’s log
         let logs_up_to_date = rpc_last_log_term_idx >= self.inner.last_committed_term_idx();
 
-        let give_vote = match &self.inner.voted_for {
+        let give_vote = match &self.inner.voted_for() {
             Some(voted_for) if voted_for == &candidate_id => {
                 // # Compliance:
                 // and votedFor is candidateId , grant vote (§5.2, §5.4)
                 true
             }
             None => {
-                self.inner.voted_for = Some(candidate_id);
                 // # Compliance:
                 // and votedFor is null , grant vote (§5.2, §5.4)
+                self.inner.cast_vote(candidate_id);
                 true
             }
             _ => false,
         };
 
-        let voted_for = term_up_to_date && logs_up_to_date && give_vote;
+        let voted_for_resp = term_up_to_date && logs_up_to_date && give_vote;
 
         let term = self.inner.curr_term.0;
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_request_vote_resp(term, voted_for).encode_mut(&mut buf);
+        Rpc::new_request_vote_resp(term, voted_for_resp).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
     }
 
@@ -347,7 +350,26 @@ mod tests {
     #[tokio::test]
     async fn majority_of_votes() {
         let mut io = testing::Io::new();
-        let server_list = vec![ServerId::new(), ServerId::new(), ServerId::new(), ServerId::new()];
+        let server_list = vec![ServerId::new(), ServerId::new(), ServerId::new()];
         let mut s = State::new(Clock::default(), server_list);
+
+        assert!(s.inner.voted_for().is_none());
+
+        // on_timeout start a new election
+        s.on_timeout(&mut io);
+        assert!(matches!(s.mode, Mode::Candidate));
+
+        // RequestVote is sent when a new election is started
+        let bytes = io.tx.pop_front().unwrap();
+        let buf = DecoderBuffer::new(&bytes);
+        let (rpc, _buffer) = Rpc::decode(buf).unwrap();
+        let req = cast_unsafe!(rpc, Rpc::RequestVote);
+        assert_eq!(req.term, Term(1));
+        assert!(io.tx.is_empty());
+
+        s.inner.cast_vote(s.inner.id);
+
+        // recv RespRequestVote
+        s.recv(&mut io, Rpc::new_request_vote_resp(1, true));
     }
 }

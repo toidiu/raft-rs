@@ -6,17 +6,19 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Inner {
+    pub id: ServerId,
+
     // # Compliance: Fig 2
     // currentTerm: latest term server has seen (initialized to 0 on first boot, increases
     // monotonically)
     pub curr_term: Term,
 
     // list of all raft servers
-    server_list: Vec<ServerId>,
+    server_list: Vec<(ServerId, bool)>,
 
     // # Compliance: Fig 2
     // votedFor: candidateId that received vote in current
-    pub voted_for: Option<ServerId>,
+    voted_for: Option<ServerId>,
 
     // # Compliance: Fig 2
     // log[]: log entries; each entry contains command for state machine, and term when entry was
@@ -33,12 +35,26 @@ pub struct Inner {
 impl Inner {
     pub fn new(clock: Clock, server_list: Vec<ServerId>) -> Self {
         Inner {
+            id: ServerId::new(),
             curr_term: Term(0),
-            server_list,
+            server_list: server_list.into_iter().map(|id| (id, false)).collect(),
             voted_for: None,
             log: Log::new(),
             timer: Timer::new(clock),
         }
+    }
+
+    pub fn cast_vote(&mut self, id: ServerId) {
+        if self.id == id {
+            self.voted_for = Some(self.id);
+        } else {
+            // TODO vote for one of server_list
+            todo!()
+        }
+    }
+
+    pub fn voted_for(&self) -> Option<ServerId> {
+        self.voted_for
     }
 
     // # Compliance: Fig 2
