@@ -5,6 +5,7 @@ use crate::{
 };
 use std::collections::HashSet;
 
+#[must_use]
 pub enum ElectionResult {
     Elected,
     Pending,
@@ -57,19 +58,19 @@ impl Inner {
         self.votes_received.clear();
     }
 
-    #[must_use]
     pub fn on_vote_received(&mut self, id: ServerId) -> ElectionResult {
         debug_assert!(self.server_list.contains(&id) || id == self.id);
         self.votes_received.insert(id);
 
         if self.votes_received.len() >= self.quorum() {
+            // # Compliance:
+            // If votes received from majority of servers: become leader
             ElectionResult::Elected
         } else {
             ElectionResult::Pending
         }
     }
 
-    #[must_use]
     pub fn cast_vote(&mut self, id: ServerId) -> ElectionResult {
         debug_assert!(self.voted_for.is_none());
 
