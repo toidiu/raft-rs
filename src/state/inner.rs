@@ -5,6 +5,11 @@ use crate::{
 };
 use std::collections::HashSet;
 
+pub enum ElectionResult {
+    Elected,
+    Pending,
+}
+
 #[derive(Debug)]
 pub struct Inner {
     pub id: ServerId,
@@ -20,7 +25,7 @@ pub struct Inner {
     // # Compliance: Fig 2
     // votedFor: candidateId that received vote in current
     voted_for: Option<ServerId>,
-    votes_received: HashSet<ServerId>,
+    pub votes_received: HashSet<ServerId>,
 
     // # Compliance: Fig 2
     // log[]: log entries; each entry contains command for state machine, and term when entry was
@@ -52,19 +57,29 @@ impl Inner {
         self.votes_received.clear();
     }
 
-    pub fn on_vote_received(&mut self, id: ServerId) {
+    #[must_use]
+    pub fn on_vote_received(&mut self, id: ServerId) -> ElectionResult {
         debug_assert!(self.server_list.contains(&id) || id == self.id);
         self.votes_received.insert(id);
+
+        if self.votes_received.len() >= self.quorum() {
+            ElectionResult::Elected
+        } else {
+            ElectionResult::Pending
+        }
     }
 
-    pub fn cast_vote(&mut self, id: ServerId) {
+    #[must_use]
+    pub fn cast_vote(&mut self, id: ServerId) -> ElectionResult {
         debug_assert!(self.voted_for.is_none());
 
         if self.id == id {
             self.voted_for = Some(self.id);
+            self.on_vote_received(self.id)
         } else {
             debug_assert!(self.server_list.contains(&id));
             self.voted_for = Some(id);
+            ElectionResult::Pending
         }
     }
 
@@ -79,8 +94,13 @@ impl Inner {
         self.log.last_committed_term_idx()
     }
 
-    pub fn quorum(&self) -> usize {
-        let half = self.server_list.len() / 2;
+    fn is_elected(&self) -> bool {
+        self.votes_received.len() >= self.quorum()
+    }
+
+    fn quorum(&self) -> usize {
+        let peer_plus_self = self.server_list.len() + 1;
+        let half = peer_plus_self / 2;
         half + 1
     }
 }
@@ -91,8 +111,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_quorum() {
-        let inner = Inner::new(Clock::default(), vec![ServerId::new()]);
+        let inner = Inner::new(Clock::default(), vec![]);
         assert_eq!(inner.quorum(), 1);
+
+        let inner = Inner::new(Clock::default(), vec![ServerId::new()]);
+        assert_eq!(inner.quorum(), 2);
 
         let inner = Inner::new(Clock::default(), vec![ServerId::new(), ServerId::new()]);
         assert_eq!(inner.quorum(), 2);
@@ -101,7 +124,7 @@ mod tests {
             Clock::default(),
             vec![ServerId::new(), ServerId::new(), ServerId::new()],
         );
-        assert_eq!(inner.quorum(), 2);
+        assert_eq!(inner.quorum(), 3);
     }
 
     #[tokio::test]
@@ -109,14 +132,23 @@ mod tests {
         let server_list = vec![ServerId::new(), ServerId::new()];
         let mut inner = Inner::new(Clock::default(), server_list.clone());
 
-        inner.on_vote_received(inner.id);
+        assert!(matches!(
+            inner.on_vote_received(inner.id),
+            ElectionResult::Pending
+        ));
         assert_eq!(inner.votes_received.len(), 1);
 
         inner.on_new_election();
         assert_eq!(inner.votes_received.len(), 0);
 
-        inner.on_vote_received(inner.id);
-        inner.on_vote_received(server_list[0]);
+        assert!(matches!(
+            inner.on_vote_received(inner.id),
+            ElectionResult::Pending
+        ));
+        assert!(matches!(
+            inner.on_vote_received(server_list[0]),
+            ElectionResult::Elected
+        ));
         assert_eq!(inner.votes_received.len(), 2);
     }
 }

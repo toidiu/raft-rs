@@ -3,9 +3,9 @@ use crate::{
     io::{ServerTx, IO_BUF_LEN},
     log::Term,
     rpc::{AppendEntries, RequestVote, RespAppendEntries, RespRequestVote, Rpc},
-    state::inner::Inner,
+    state::inner::{ElectionResult, Inner},
 };
-use s2n_codec::{EncoderBuffer, EncoderValue};
+use s2n_codec::{DecoderValue, EncoderBuffer, EncoderValue};
 use uuid::Uuid;
 
 mod inner;
@@ -49,6 +49,23 @@ impl ServerId {
     pub fn new() -> Self {
         let id = Uuid::new_v4();
         ServerId(id.into_bytes())
+    }
+}
+
+impl<'a> DecoderValue<'a> for ServerId {
+    fn decode(buffer: s2n_codec::DecoderBuffer<'a>) -> s2n_codec::DecoderBufferResult<'a, Self> {
+        let (candidate_id, buffer) = buffer.decode_slice(16)?;
+        let candidate_id = candidate_id
+            .into_less_safe_slice()
+            .try_into()
+            .expect("already decoded 16 bytes");
+        Ok((ServerId(candidate_id), buffer))
+    }
+}
+
+impl EncoderValue for ServerId {
+    fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
+        encoder.write_slice(&self.0)
     }
 }
 
@@ -126,6 +143,7 @@ impl State {
             }
             Rpc::RespRequestVote(RespRequestVote {
                 term: _,
+                id: _,
                 vote_granted: _,
             }) => {
                 todo!()
@@ -144,11 +162,14 @@ impl State {
             Rpc::RequestVote(request_vote) => self.on_request_vote(request_vote, tx),
             Rpc::RespRequestVote(RespRequestVote {
                 term: _,
+                id,
                 vote_granted,
             }) => {
                 if vote_granted {
-                    // FIXME get server_id from RPC
-                    self.inner.on_vote_received(ServerId::new());
+                    let result = self.inner.on_vote_received(id);
+                    if matches!(result, ElectionResult::Elected) {
+                        self.on_leader(tx);
+                    }
                 }
             }
             Rpc::AppendEntries(append_entry) => {
@@ -175,6 +196,11 @@ impl State {
         self.on_new_election(tx)
     }
 
+    fn on_leader<T: ServerTx>(&mut self, _tx: &mut T) {
+        println!("on_leader");
+        self.mode = Mode::Leader;
+    }
+
     fn on_new_election<T: ServerTx>(&mut self, tx: &mut T) {
         self.inner.on_new_election();
 
@@ -184,7 +210,9 @@ impl State {
 
         // # Compliance:
         // Vote for self
-        self.inner.on_vote_received(self.inner.id);
+        if matches!(self.inner.cast_vote(self.inner.id), ElectionResult::Elected) {
+            self.on_leader(tx);
+        }
 
         // # Compliance:
         // Reset election timer
@@ -211,6 +239,11 @@ impl State {
             candidate_id,
             last_log_term_idx: rpc_last_log_term_idx,
         } = request_vote;
+        debug_assert!(
+            candidate_id != self.inner.id,
+            "sanity check that the peer's id is different from self"
+        );
+
         // # Compliance:
         // Reply false if term < currentTerm (§5.1)
         let term_up_to_date = rpc_term >= self.inner.curr_term;
@@ -222,13 +255,17 @@ impl State {
         let give_vote = match &self.inner.voted_for() {
             Some(voted_for) if voted_for == &candidate_id => {
                 // # Compliance:
-                // and votedFor is candidateId , grant vote (§5.2, §5.4)
+                // and votedFor is candidateId, grant vote (§5.2, §5.4)
                 true
             }
             None => {
                 // # Compliance:
-                // and votedFor is null , grant vote (§5.2, §5.4)
-                self.inner.on_vote_received(candidate_id);
+                // and votedFor is null, grant vote (§5.2, §5.4)
+                let voted_for_peer = self.inner.cast_vote(candidate_id);
+                debug_assert!(
+                    matches!(voted_for_peer, ElectionResult::Pending),
+                    "voted for peer so election should be pending"
+                );
                 true
             }
             _ => false,
@@ -239,7 +276,7 @@ impl State {
         let term = self.inner.curr_term.0;
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_request_vote_resp(term, voted_for_resp).encode_mut(&mut buf);
+        Rpc::new_request_vote_resp(term, ServerId::new(), voted_for_resp).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
     }
 
@@ -269,7 +306,7 @@ mod tests {
     #[tokio::test]
     async fn follower_timeout() {
         let mut io = testing::Io::new();
-        let mut s = State::new(Clock::default(), vec![]);
+        let mut s = State::new(Clock::default(), vec![ServerId::new()]);
         assert!(matches!(s.mode, Mode::Follower));
 
         s.on_timeout(&mut io);
@@ -342,7 +379,7 @@ mod tests {
     #[tokio::test]
     async fn candidate_timeout() {
         let mut io = testing::Io::new();
-        let mut s = State::new(Clock::default(), vec![]);
+        let mut s = State::new(Clock::default(), vec![ServerId::new()]);
         s.mode = Mode::Candidate;
 
         s.on_timeout(&mut io);
@@ -357,13 +394,17 @@ mod tests {
     #[tokio::test]
     async fn majority_of_votes() {
         let mut io = testing::Io::new();
-        let server_list = vec![ServerId::new(), ServerId::new(), ServerId::new()];
+        // 2 peers in addition to the current server
+        let server_list = vec![ServerId::new(), ServerId::new()];
         let mut s = State::new(Clock::default(), server_list.clone());
 
         assert!(s.inner.voted_for().is_none());
 
         // on_timeout start a new election
         s.on_timeout(&mut io);
+        assert!(matches!(s.mode, Mode::Candidate));
+        assert_eq!(s.inner.votes_received.len(), 1);
+        // not Elected
         assert!(matches!(s.mode, Mode::Candidate));
 
         // RequestVote is sent when a new election is started
@@ -374,10 +415,21 @@ mod tests {
         assert_eq!(req.term, Term(1));
         assert!(io.tx.is_empty());
 
-        s.inner.on_new_election();
-        s.inner.on_vote_received(server_list[0]);
+        // recv RespRequestVote, second vote give us quorum
+        s.recv(&mut io, Rpc::new_request_vote_resp(1, server_list[0], true));
+        assert_eq!(s.inner.votes_received.len(), 2);
+        // Elected
+        assert!(matches!(s.mode, Mode::Leader));
+    }
 
-        // recv RespRequestVote
-        s.recv(&mut io, Rpc::new_request_vote_resp(1, true));
+    #[tokio::test]
+    async fn single_server_wins_election() {
+        let mut io = testing::Io::new();
+        let mut s = State::new(Clock::default(), vec![]);
+        assert!(matches!(s.mode, Mode::Follower));
+
+        s.on_timeout(&mut io);
+        // Elected since there are no peers
+        assert!(matches!(s.mode, Mode::Leader));
     }
 }

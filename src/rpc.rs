@@ -21,9 +21,10 @@ impl Rpc {
         })
     }
 
-    pub fn new_request_vote_resp(term: u64, vote_granted: bool) -> Rpc {
+    pub fn new_request_vote_resp(term: u64, id: ServerId, vote_granted: bool) -> Rpc {
         Rpc::RespRequestVote(RespRequestVote {
             term: Term(term),
+            id,
             vote_granted,
         })
     }
@@ -56,12 +57,7 @@ impl<'a> DecoderValue<'a> for Rpc {
 
         match tag {
             RequestVote::TAG => {
-                let (candidate_id, buffer) = buffer.decode_slice(16)?;
-                let candidate_id = candidate_id
-                    .into_less_safe_slice()
-                    .try_into()
-                    .expect("already decoded 16 bytes");
-                let candidate_id = ServerId(candidate_id);
+                let (candidate_id, buffer) = buffer.decode()?;
                 let (last_log_term_idx, buffer) = buffer.decode()?;
 
                 let rpc = RequestVote {
@@ -72,9 +68,14 @@ impl<'a> DecoderValue<'a> for Rpc {
                 Ok((Rpc::RequestVote(rpc), buffer))
             }
             RespRequestVote::TAG => {
+                let (id, buffer) = buffer.decode()?;
                 let (vote_granted, buffer): (u8, _) = buffer.decode()?;
                 let vote_granted = vote_granted != 0;
-                let rpc = RespRequestVote { term, vote_granted };
+                let rpc = RespRequestVote {
+                    term,
+                    id,
+                    vote_granted,
+                };
                 Ok((Rpc::RespRequestVote(rpc), buffer))
             }
             AppendEntries::TAG => {
@@ -100,12 +101,13 @@ impl EncoderValue for Rpc {
             Rpc::RequestVote(inner) => {
                 encoder.write_slice(&[RequestVote::TAG]);
                 encoder.encode(&inner.term);
-                encoder.write_slice(&inner.candidate_id.0);
+                encoder.encode(&inner.candidate_id);
                 encoder.encode(&inner.last_log_term_idx);
             }
             Rpc::RespRequestVote(inner) => {
                 encoder.write_slice(&[RespRequestVote::TAG]);
                 encoder.encode(&inner.term);
+                encoder.encode(&inner.id);
                 encoder.write_slice(&(inner.vote_granted as u8).to_be_bytes());
             }
             Rpc::AppendEntries(inner) => {
@@ -148,6 +150,9 @@ pub struct RespRequestVote {
     // # Compliance: Fig 2
     // term: currentTerm, for candidate to update itself
     pub term: Term,
+
+    // id of the server granting the vote
+    pub id: ServerId,
 
     // # Compliance: Fig 2
     // voteGranted: true means candidate received vote
@@ -232,7 +237,7 @@ mod tests {
 
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_request_vote_resp(0, true).encode_mut(&mut buf);
+        Rpc::new_request_vote_resp(0, ServerId::new(), true).encode_mut(&mut buf);
         server_io.send(buf.as_mut_slice().to_vec());
 
         network_io.send().unwrap();

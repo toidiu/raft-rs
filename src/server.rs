@@ -147,7 +147,8 @@ mod tests {
     async fn mock_event_loop() {
         tokio::time::pause();
         let clock = Clock::default();
-        let (mut server, mut network_io) = Server::new(clock, vec![]);
+        let server_list = vec![ServerId::new(), ServerId::new()];
+        let (mut server, mut network_io) = Server::new(clock, server_list.clone());
 
         let wait_complete = Arc::new(AtomicBool::new(true));
         let set_wait = wait_complete.clone();
@@ -185,7 +186,6 @@ mod tests {
             }
         });
 
-        let server_id = server.id();
         // network: simulate receiving a message over the network
         tokio::spawn(async move {
             for i in 0..5 {
@@ -194,7 +194,7 @@ mod tests {
                 let mut slice = vec![0; 100];
                 let mut buf = EncoderBuffer::new(&mut slice);
                 let last_log_term_idx = TermIdx::new(8, 1);
-                Rpc::new_request_vote(i, server_id, last_log_term_idx).encode(&mut buf);
+                Rpc::new_request_vote(i, server_list[0], last_log_term_idx).encode(&mut buf);
                 let (written, buf) = buf.split_mut();
                 network_io.recv(written.to_vec());
 

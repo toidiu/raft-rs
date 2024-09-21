@@ -17,8 +17,8 @@ Remaining tasks to complete:
 ### RequestVote
 - [x] Reply false if term < currentTerm (§5.1)
 - [x] If candidate’s log is at least as up-to-date as receiver’s log
-    - [x] and votedFor is null , grant vote (§5.2, §5.4)
-    - [x] and votedFor is candidateId , grant vote (§5.2, §5.4)
+    - [x] and votedFor is null, grant vote (§5.2, §5.4)
+    - [x] and votedFor is candidateId, grant vote (§5.2, §5.4)
 
 ### Rules for Servers **All Servers:**
 - [ ] If commitIndex > lastApplied: increment lastApplied
