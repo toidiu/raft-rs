@@ -152,6 +152,7 @@ pub struct RespRequestVote {
     pub term: Term,
 
     // id of the server granting the vote
+    // FIXME: this should not be part of the RPC
     pub id: ServerId,
 
     // # Compliance: Fig 2
@@ -165,6 +166,8 @@ impl RespRequestVote {
 
 #[derive(Debug, Clone, Copy)]
 pub struct RespAppendEntries {
+    // # Compliance: Fig 2
+    // term currentTerm, for leader to update itself
     pub term: Term,
 }
 
@@ -179,8 +182,7 @@ pub struct AppendEntries {
     // term leader’s term
     term: Term,
     // # Compliance: Fig 2
-    // prevLogIndex index of log entry immediately preceding
-    // new ones
+    // prevLogIndex index of log entry immediately preceding new ones
     //
     // # Compliance: Fig 2
     // prevLogTerm term of prevLogIndex entry

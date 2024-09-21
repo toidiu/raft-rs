@@ -109,7 +109,7 @@ impl State {
     }
 
     pub fn recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc) {
-        // TODO validate the term and idx
+        // TODO validate the term and idx. or is this done in on_request_vote/on_append_entry?
 
         if rpc.term() >= &self.inner.curr_term {
             self.inner.timer.rearm();
@@ -179,6 +179,7 @@ impl State {
                 let new_leader_detected = rpc_term > self.inner.curr_term;
                 if new_leader_detected {
                     self.on_follower();
+                    self.on_append_entry(append_entry, tx);
                 }
             }
             Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {
