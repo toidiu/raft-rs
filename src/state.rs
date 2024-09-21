@@ -42,7 +42,7 @@ mod inner;
 /// ```
 /// https://textik.com/#8dbf6540e0dd1676
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ServerId(pub [u8; 16]);
 
 impl ServerId {
@@ -92,6 +92,8 @@ impl State {
     }
 
     pub fn recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc) {
+        // TODO validate the term and idx
+
         if rpc.term() >= &self.inner.curr_term {
             self.inner.timer.rearm();
         }
@@ -142,9 +144,12 @@ impl State {
             Rpc::RequestVote(request_vote) => self.on_request_vote(request_vote, tx),
             Rpc::RespRequestVote(RespRequestVote {
                 term: _,
-                vote_granted: _,
+                vote_granted,
             }) => {
-                todo!()
+                if vote_granted {
+                    // FIXME get server_id from RPC
+                    self.inner.on_vote_received(ServerId::new());
+                }
             }
             Rpc::AppendEntries(append_entry) => {
                 let rpc_term = append_entry.term();
@@ -167,17 +172,19 @@ impl State {
 
         // # Compliance:
         // On conversion to candidate, start election:
-        self.start_new_election(tx)
+        self.on_new_election(tx)
     }
 
-    fn start_new_election<T: ServerTx>(&mut self, tx: &mut T) {
+    fn on_new_election<T: ServerTx>(&mut self, tx: &mut T) {
+        self.inner.on_new_election();
+
         // # Compliance:
         // Increment currentTerm
         self.inner.curr_term += 1;
 
         // # Compliance:
         // Vote for self
-        self.inner.cast_vote(self.inner.id);
+        self.inner.on_vote_received(self.inner.id);
 
         // # Compliance:
         // Reset election timer
@@ -221,7 +228,7 @@ impl State {
             None => {
                 // # Compliance:
                 // and votedFor is null , grant vote (§5.2, §5.4)
-                self.inner.cast_vote(candidate_id);
+                self.inner.on_vote_received(candidate_id);
                 true
             }
             _ => false,
@@ -351,7 +358,7 @@ mod tests {
     async fn majority_of_votes() {
         let mut io = testing::Io::new();
         let server_list = vec![ServerId::new(), ServerId::new(), ServerId::new()];
-        let mut s = State::new(Clock::default(), server_list);
+        let mut s = State::new(Clock::default(), server_list.clone());
 
         assert!(s.inner.voted_for().is_none());
 
@@ -367,7 +374,8 @@ mod tests {
         assert_eq!(req.term, Term(1));
         assert!(io.tx.is_empty());
 
-        s.inner.cast_vote(s.inner.id);
+        s.inner.on_new_election();
+        s.inner.on_vote_received(server_list[0]);
 
         // recv RespRequestVote
         s.recv(&mut io, Rpc::new_request_vote_resp(1, true));
