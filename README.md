@@ -8,6 +8,7 @@ consensus protocol
 Remaining tasks to complete:
 - [x] IO
 - [x] implement leader election
+- [ ] Amend Entry to contain (idx, term, data)
 - [ ] implement heartbeats
 - [ ] implement AppendEntries
 - [ ] implement Leader
