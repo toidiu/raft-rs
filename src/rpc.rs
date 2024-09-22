@@ -36,8 +36,11 @@ impl Rpc {
         })
     }
 
-    pub fn new_append_entry_resp(term: u64) -> Rpc {
-        Rpc::RespAppendEntries(RespAppendEntries { term: Term(term) })
+    pub fn new_append_entry_resp(term: u64, success: bool) -> Rpc {
+        Rpc::RespAppendEntries(RespAppendEntries {
+            term: Term(term),
+            success,
+        })
     }
 
     pub fn term(&self) -> &Term {
@@ -87,7 +90,10 @@ impl<'a> DecoderValue<'a> for Rpc {
                 Ok((Rpc::AppendEntries(rpc), buffer))
             }
             RespAppendEntries::TAG => {
-                let rpc = RespAppendEntries { term };
+                let (success, buffer): (u8, _) = buffer.decode()?;
+                let success = success != 0;
+
+                let rpc = RespAppendEntries { term, success };
                 Ok((Rpc::RespAppendEntries(rpc), buffer))
             }
             _tag => Err(DecoderError::InvariantViolation("received unexpected tag")),
@@ -118,6 +124,7 @@ impl EncoderValue for Rpc {
             Rpc::RespAppendEntries(inner) => {
                 encoder.write_slice(&[RespAppendEntries::TAG]);
                 encoder.encode(&inner.term);
+                encoder.write_slice(&(inner.success as u8).to_be_bytes());
             }
         }
     }
@@ -169,6 +176,10 @@ pub struct RespAppendEntries {
     // # Compliance: Fig 2
     // term currentTerm, for leader to update itself
     pub term: Term,
+
+    // # Compliance: Fig 2
+    // success true if follower contained entry matching prevLogIndex and prevLogTerm
+    success: bool,
 }
 
 impl RespAppendEntries {
@@ -180,14 +191,14 @@ impl RespAppendEntries {
 pub struct AppendEntries {
     // # Compliance: Fig 2
     // term leader’s term
-    term: Term,
+    pub term: Term,
+
     // # Compliance: Fig 2
     // prevLogIndex index of log entry immediately preceding new ones
     //
     // # Compliance: Fig 2
     // prevLogTerm term of prevLogIndex entry
-    prev_term_idx: TermIdx,
-    //
+    pub prev_term_idx: TermIdx,
     // # Compliance: Fig 2
     // TODO leaderId so follower can redirect clients
     //
@@ -263,7 +274,7 @@ mod tests {
 
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_append_entry_resp(0).encode_mut(&mut buf);
+        Rpc::new_append_entry_resp(0, true).encode_mut(&mut buf);
         server_io.send(buf.as_mut_slice().to_vec());
 
         network_io.send().unwrap();

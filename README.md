@@ -11,6 +11,7 @@ Remaining tasks to complete:
 - [ ] implement heartbeats
 - [ ] implement AppendEntries
 - [ ] implement Leader
+- [ ] remove ServerId from RequestVote
 - [ ] implement state machine storage
 
 ## Fig 2 compliance
@@ -36,15 +37,6 @@ Remaining tasks to complete:
   replicated on server (initialized to 0, increases monotonically)
 
 **AppendEntries**
-#### Receiver implementation:
-- [ ] Reply false if term < currentTerm (§5.1)
-- [ ] Reply false if log doesn’t contain an entry at prevLogIndex whose term
-  matches prevLogTerm (§5.3)
-- [ ] If an existing entry conflicts with a new one (same index but different
-  terms), delete the existing entry and all that follow it (§5.3)
-- [ ] Append any new entries not already in the log
-- [ ] If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index
-  of last new entry)
 #### Arguments:
 - [x] term leader’s term
 - [ ] leaderId so follower can redirect clients
@@ -55,15 +47,19 @@ Remaining tasks to complete:
 - [ ] leaderCommit leader’s commitIndex
 #### Results:
 - [x] term currentTerm, for leader to update itself
-- [ ] success true if follower contained entry matching prevLogIndex and
+- [x] success true if follower contained entry matching prevLogIndex and
   prevLogTerm
-
-**RequestVote**
 #### Receiver implementation:
 - [x] Reply false if term < currentTerm (§5.1)
-- [x] If candidate’s log is at least as up-to-date as receiver’s log
-    - [x] and votedFor is null, grant vote (§5.2, §5.4)
-    - [x] and votedFor is candidateId, grant vote (§5.2, §5.4)
+- [x] Reply false if log doesn’t contain an entry at prevLogIndex whose term
+  matches prevLogTerm (§5.3)
+- [ ] If an existing entry conflicts with a new one (same index but different
+  terms), delete the existing entry and all that follow it (§5.3)
+- [ ] Append any new entries not already in the log
+- [ ] If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index
+  of last new entry)
+
+**RequestVote**
 #### Arguments:
 - [x] term candidate’s term
 - [x] candidateId candidate requesting vote
@@ -72,6 +68,11 @@ Remaining tasks to complete:
 #### Results:
 - [x] term currentTerm, for candidate to update itself
 - [x] voteGranted true means candidate received vote
+#### Receiver implementation:
+- [x] Reply false if term < currentTerm (§5.1)
+- [x] If candidate’s log is at least as up-to-date as receiver’s log
+    - [x] and votedFor is null, grant vote (§5.2, §5.4)
+    - [x] and votedFor is candidateId, grant vote (§5.2, §5.4)
 
 ### Rules for Servers
 **All Servers:**

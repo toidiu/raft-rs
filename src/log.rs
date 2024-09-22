@@ -1,5 +1,3 @@
-// The data type supported by this Raft implementation.
-// TODO: u8 is used for simplification. Eventually support additional types.
 use core::{cmp::Ordering, ops::AddAssign};
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 
@@ -9,7 +7,9 @@ use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 // TermIdx and therefore make progress.
 const INITIAL_LAST_TERM_IDX: TermIdx = TermIdx::new(0, 0);
 
-pub type Data = u8;
+// The data type supported by this Raft implementation.
+// TODO: u8 is used for simplification. Eventually support additional types.
+type Data = u8;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Term(pub u64);

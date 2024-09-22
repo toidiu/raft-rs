@@ -151,7 +151,7 @@ impl State {
             Rpc::AppendEntries(append_entry) => {
                 self.on_append_entry(append_entry, tx);
             }
-            Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {
+            Rpc::RespAppendEntries(RespAppendEntries { term: _, .. }) => {
                 todo!()
             }
         }
@@ -182,7 +182,7 @@ impl State {
                     self.on_append_entry(append_entry, tx);
                 }
             }
-            Rpc::RespAppendEntries(RespAppendEntries { term: _ }) => {
+            Rpc::RespAppendEntries(RespAppendEntries { term: _, .. }) => {
                 todo!()
             }
         }
@@ -281,11 +281,36 @@ impl State {
         tx.send(buf.as_mut_slice().to_vec());
     }
 
-    fn on_append_entry<T: ServerTx>(&mut self, _rpc: AppendEntries, tx: &mut T) {
+    fn on_append_entry<T: ServerTx>(&mut self, rpc: AppendEntries, tx: &mut T) {
+        let AppendEntries {
+            term: rpc_term,
+            prev_term_idx: rcp_prev_term_idx,
+        } = rpc;
+
+        // # Compliance: Fig 2
+        // Reply false if term < currentTerm (§5.1)
+        let term_up_to_date = rpc_term >= self.inner.curr_term;
+
+        // # Compliance: Fig 2
+        // prevLogIndex index of log entry immediately preceding new ones
+        //
+        // Since we haven't processed and of the new entries yet, this is the last entry in the log
+        let prev_term_idx = self.inner.last_committed_term_idx();
+
+        // # Compliance: Fig 2
+        // Reply false if log doesn’t contain an entry at prevLogIndex whose term matches
+        // prevLogTerm (§5.3)
+        //
+        // # Compliance: Fig 2
+        // success true if follower contained entry matching prevLogIndex and prevLogTerm
+        let log_contains_entry = rcp_prev_term_idx == prev_term_idx;
+
+        let success = term_up_to_date && log_contains_entry;
+
         let term = self.inner.curr_term.0;
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_append_entry_resp(term).encode_mut(&mut buf);
+        Rpc::new_append_entry_resp(term, success).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
     }
 }
