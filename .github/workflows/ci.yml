@@ -22,7 +22,6 @@ permissions:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
-    needs: env
     strategy:
       fail-fast: false
       matrix:
