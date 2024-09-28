@@ -1,0 +1,48 @@
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+name: ci
+
+env:
+  RUST_BACKTRACE: 1
+
+# By default depandabot only receives read permissions. Explicitly give it write
+# permissions which is needed by the ouzi-dev/commit-status-updater task.
+#
+# Updating status is relatively safe (doesnt modify source code) and caution
+# should we taken before adding more permissions.
+permissions:
+  statuses: write
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    needs: env
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable]
+        os: [ubuntu-latest]
+        env: [default]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rust toolchain
+        id: toolchain
+        run: |
+          rustup toolchain install ${{ matrix.rust }}
+          rustup override set ${{ matrix.rust }}
+          rustup toolchain install ${{ matrix.rust }}
+
+      - name: Run cargo build
+        run: |
+          cargo build --tests
+
+      - name: Run cargo test
+        run: |
+          cargo test
+
