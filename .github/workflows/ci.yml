@@ -11,15 +11,44 @@ name: ci
 env:
   RUST_BACKTRACE: 1
 
-# By default depandabot only receives read permissions. Explicitly give it write
-# permissions which is needed by the ouzi-dev/commit-status-updater task.
-#
-# Updating status is relatively safe (doesnt modify source code) and caution
-# should we taken before adding more permissions.
-permissions:
-  statuses: write
-
 jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rust toolchain
+        id: toolchain
+        run: |
+          rustup toolchain install stable
+          rustup override set stable
+          rustup toolchain install stable
+
+      - name: Run cargo fmt
+        run: |
+          cargo fmt -- --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - toolchain: stable
+            # fail on stable warnings
+            args: "-D warnings"
+          - toolchain: beta
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rust toolchain
+        id: toolchain
+        run: |
+          rustup toolchain install ${{ matrix.toolchain }} --profile minimal --component clippy
+          rustup override set ${{ matrix.toolchain }}
+
+      - name: Run cargo clippy
+        run: |
+          cargo clippy --all-features --all-targets --workspace -- ${{ matrix.args }}
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -36,10 +65,6 @@ jobs:
           rustup toolchain install ${{ matrix.rust }}
           rustup override set ${{ matrix.rust }}
           rustup toolchain install ${{ matrix.rust }}
-
-      - name: Run cargo build
-        run: |
-          cargo build --tests
 
       - name: Run cargo test
         run: |
