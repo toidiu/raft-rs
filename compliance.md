@@ -45,7 +45,7 @@
 
 - [ ] Raft uses randomized election timeouts to ensure that split votes are rare
   and that they are resolved quickly.
-- [ ] To prevent split votes in the first place, election timeouts are chosen
+- [x] To prevent split votes in the first place, election timeouts are chosen
   randomly from a fixed interval (e.g., 150–300ms).
 - [ ] Each candidate restarts its randomized election timeout at the start of an
   election, and it waits for that timeout to elapse before starting the next
