@@ -46,12 +46,20 @@ pub struct Timeout {
 
 impl Timeout {
     /// Returns an armed Timeout.
-    fn new<R: RngCore>(prng: &mut R) -> Self {
+    pub(crate) fn new<R: RngCore>(prng: &mut R) -> Self {
         let duration = Self::rearm_duration(prng);
         let expire = Instant::now() + duration;
         let sleep = Box::pin(sleep_until(expire));
 
         Timeout { sleep }
+    }
+
+    /// Returns a Future which can be polled to check if the timout has expired.
+    pub(crate) fn timeout_ready<'a, R: RngCore>(
+        &'a mut self,
+        prng: &'a mut R,
+    ) -> TimeoutReady<'a, R> {
+        TimeoutReady { timout: self, prng }
     }
 
     /// Check if the timeout has expired.
@@ -72,18 +80,8 @@ impl Timeout {
 
     /// Randomly select a duration for the next timeout.
     fn rearm_duration<R: RngCore>(prng: &mut R) -> Duration {
-        let range = prng.gen_range(MIN_REARM_DURATION..MAX_REARM_DURATION);
+        let range = prng.gen_range(MIN_REARM_DURATION..=MAX_REARM_DURATION);
         Duration::from_millis(range)
-    }
-
-    /// Returns the instant when the timout will expire.
-    fn expire_instant(&self) -> Instant {
-        self.sleep.deadline()
-    }
-
-    /// Returns a Future which can be polled to check if the timout has expired.
-    fn timeout_ready<'a, R: RngCore>(&'a mut self, prng: &'a mut R) -> TimeoutReady<'a, R> {
-        TimeoutReady { timout: self, prng }
     }
 }
 
@@ -91,7 +89,7 @@ pin_project! {
     /// A handle to check if the timout has expired.
     ///
     /// Auto-rearms the Timout upon expiration.
-    struct TimeoutReady<'a, R: RngCore> {
+    pub(crate) struct TimeoutReady<'a, R: RngCore> {
         #[pin]
         timout: &'a mut Timeout,
         prng: &'a mut R
@@ -121,6 +119,12 @@ mod tests {
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
     use tokio::time::advance;
+
+    /// Returns the instant when the timout will expire.
+    fn duration_to_expiration(timeout: &Timeout) -> Duration {
+        let expire_instant = timeout.sleep.deadline();
+        expire_instant.duration_since(Instant::now())
+    }
 
     #[tokio::test]
     async fn manually_check_elapsed_time() {
@@ -152,35 +156,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_rearm() {
+    async fn test_auto_rearm_on_expiration() {
         tokio::time::pause();
         let mut prng = Pcg32::from_seed([0; 16]);
         let mut timout = Timeout::new(&mut prng);
-        let original_expire = timout.expire_instant();
 
         let (waker, cnt) = new_count_waker();
         let mut ctx = Context::from_waker(&waker);
-        let max_expiration_time = Duration::from_millis(MAX_REARM_DURATION);
 
         let mut timeout_rdy = pin!(timout.timeout_ready(&mut prng));
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_pending());
         assert_eq!(cnt, 0);
 
         // wait till timout is expired and call poll again
-        advance(max_expiration_time).await;
+        let expiration_duration_plus_1 = duration_to_expiration(&timout) + Duration::from_millis(1);
+        advance(expiration_duration_plus_1).await;
         let mut timeout_rdy = pin!(timout.timeout_ready(&mut prng));
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_ready());
         assert_eq!(cnt, 1);
 
         // timout should have rearmed but not expired
-        assert!(original_expire + max_expiration_time < timout.expire_instant());
+        assert!(duration_to_expiration(&timout) > Duration::from_millis(MIN_REARM_DURATION));
         let mut timeout_rdy = pin!(timout.timeout_ready(&mut prng));
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_pending());
         assert_eq!(cnt, 1);
 
         // wait till timout is expired and call poll again
-        let max_expiration_time = Duration::from_millis(MAX_REARM_DURATION);
-        advance(max_expiration_time).await;
+        let expiration_duration_plus_1 = duration_to_expiration(&timout) + Duration::from_millis(1);
+        advance(expiration_duration_plus_1).await;
         let mut timeout_rdy = pin!(timout.timeout_ready(&mut prng));
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_ready());
         assert_eq!(cnt, 2);
