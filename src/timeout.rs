@@ -103,7 +103,7 @@ pin_project! {
     }
 }
 
-impl<'a, R: RngCore> Future for TimeoutReady<'a, R> {
+impl<R: RngCore> Future for TimeoutReady<'_, R> {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
