@@ -1,4 +1,3 @@
-use rand_pcg::Pcg32;
 use core::{
     future::Future,
     pin::Pin,
@@ -7,6 +6,7 @@ use core::{
 };
 use pin_project_lite::pin_project;
 use rand::{Rng, RngCore};
+use rand_pcg::Pcg32;
 use tokio::time::{sleep_until, Instant, Sleep};
 
 // # Compliance: 5.2
@@ -63,7 +63,10 @@ impl Timeout {
         &'a mut self,
         prng: &'a mut R,
     ) -> TimeoutReady<'a, R> {
-        TimeoutReady { timeout: self, prng }
+        TimeoutReady {
+            timeout: self,
+            prng,
+        }
     }
 
     /// Check if the timeout has expired.
@@ -173,7 +176,8 @@ mod tests {
         assert_eq!(cnt, 0);
 
         // wait till timeout is expired and call poll again
-        let expiration_duration_plus_1 = duration_to_expiration(&timeout) + Duration::from_millis(1);
+        let expiration_duration_plus_1 =
+            duration_to_expiration(&timeout) + Duration::from_millis(1);
         advance(expiration_duration_plus_1).await;
         let mut timeout_rdy = pin!(timeout.timeout_ready(&mut prng));
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_ready());
@@ -186,7 +190,8 @@ mod tests {
         assert_eq!(cnt, 1);
 
         // wait till timeout is expired and call poll again
-        let expiration_duration_plus_1 = duration_to_expiration(&timeout) + Duration::from_millis(1);
+        let expiration_duration_plus_1 =
+            duration_to_expiration(&timeout) + Duration::from_millis(1);
         advance(expiration_duration_plus_1).await;
         let mut timeout_rdy = pin!(timeout.timeout_ready(&mut prng));
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_ready());
