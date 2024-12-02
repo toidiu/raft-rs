@@ -25,6 +25,7 @@ pub trait NetTx {
 /// A handle to the underlying BufferIo
 #[derive(Debug, Clone)]
 pub struct NetworkIo {
+    pub buf: [u8; IO_BUF_LEN],
     pub rx: Arc<Mutex<VecDeque<u8>>>,
     pub tx: Arc<Mutex<VecDeque<u8>>>,
     pub rx_waker: Arc<Mutex<Option<Waker>>>,
@@ -44,11 +45,10 @@ impl NetRx for NetworkIo {
 
 impl NetTx for NetworkIo {
     fn send(&mut self) -> Option<Vec<u8>> {
-        let mut buf = [0; IO_BUF_LEN];
-        let len = self.tx.lock().unwrap().read(&mut buf[0..]).ok()?;
+        let len = self.tx.lock().unwrap().read(&mut self.buf[0..]).ok()?;
         if len > 0 {
-            println!("  ---> network {:?}", &buf[0..len]);
-            Some(buf[0..len].to_vec())
+            println!("  ---> network {:?}", &self.buf[0..len]);
+            Some(self.buf[0..len].to_vec())
         } else {
             None
         }

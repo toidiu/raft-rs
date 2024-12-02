@@ -34,12 +34,14 @@ impl BufferIo {
         let tx_waker = Arc::new(Mutex::new(None));
 
         let network_io = NetworkIo {
+            buf: [0; IO_BUF_LEN],
             rx: rx_queue.clone(),
             tx: tx_queue.clone(),
             rx_waker: rx_waker.clone(),
             tx_waker: tx_waker.clone(),
         };
         let server_io = ServerIo {
+            buf: [0; IO_BUF_LEN],
             rx: rx_queue,
             tx: tx_queue,
             rx_waker: rx_waker.clone(),

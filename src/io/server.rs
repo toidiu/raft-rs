@@ -25,6 +25,7 @@ pub trait ServerTx {
 /// A handle to the underlying BufferIo
 #[derive(Debug)]
 pub struct ServerIo {
+    pub buf: [u8; IO_BUF_LEN],
     pub rx: Arc<Mutex<VecDeque<u8>>>,
     pub tx: Arc<Mutex<VecDeque<u8>>>,
     pub rx_waker: Arc<Mutex<Option<Waker>>>,
@@ -33,10 +34,9 @@ pub struct ServerIo {
 
 impl ServerRx for ServerIo {
     fn recv(&mut self) -> Option<Vec<u8>> {
-        let mut buf = [0; IO_BUF_LEN];
-        let len = self.rx.lock().unwrap().read(&mut buf[0..]).ok()?;
+        let len = self.rx.lock().unwrap().read(&mut self.buf[0..]).ok()?;
         if len > 0 {
-            Some(buf[0..len].to_vec())
+            Some(self.buf[0..len].to_vec())
         } else {
             None
         }
