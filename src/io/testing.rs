@@ -23,10 +23,6 @@ impl ServerTx for Io {
         println!("  -------> {:?}", data);
         self.tx.push_back(data)
     }
-
-    fn poll_tx_ready(&mut self, _cx: &mut std::task::Context) -> std::task::Poll<()> {
-        unimplemented!()
-    }
 }
 
 impl ServerRx for Io {

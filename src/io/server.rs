@@ -1,4 +1,4 @@
-use crate::io::{RxReady, TxReady, IO_BUF_LEN};
+use crate::io::{RxReady, IO_BUF_LEN};
 use core::task::{Context, Poll, Waker};
 use std::{
     collections::VecDeque,
@@ -20,13 +20,6 @@ pub trait ServerRx {
 
 pub trait ServerTx {
     fn send(&mut self, data: Vec<u8>);
-
-    fn poll_tx_ready(&mut self, cx: &mut Context) -> Poll<()>;
-
-    // A handle to a Future to check for new messages
-    fn tx_ready(&mut self) -> TxReady<Self> {
-        TxReady(self)
-    }
 }
 
 /// A handle to the underlying BufferIo
@@ -68,16 +61,6 @@ impl ServerTx for ServerIo {
 
         if let Some(waker) = self.tx_waker.lock().unwrap().deref() {
             waker.wake_by_ref();
-        }
-    }
-
-    fn poll_tx_ready(&mut self, cx: &mut Context) -> Poll<()> {
-        let rdy = !self.tx.lock().unwrap().is_empty();
-        *self.tx_waker.lock().unwrap() = Some(cx.waker().clone());
-        if rdy {
-            Poll::Ready(())
-        } else {
-            Poll::Pending
         }
     }
 }

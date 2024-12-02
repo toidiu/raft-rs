@@ -8,9 +8,10 @@ mod network;
 mod server;
 #[cfg(test)]
 pub(crate) mod testing;
-
-pub use network::{NetRx, NetTx, NetworkIo};
-pub use server::{ServerIo, ServerRx, ServerTx};
+#[cfg(test)]
+pub(crate) use network::NetRx;
+pub(crate) use network::{NetTx, NetworkIo};
+pub(crate) use server::{ServerIo, ServerRx, ServerTx};
 
 // The size of the buffer used to send/recv from the IO queues
 pub const IO_BUF_LEN: usize = 1024;
@@ -78,8 +79,6 @@ macro_rules! impl_io_ready(($io:ident, $fut:ident, $poll_fn:ident) => {
 });
 
 impl_io_ready!(ServerIo, RxReady, poll_rx_ready);
-impl_io_ready!(ServerIo, TxReady, poll_tx_ready);
-impl_io_ready!(NetworkIo, RxReady, poll_rx_ready);
 impl_io_ready!(NetworkIo, TxReady, poll_tx_ready);
 
 #[cfg(test)]

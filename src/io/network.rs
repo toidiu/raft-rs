@@ -1,4 +1,4 @@
-use crate::io::{RxReady, TxReady, IO_BUF_LEN};
+use crate::io::{TxReady, IO_BUF_LEN};
 use core::task::{Context, Poll, Waker};
 use std::{
     collections::VecDeque,
@@ -9,13 +9,6 @@ use std::{
 
 pub trait NetRx {
     fn recv(&mut self, data: Vec<u8>);
-
-    fn poll_rx_ready(&mut self, cx: &mut Context) -> Poll<()>;
-
-    // A handle to a Future to check for new messages
-    fn rx_ready(&mut self) -> RxReady<Self> {
-        RxReady(self)
-    }
 }
 
 pub trait NetTx {
@@ -45,16 +38,6 @@ impl NetRx for NetworkIo {
         self.rx.lock().unwrap().extend(data);
         if let Some(waker) = self.rx_waker.lock().unwrap().deref() {
             waker.wake_by_ref();
-        }
-    }
-
-    fn poll_rx_ready(&mut self, cx: &mut Context) -> Poll<()> {
-        let rdy = !self.rx.lock().unwrap().is_empty();
-        *self.rx_waker.lock().unwrap() = Some(cx.waker().clone());
-        if rdy {
-            Poll::Ready(())
-        } else {
-            Poll::Pending
         }
     }
 }
