@@ -1,6 +1,10 @@
 use core::{cmp::Ordering, ops::AddAssign};
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 
+TODO idx needs to increase monotonically over time
+// idx   1 2 3 4 5 6 7 8
+// term  1 1 1 2 2 3 4 4
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(crate) struct TermIdx {
     term: Term,
