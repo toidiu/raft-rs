@@ -1,9 +1,5 @@
-use core::{cmp::Ordering, ops::AddAssign};
+use core::cmp::Ordering;
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
-
-TODO idx needs to increase monotonically over time
-// idx   1 2 3 4 5 6 7 8
-// term  1 1 1 2 2 3 4 4
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(crate) struct TermIdx {
@@ -12,12 +8,8 @@ pub(crate) struct TermIdx {
 }
 
 impl TermIdx {
-    pub fn new(term: u64, idx: u64) -> Self {
-        debug_assert!(idx > 0);
-        TermIdx {
-            term: Term(term),
-            idx: Idx(idx),
-        }
+    pub fn builder() -> TermIdxBuilder {
+        TermIdxBuilder::default()
     }
 
     pub fn term(&self) -> Term {
@@ -29,10 +21,46 @@ impl TermIdx {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Default)]
+pub(crate) struct TermIdxBuilder {
+    term: Option<u64>,
+    idx: Option<u64>,
+}
+
+impl TermIdxBuilder {
+    fn with_term(mut self, term: u64) -> Self {
+        self.term = Some(term);
+        self
+    }
+
+    fn with_idx(mut self, idx: u64) -> Self {
+        self.idx = Some(idx);
+        self
+    }
+
+    fn build(self) -> Result<TermIdx, ()> {
+        let term = self.term.ok_or(())?;
+        let idx = self.idx.ok_or(())?;
+
+        Ok(TermIdx {
+            term: Term(term),
+            idx: Idx(idx),
+        })
+    }
+
+    fn build_unchecked(self) -> TermIdx {
+        self.build().unwrap()
+    }
+}
+
+#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+//% Compliance:
+//% initialized to 0, increases monotonically
 pub(crate) struct Term(pub u64);
 
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+//% Compliance:
+//% initialized to 0, increases monotonically
 pub(crate) struct Idx(pub u64);
 
 impl PartialOrd for TermIdx {
@@ -43,18 +71,20 @@ impl PartialOrd for TermIdx {
 
 impl Ord for TermIdx {
     fn cmp(&self, other: &Self) -> Ordering {
-        // compare term
-        let term = self.term.cmp(&other.term);
+        let term_ord = self.term.cmp(&other.term);
+        let idx_ord = self.idx.cmp(&other.idx);
 
-        // compare idx
-        let idx = self.idx.cmp(&other.idx);
-
-        match (term, idx) {
+        //% Compliance:
+        //% up-to-date: a log is considered more up-to-date than another log if:
+        //%   compare the index and term of the last entry of A's and B's log
+        //%   if the entries have different term: the higher term is more up-to-date
+        //%   if the term is the same: the longer log (higher index) is more up-to-date
+        match (term_ord, idx_ord) {
             (Ordering::Less, _) => Ordering::Less,
+            (Ordering::Greater, _) => Ordering::Greater,
             (Ordering::Equal, Ordering::Less) => Ordering::Less,
             (Ordering::Equal, Ordering::Equal) => Ordering::Equal,
             (Ordering::Equal, Ordering::Greater) => Ordering::Greater,
-            (Ordering::Greater, _) => Ordering::Greater,
         }
     }
 }
@@ -71,18 +101,6 @@ impl EncoderValue for TermIdx {
     fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
         encoder.encode(&self.term);
         encoder.encode(&self.idx);
-    }
-}
-
-impl AddAssign<u64> for Term {
-    fn add_assign(&mut self, rhs: u64) {
-        self.0 += rhs;
-    }
-}
-
-impl From<u64> for Term {
-    fn from(value: u64) -> Self {
-        Term(value)
     }
 }
 
@@ -119,20 +137,53 @@ mod tests {
     use super::*;
 
     #[test]
-    fn new_term_idx() {
-        let ti1 = TermIdx::new(2, 4);
+    fn initial_value() {
+        let idx = Idx::default();
+        assert_eq!(idx.0, 0);
 
-        let ti_equal = TermIdx::new(2, 4);
-        assert!(ti1 == ti_equal);
+        let term = Term::default();
+        assert_eq!(term.0, 0);
+    }
 
-        let mut ti_less = TermIdx::new(0, 4);
+    #[test]
+    fn cmp_term_idx() {
+        let term = 2;
+        let idx = 4;
+
+        let ti1 = TermIdx::builder()
+            .with_term(term)
+            .with_idx(idx)
+            .build_unchecked();
+
+        // equal
+        let ti_equal = TermIdx::builder()
+            .with_term(term)
+            .with_idx(idx)
+            .build_unchecked();
+        assert_eq!(ti1, ti_equal);
+
+        // term difference
+        let ti_less = TermIdx::builder()
+            .with_term(term - 1)
+            .with_idx(idx)
+            .build_unchecked();
         assert!(ti_less < ti1);
-        ti_less = TermIdx::new(1, 3);
-        assert!(ti_less < ti1);
-
-        let mut ti_greater = TermIdx::new(3, 4);
+        let ti_greater = TermIdx::builder()
+            .with_term(term + 1)
+            .with_idx(idx)
+            .build_unchecked();
         assert!(ti_greater > ti1);
-        ti_greater = TermIdx::new(2, 5);
+
+        // idx difference
+        let ti_less = TermIdx::builder()
+            .with_term(term)
+            .with_idx(idx - 1)
+            .build_unchecked();
+        assert!(ti_less < ti1);
+        let ti_greater = TermIdx::builder()
+            .with_term(term)
+            .with_idx(idx + 1)
+            .build_unchecked();
         assert!(ti_greater > ti1);
     }
 }
