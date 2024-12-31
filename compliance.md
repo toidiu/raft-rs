@@ -147,10 +147,10 @@
 	- after the entry has been safely replicated
 		- [ ] the leader applies the entry to its state machine
 	- [ ] leader indefinitely reties AppendEntries in the face of packet loss/network issues
-- [ ] each log entry stores
-	- [ ] a state machine command
-	- [ ] term number
-	- [ ] log index: integer
+- [x] each log entry stores
+	- [x] a state machine command
+	- [x] term number
+	- [x] log index: integer
 - [ ] leader decides when to `commit` an entry
 	- `commit`: when its safe to apply an entry to the state machine
 	- `apply` entry to state machine: actually write an entry to the state machine
