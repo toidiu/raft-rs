@@ -1,4 +1,8 @@
 // use crate::term_idx::{Idx, Term, TermIdx};
+//
+mod idx;
+mod term;
+mod term_idx;
 
 // // The data type supported by this Raft implementation.
 // // TODO: u8 is used for simplification. Eventually support additional types.
