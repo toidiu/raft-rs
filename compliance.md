@@ -1,147 +1,212 @@
 ## Citations
 
-### 5.2
-- [ ] When servers start up, they begin as followers
-- [ ] A server remains in fillower state as long as it receives valid RPCs from
-  a leader or candidate.
-- [ ] Leaders send periodic heartbeats (AppendEntries RPCs that carry no log
-  entries) to all followers in order to maintain their authority.
-- [ ] If a follower receives no communication over a period of time called the
-  election timeout, then it assumes there is no viable leader and begins an
-  election to choose a new leader.
+# Requirements
 
-- [ ] To begin an election, a follower increments its current term and
-  transitions to candidate state.
-- [ ] It then votes for itself and issues RequestVote RPCs in parallel to each
-  of the other servers in the cluster.
-- [ ] A candidate continues in this state until one of three things happens: (a)
-  it wins the election, (b) another server establishes itself as leader, or (c)
-  a period of time goes by with no winner.
+## Fig 2: condensed summary of Raft
 
-- [ ] A candidate wins an election if it receives votes from a majority of the
-  servers in the full cluster for the same term.
-- [ ] Each server will vote for at most one candidate in a given term, on a
-  first-come-first-served basis (note: Section 5.4 adds an additional
-  restriction on votes).
-- [ ] The majority rule ensures that at most one candidate can win the election
-  for a particular term (the Election Safety Property in Figure 3).
-- [ ] Once a candidate wins an election, it becomes leader.
-- [ ] It then sends heartbeat messages to all of the other servers to establish
-  its authority and prevent new elections.
+### State
+#### Persistent state on all servers
+- [ ] Updated on stable storage before responding to RPCs
+- [ ] `currentTerm` latest term server has seen (initialized to 0 on first boot, increases monotonically)
+- [ ] `votedFor` `candidateId` that received vote in current term (or null if none)
+- [ ] `log[]` log entries; each entry contains command for state machine, and term when entry was received by leader (first index is 1)
+#### Volatile state on all servers
+- [ ] `commitIndex` index of highest log entry known to be committed (initialized to 0, increases monotonically)
+- [ ] `lastApplied` index of highest log entry applied to state machine (initialized to 0, increases monotonically)
+#### Volatile state on leaders
+- [ ] "Reinitialized after election"
+- [ ] `nextIndex[]` for each server, index of the next log entry to send to that server (initialized to leader last log index + 1)
+- [ ] `matchIndex[]` for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
+### Rules for Servers
+#### All Servers
+- [ ] If commitIndex > lastApplied: increment lastApplied
+- [ ] If commitIndex > lastApplied: apply log[lastApplied] to state machine (§5.3)
+- [ ] If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
+#### Followers (§5.2)
+- [ ] Respond to RPCs from candidates and leaders
+- [ ] If election timeout elapses without receiving AppendEntries RPC from current leader or granting vote to candidate: convert to candidate
+#### Candidates (§5.2)
+- [ ] On conversion to candidate, start election:
+  - [ ] Increment currentTerm
+  - [ ] Vote for self
+  - [ ] Reset election timer
+  - [ ] Send RequestVote RPCs to all other servers
+- [ ] If votes received from majority of servers: become leader
+- [ ] If AppendEntries RPC received from new leader: convert to follower
+- [ ] If election timeout elapses: start new election
+#### Leaders
+- [ ] Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat during idle periods to prevent election timeouts (§5.2)
+- [ ] If command received from client: append entry to local log, respond after entry applied to state machine (§5.3)
+- [ ] If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log entries starting at nextIndex
+  - [ ] If successful: update nextIndex and matchIndex for follower (§5.3)
+  - [ ] If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
+- [ ] If there exists an N such that N > commitIndex, a majority of matchIndex[i] ≥ N, and log[N].term == currentTerm: set commitIndex = N (§5.3, §5.4).
+### AppendEntries RPC
+#### Arguments
+- [ ] term leader’s term
+- [ ] leaderId so follower can redirect clients
+- [ ] prevLogIndex index of log entry immediately preceding new ones
+- [ ] prevLogTerm term of prevLogIndex entry
+- [ ] entries[] log entries to store (empty for heartbeat; may send more than one for efficiency)
+- [ ] leaderCommit leader’s commitIndex
+#### Results
+- [ ] term currentTerm, for leader to update itself
+- [ ] success true if follower contained entry matching prevLogIndex and
+  prevLogTerm
+#### Receiver implementation
+- [ ] Reply false if term < currentTerm (§5.1)
+- [ ] Reply false if log doesn’t contain an entry at prevLogIndex whose term  matches prevLogTerm (§5.3)
+- [ ] If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it (§5.3)
+- [ ] Append any new entries not already in the log
+- [ ] If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
+### RequestVote RPC
+#### Arguments
+- [ ] term candidate’s term
+- [ ] candidateId candidate requesting vote
+- [ ] lastLogIndex index of candidate’s last log entry (§5.4)
+- [ ] lastLogTerm term of candidate’s last log entry (§5.4)
+#### Results
+- [ ] term currentTerm, for candidate to update itself
+- [ ] voteGranted true means candidate received vote
+#### Receiver implementation
+- [ ] Reply false if term < currentTerm (§5.1)
+- [ ] If candidate’s log is at least as up-to-date as receiver’s log
+    - [ ] and votedFor is null, grant vote (§5.2, §5.4)
+    - [ ] and votedFor is candidateId, grant vote (§5.2, §5.4)
 
-- [ ] While waiting for votes, a candidate may receive an AppendEntries RPC from
-  another server claiming to be leader.
-- [ ] If the leader’s term (included in its RPC) is at least as large as the
-  candidate’s current term, then the candidate recognizes the leader as
-  legitimate and returns to follower state.
-- [ ] If the term in the RPC is smaller than the candidate’s current term, then
-  the candidate rejects the RPC and continues in candidate state.
+## 5: The Raft consensus algo
+- [ ] first elect a leader
+- [ ] leader then responsible for managing the replicated log
+- [ ] leader accepts log entries from clients
+	- [ ] replicates them on other servers
+	- [ ] tells other servers when its safe to apply log entries to state machine
+**Raft sub-problem:**
+- **Leader election:** choose a new leader when the existing one fails
+- **Log replication:** leader accepts log entries from client and replicate them across cluster, forcing other logs to agree with its own
+- **Safety:** (State Machine Safety Property). If a server has applied a log entry to state machine, then no other server will apply a different entry to the same log index
+### 5.1 Raft basics
+- [ ] server can be in one of 3 modes: leader, follower candidate
+	- [ ] normal operation: 1 leader and other are followers
+	- [ ] followers are passive and only respond to requests
+	- [ ] leader handles all client requests
+	- [ ] candidate state is used to elect a new leader
+- [ ] the unit of time is `terms`: logical clock
+	- [ ] which are consecutive integers
+	- [ ] begins with a new election
+	- [ ] there is at most one leader per term
+	- [ ] if an election ends with a split vote then the term ends with no leader
+- [ ] each server stores the `current term`
+	- [ ] increases monotonically
+	- [ ] if a server sees a larger term, it updates its `current term`
+	- [ ] if a candidate or leader sees a larger term, it reverts to follower state
+	- [ ] a request with a stale term is rejected
+- [ ] RPCs
+	- [ ] issued in parallel for best performance
+	- [ ] retried if no response is received
+	- [ ] RequestVote
+		- [ ] initiated by a candidate during election
+	- [ ] AppendEntries
+		- [ ] initiated by a leader
+		- [ ] used to replicate log entries
+		- [ ] also a heartbeat mechanism
+	- [ ] InstallSnapshot (optional)
 
-- [ ] The third possible outcome is that a candidate neither wins nor loses the
-  election: if many followers become candidates at the same time, votes could be
-  split so that no candidate obtains a majority.
-- [ ] When this happens, each candidate will time out and start a new election
-  by incrementing its term and initiating another round of RequestVote RPCs.
+### 5.2 Leader Election
+- [ ] heartbeat are used to trigger election
+- [ ] servers begin as followers
+	- [ ]  a server remains a follower as long as it receives a valid RPC from a leader or candidate
+- [ ] leaders send periodic heartbeat
+- [ ] heartbeat is a AppendEntries RPC with no log entries
+- [ ] a follower that receives no communication (election timeout) assumes there is no viable leader
+	- [ ] increments its current term
+	- [ ] transitions to `candidate`
+	- [ ] votes for itself
+	- [ ] issues a RequestVote in parallel to other servers
+- [ ] The `candidate` continues in the above state until one of:
+	- [ ] wins election
+		- [ ] receives majority of votes in cluster (ensures a single winner)
+		- [ ] a server can only vote once for a given term (first-come basis)
+		- [ ] a candidate becomes `leader` if it wins the election
+		- [ ] sends a heartbeat to establish itself as a leader and prevent a new election
+	- [ ] another server establishes itself as a leader
+		- [ ] a candidate receives AppendEntries from another server claiming to be a leader
+		- [ ] if that leader's current term is >= the candidate's
+			- [ ] recognize the server as the new leader
+			- [ ] then the candidate reverts to a follower
+		- [ ] if the leader's current term is < the candidate's
+			- [ ] reject the RPC and continue in the candidate state
+	- [ ] a timeout occurs and there is no winner (can happen if too many servers become candidates at the same time)
+		- [ ] increment its term
+		- [ ] start a new election by initiating another round of RequestVote
+- [ ] Election timeout is chosen randomly between 150-300ms
+### 5.3 Log replication
+- [ ] a leader services client requests
+	- each request contains a command to be executed by the state machine
+	- [ ] the leader appends the command to its log as a new entry
+	- [ ] issues AppendEntries in parallel to replicate the entry
+	- after the entry has been safely replicated
+		- [ ] the leader applies the entry to its state machine
+	- [ ] leader indefinitely reties AppendEntries in the face of packet loss/network issues
+- [ ] each log entry stores
+	- [ ] a state machine command
+	- [ ] term number
+	- [ ] log index: integer
+- [ ] leader decides when to `commit` an entry
+	- `commit`: when its safe to apply an entry to the state machine
+	- `apply` entry to state machine: actually write an entry to the state machine
+	- [ ] An entry is `committed` when the leader that created the entry, replicates it on majority of servers
+		- this also commits all preceding entries in the leader's log
+	- [ ] leader tracks the highest index it knows to be committed
+		- [ ] includes that number in future AppendEntries
+		- [ ] once a follower learns an entry is committed (`leaderCommit` in AppendEntries), it applies the entry to its state machine
+- **Log Matching Property**
+	- if two entries in different logs have the same index/term, they store the same command
+	- if two entries in different logs have the same index/term, all preceding entries are identical
+- AppendEntries helps perform a consistency check
+	- [ ] the leader includes the index and term of the entry immediately preceding the new entries
+		- [ ] if the follower doesn't find an entry with the same index and term, it refuses the new entries
+- leader handles inconsistent logs by forcing follower to duplicate its own logs. conflicting follower logs are overwritten with the leader's logs
+	- to make the leader/follower logs consistent:
+		- [ ] the leader finds the last log entry that are the same
+		- [ ] follower deletes any entries after that point
+		- [ ] leader sends the follower all its entries after the common point
+	- [ ] leader maintains a `nextIndex` for each follower: index of the next log entry the leader will send to that follower
+	- [ ] when a server first becomes a leader
+		- [ ] initializes `nextIndex` to +1 of the last entry in its log
+	- [ ] if a follower's log is inconsistent with the leader's, AppendEntries RPC will fail
+		- [ ] after a failed AppendEntries, the leader will decrement `nextIndex` and retry AppendEntries
+			- [ ] Eventually `nextIndex` will match the follower's and leader's logs
+			- [ ] after logs match
+				- [ ] AppendEntries will succeed
+				- [ ] follower removes conflicting entries from its logs
+				- [ ] follower appends entries from the leader
+			- [ ] (optional) its possible to optimize finding the matching `nextIndex` between leader and follower
+- [ ] A leader never deletes of overwrites its own logs
+### 5.4 Safety
+- restrict which servers can be elected leaders
+	- [ ] leader for any term must contain all entries committed in previous terms
+#### 5.4.1 Election restriction
+- All committed entries from previous terms are present on each new leader when its elected.
+	- [ ] log entries only flow from leader to follower.
+	- [ ] leader never overwrites existing entries in its log.
+- [ ] a candidate cant win an election unless its log contains all committed entries.
+	- [ ] a candidate must get a vote from a majority of servers
+	- `up-to-date`: a log is considered more up-to-date than another log if:
+		- [ ] compare the index and term of the last entry of A's and B's log
+		- [ ] if the entries have different term: the higher term is more up-to-date
+		- [ ] if the term is the same: the longer log (higher index) is more up-to-date
+	- The RequestVote RPC helps ensure the leader's log is `up-to-date`
+		- [ ] RequestVote includes info about candidate's log
+		- [ ] voter denies vote if its own log is more `up-to-date`
+#### 5.4.2 Committing entries from previous terms
+- [ ] a leader knows an entry from its **current term** (not true for previous terms) is committed, once its stored (replicated) on a majority of servers
+	- [ ] an entry is replicated if the server responds with success to AppendEntries
+- [ ] a leader can NOT conclude an entry from a previous term is committed once it is stored on a majority of servers (a previous entry could be overwritten)
+	- log entries retain their original term number even when a leader entries previous terms. This makes logs easier to reason about
+	- [ ] never commit entries from previous terms by counting replicas
+	- [ ] only entries from the leader's current term are committed by counting replicas
+	- [ ] once an entry from the current term is committed, previous entries will indirectly be committed
+#### 5.4.3 Safety argument
+- [ ] entries are applied/committed in log index order
+	- this (combined with State Machine Safety Property) ensures that all servers apply the same set of log entries to state machine, in the same order
 
-- [ ] Raft uses randomized election timeouts to ensure that split votes are rare
-  and that they are resolved quickly.
-- [x] To prevent split votes in the first place, election timeouts are chosen
-  randomly from a fixed interval (e.g., 150–300ms).
-- [ ] Each candidate restarts its randomized election timeout at the start of an
-  election, and it waits for that timeout to elapse before starting the next
-  election; this reduces the likelihood of another split vote in the new
-  election.
-
-### 5.3
-- [ ] Once a leader has been elected, it begins servicing client requests.
-- [ ] Each client request contains a command to be executed by the replicated
-  state machines.
-- [ ] The leader appends the command to its log as a new entry, then issues
-  AppendEntries RPCs in parallel to each of the other servers to replicate the
-  entry.
-- [ ] When the entry has been safely replicated (as described below), the leader
-  applies the entry to its state machine and returns the result of that
-  execution to the client.
-- [ ] If followers crash or run slowly, or if network packets are lost, the
-  leader retries AppendEntries RPCs indefinitely (even after it has responded to
-  the client) until all followers eventually store all log entries.
-
-- [ ] Each log entry stores a state machine command along with the term number
-  when the entry was received by the leader.
-- [ ] Each log entry also has an integer index identifying its position in the
-  log.
-
-- [ ] The leader decides when it is safe to apply a log entry to the state
-  machines; such an entry is called committed.
-- [ ] Raft guarantees that committed entries are durable and will eventually be
-  executed by all of the available state machines.
-- [ ] A log entry is committed once the leader that created the entry has
-  replicated it on a majority of the servers.
-- [ ] This also commits all preceding entries in the leader’s log, including
-  entries created by previous leaders.
-
-- [ ] The leader keeps track of the highest index it knows to be committed, and
-  it includes that index in future AppendEntries RPCs (including heartbeats) so
-  that the other servers eventually find out.
-- [ ] Once a follower learns that a log entry is committed, it applies the entry
-  to its local state machine (in log order).
-
-
-- [ ] Log Matching Property:
-  - [ ] If two entries in different logs have the same index and term, then they
-    store the same command.
-  - [ ] If two entries in different logs have the same index and term, then the
-    logs are identical in all preceding entries.
-
-- [ ] conflicting entries in follower logs will be overwritten with entries from
-  the leader’s log.
-- [ ] To bring a follower’s log into consistency with its own, the leader must
-  find the latest log entry where the two logs agree, delete any entries in the
-  follower’s log after that point, and send the follower all of the leader’s
-  entries after that point.
-- [ ] All of these actions happen in response to the consistency check performed
-  by AppendEntries RPCs.
-
-- [ ] The leader maintains a nextIndex for each follower, which is the index of
-  the next log entry the leader will send to that follower.
-- [ ] When a leader first comes to power, it initializes all nextIndex values to
-  the index just after the last one in its log.
-- [ ] If a follower’s log is inconsistent with the leader’s, the AppendEntries
-  consistency check will fail in the next AppendEntries RPC.
-- [ ] After a rejection, the leader decrements nextIndex and retries the
-  AppendEntries RPC.
-- [ ] Eventually nextIndex will reach a point where the leader and follower logs
-  match.
-- [ ] When this happens, AppendEntries will succeed, which removes any
-  conflicting entries in the follower’s log and appends entries from the
-  leader’s log (if any).
-- [ ] Once AppendEntries succeeds, the follower’s log is consistent with the
-  leader’s, and it will remain that way for the rest of the term.
-- [ ] A leader never overwrites or deletes entries in its own log.
-
-### 5.4
-- [ ] The restriction ensures that the leader for any given term contains all of
-  the entries committed in previous terms.
-
-### 5.4.1
-- [ ]  This means that log entries only flow in one direction, from leaders to
-  followers, and leaders never overwrite existing entries in their logs.
-- [ ] The RequestVote RPC implements this restriction: the RPC includes
-  information about the candidate’s log, and the voter denies its vote if its
-  own log is more up-to-date than that of the candidate.
-- [ ] Raft determines which of two logs is more up-to-date by comparing the
-  index and term of the last entries in the logs.
-- [ ] If the logs have last entries with different terms, then the log with the
-  later term is more up-to-date.
-- [ ] If the logs end with the same term, then whichever log is longer is more
-  up-to-date.
-
-### 5.4.2
-- [ ]  Raft never commits log entries from previous terms by counting replicas.
-  Only log entries from the leader’s current term are committed by counting
-  replicas; once an entry from the current term has been committed in this way,
-  then all prior entries are committed indirectly because of the Log Matching
-  Property.
-
-### Figure 6 An entry is considered committed if it is safe for that entry to be
-applied to state machines.
