@@ -5,7 +5,7 @@ use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 //% monotonically)
 const INITIAL_IDX: Idx = Idx(0);
 
-#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub(crate) struct Idx(u64);
 
 impl From<u64> for Idx {
@@ -33,17 +33,30 @@ impl EncoderValue for Idx {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use s2n_codec::{DecoderBuffer, EncoderBuffer};
 
     #[test]
     fn initial_value() {
-        let idx = Idx::default();
-        assert_eq!(idx.0, 0);
+        assert_eq!(INITIAL_IDX.0, 0);
+    }
+
+    #[test]
+    fn encode_decode() {
+        let idx = Idx::from(9);
+
+        let mut slice = vec![0; 10];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        idx.encode(&mut buf);
+
+        let d_buf = DecoderBuffer::new(&slice);
+        let (d_idx, _) = Idx::decode(d_buf).unwrap();
+
+        assert_eq!(idx, d_idx);
     }
 
     #[test]
     fn cmp_idx() {
         let idx = 4;
-
         let i = Idx(idx);
         let i_eq = Idx(idx);
         let i_lt = Idx(idx - 1);

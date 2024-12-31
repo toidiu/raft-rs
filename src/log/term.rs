@@ -5,7 +5,7 @@ use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 //% monotonically)
 const INITIAL_TERM: Term = Term(0);
 
-#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub(crate) struct Term(u64);
 
 impl From<u64> for Term {
@@ -33,17 +33,30 @@ impl EncoderValue for Term {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use s2n_codec::{DecoderBuffer, EncoderBuffer};
 
     #[test]
     fn initial_value() {
-        let term = Term::default();
-        assert_eq!(term.0, 0);
+        assert_eq!(INITIAL_TERM.0, 0);
+    }
+
+    #[test]
+    fn encode_decode() {
+        let term = Term::from(9);
+
+        let mut slice = vec![0; 10];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        term.encode(&mut buf);
+
+        let d_buf = DecoderBuffer::new(&slice);
+        let (d_term, _) = Term::decode(d_buf).unwrap();
+
+        assert_eq!(term, d_term);
     }
 
     #[test]
     fn cmp_term() {
         let term = 4;
-
         let i = Term(term);
         let i_eq = Term(term);
         let i_lt = Term(term - 1);

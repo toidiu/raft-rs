@@ -2,7 +2,7 @@
 
 # Requirements
 
-## Fig 2: condensensed summary of Raft
+## Fig 2: condensed summary of Raft
 
 ### State
 #### Persistent state on all servers
@@ -146,7 +146,7 @@
 	- [ ] issues AppendEntries in parallel to replicate the entry
 	- after the entry has been safely replicated
 		- [ ] the leader applies the entry to its state machine
-	- [ ] leader indefinitely reties AppendEnties in the face of packet loss/network issues
+	- [ ] leader indefinitely reties AppendEntries in the face of packet loss/network issues
 - [ ] each log entry stores
 	- [ ] a state machine command
 	- [ ] term number

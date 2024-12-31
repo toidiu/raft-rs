@@ -8,16 +8,6 @@ pub(crate) struct TermIdx {
     idx: Idx,
 }
 
-impl TermIdx {
-    pub fn term(&self) -> Term {
-        self.term
-    }
-
-    pub fn idx(&self) -> Idx {
-        self.idx
-    }
-}
-
 impl PartialOrd for TermIdx {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
@@ -29,6 +19,11 @@ impl Ord for TermIdx {
         let term_ord = self.term.cmp(&other.term);
         let idx_ord = self.idx.cmp(&other.idx);
 
+        //% Compliance:
+        //% `up-to-date`: a log is considered more up-to-date than another log if:
+        //% 	- compare the index and term of the last entry of A's and B's log
+        //% 	- if the entries have different term: the higher term is more up-to-date
+        //% 	- if the term is the same: the longer log (higher index) is more up-to-date
         match (term_ord, idx_ord) {
             (Ordering::Less, _) => Ordering::Less,
             (Ordering::Greater, _) => Ordering::Greater,
@@ -55,6 +50,23 @@ impl EncoderValue for TermIdx {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use s2n_codec::{DecoderBuffer, EncoderBuffer};
+
+    #[test]
+    fn encode_decode() {
+        let term = Term::from(9);
+        let idx = Idx::from(9);
+        let term_idx = TermIdx { term, idx };
+
+        let mut slice = vec![0; 20];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        term_idx.encode(&mut buf);
+
+        let d_buf = DecoderBuffer::new(&slice);
+        let (d_term_idx, _) = TermIdx::decode(d_buf).unwrap();
+
+        assert_eq!(term_idx, d_term_idx);
+    }
 
     #[test]
     fn cmp_term_idx() {
