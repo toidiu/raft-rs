@@ -3,7 +3,7 @@ use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 //% Compliance:
 //% `currentTerm` latest term server has seen (initialized to 0 on first boot, increases
 //% monotonically)
-const INITIAL_TERM: Term = Term(0);
+pub const INITIAL_TERM: Term = Term(0);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub(crate) struct Term(u64);

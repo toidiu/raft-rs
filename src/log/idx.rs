@@ -3,7 +3,7 @@ use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 //% Compliance:
 //% `commitIndex` index of highest log entry known to be committed (initialized to 0, increases
 //% monotonically)
-const INITIAL_IDX: Idx = Idx(0);
+pub const INITIAL_IDX: Idx = Idx(0);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub(crate) struct Idx(u64);

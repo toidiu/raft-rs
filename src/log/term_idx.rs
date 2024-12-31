@@ -1,11 +1,47 @@
-use crate::log::{idx::Idx, term::Term};
+use crate::log::{
+    idx::{Idx, INITIAL_IDX},
+    term::Term,
+};
 use core::cmp::Ordering;
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub(crate) struct TermIdx {
+pub struct TermIdx {
     term: Term,
     idx: Idx,
+}
+
+impl TermIdx {
+    pub fn builder() -> TermIdxWithTermBuilder {
+        TermIdxWithTermBuilder
+    }
+}
+
+#[derive(Debug)]
+pub struct TermIdxWithTermBuilder;
+
+impl TermIdxWithTermBuilder {
+    pub fn with_term(self, term: Term) -> TermIdxWithIdxBuilder {
+        TermIdxWithIdxBuilder {
+            term,
+            idx: INITIAL_IDX,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct TermIdxWithIdxBuilder {
+    term: Term,
+    idx: Idx,
+}
+
+impl TermIdxWithIdxBuilder {
+    pub fn with_idx(self, idx: Idx) -> TermIdx {
+        TermIdx {
+            term: self.term,
+            idx,
+        }
+    }
 }
 
 impl PartialOrd for TermIdx {
