@@ -1,7 +1,8 @@
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 
 //% Compliance:
-//% initialized to 0, increases monotonically
+//% `commitIndex` index of highest log entry known to be committed (initialized to 0, increases
+//% monotonically)
 const INITIAL_IDX: Idx = Idx(0);
 
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]

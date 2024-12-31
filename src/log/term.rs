@@ -1,7 +1,8 @@
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 
 //% Compliance:
-//% initialized to 0, increases monotonically
+//% `currentTerm` latest term server has seen (initialized to 0 on first boot, increases
+//% monotonically)
 const INITIAL_TERM: Term = Term(0);
 
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
