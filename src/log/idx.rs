@@ -26,7 +26,7 @@ impl<'a> DecoderValue<'a> for Idx {
 
 impl EncoderValue for Idx {
     fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
-        encoder.write_slice(&self.0.to_be_bytes());
+        encoder.encode(&self.0);
     }
 }
 

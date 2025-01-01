@@ -4,7 +4,7 @@ use crate::{
 };
 use s2n_codec::{DecoderValue, EncoderValue};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RequestVote {
     //% Compliance:
     //% term: candidate’s term
@@ -24,7 +24,7 @@ impl RequestVote {
     pub const TAG: u8 = 1;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RespRequestVote {
     //% Compliance:
     //% term: currentTerm, for candidate to update itself
