@@ -20,10 +20,11 @@ pub struct AppendEntries {
     //% prevLogTerm: term of prevLogIndex entry
     pub prev_log_term_idx: TermIdx,
     //% Compliance:
-    // TODO entries[]: log entries to store (empty for heartbeat; may send more than one for efficiency)
-    //
+    // leaderCommit: leader’s commitIndex
+    pub leader_commit_idx: Idx,
     //% Compliance:
-    // TODO leaderCommit: leader’s commitIndex
+    // entries[]: log entries to store (empty for heartbeat; may send more than one for efficiency)
+    // pub entries: Vec<Entry>,
 }
 
 impl AppendEntries {
@@ -54,11 +55,15 @@ impl<'a> DecoderValue<'a> for AppendEntries {
         let (term, buffer) = buffer.decode()?;
         let (leader_id, buffer) = buffer.decode()?;
         let (prev_log_term_idx, buffer) = buffer.decode()?;
+        let (leader_commit_idx, buffer) = buffer.decode()?;
+        // let (entries, buffer) = buffer.decode_with_len_prefix::<u8, Entry>()?;
 
         let rpc = AppendEntries {
             term,
             leader_id,
             prev_log_term_idx,
+            leader_commit_idx,
+            // entries,
         };
         Ok((rpc, buffer))
     }
@@ -69,6 +74,7 @@ impl EncoderValue for AppendEntries {
         encoder.encode(&self.term);
         encoder.encode(&self.leader_id);
         encoder.encode(&self.prev_log_term_idx);
+        encoder.encode(&self.leader_commit_idx);
     }
 }
 
@@ -104,6 +110,7 @@ mod tests {
             prev_log_term_idx: TermIdx::builder()
                 .with_term(Term::from(3))
                 .with_idx(Idx::from(4)),
+            leader_commit_idx: Idx::from(4),
         };
 
         let mut slice = vec![0; 50];

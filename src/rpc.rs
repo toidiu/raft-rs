@@ -1,5 +1,5 @@
 use crate::{
-    log::{Term, TermIdx},
+    log::{Idx, Term, TermIdx},
     rpc::{
         append_entries::{AppendEntries, RespAppendEntries},
         request_vote::{RequestVote, RespRequestVote},
@@ -32,11 +32,17 @@ impl Rpc {
         Rpc::RespRequestVote(RespRequestVote { term, vote_granted })
     }
 
-    pub fn new_append_entry(term: Term, leader_id: ServerId, prev_log_term_idx: TermIdx) -> Rpc {
+    pub fn new_append_entry(
+        term: Term,
+        leader_id: ServerId,
+        prev_log_term_idx: TermIdx,
+        leader_commit_idx: Idx,
+    ) -> Rpc {
         Rpc::AppendEntries(AppendEntries {
             term,
             leader_id,
             prev_log_term_idx,
+            leader_commit_idx,
         })
     }
 
@@ -140,6 +146,7 @@ mod tests {
             TermIdx::builder()
                 .with_term(Term::from(3))
                 .with_idx(Idx::from(4)),
+            Idx::from(4),
         );
 
         let mut slice = vec![0; 50];
