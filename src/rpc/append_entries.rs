@@ -1,8 +1,11 @@
-use crate::log::{Term, TermIdx};
+use crate::{
+    log::{Entry, Idx, Term, TermIdx},
+    server::ServerId,
+};
 use s2n_codec::{DecoderValue, EncoderValue};
 
 // Add entries
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppendEntries {
     //% Compliance:
     // term: leader’s term
@@ -10,13 +13,12 @@ pub struct AppendEntries {
 
     //% Compliance:
     //% leaderId: so follower can redirect clients
-    // TODO
+    pub leader_id: ServerId,
 
     //% Compliance:
     //% prevLogIndex: index of log entry immediately preceding new ones
     //% prevLogTerm: term of prevLogIndex entry
     pub prev_log_term_idx: TermIdx,
-    //
     //% Compliance:
     // TODO entries[]: log entries to store (empty for heartbeat; may send more than one for efficiency)
     //
@@ -32,7 +34,7 @@ impl AppendEntries {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RespAppendEntries {
     //% Compliance:
     //% term: currentTerm, for leader to update itself
@@ -50,10 +52,12 @@ impl RespAppendEntries {
 impl<'a> DecoderValue<'a> for AppendEntries {
     fn decode(buffer: s2n_codec::DecoderBuffer<'a>) -> s2n_codec::DecoderBufferResult<'a, Self> {
         let (term, buffer) = buffer.decode()?;
+        let (leader_id, buffer) = buffer.decode()?;
         let (prev_log_term_idx, buffer) = buffer.decode()?;
 
         let rpc = AppendEntries {
             term,
+            leader_id,
             prev_log_term_idx,
         };
         Ok((rpc, buffer))
@@ -63,6 +67,7 @@ impl<'a> DecoderValue<'a> for AppendEntries {
 impl EncoderValue for AppendEntries {
     fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
         encoder.encode(&self.term);
+        encoder.encode(&self.leader_id);
         encoder.encode(&self.prev_log_term_idx);
     }
 }
@@ -95,12 +100,13 @@ mod tests {
     fn encode_decode_rpc() {
         let rpc = AppendEntries {
             term: Term::from(2),
+            leader_id: ServerId::new([10; 16]),
             prev_log_term_idx: TermIdx::builder()
                 .with_term(Term::from(3))
                 .with_idx(Idx::from(4)),
         };
 
-        let mut slice = vec![0; 30];
+        let mut slice = vec![0; 50];
         let mut buf = EncoderBuffer::new(&mut slice);
         rpc.encode(&mut buf);
 

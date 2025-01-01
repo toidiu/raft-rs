@@ -1,10 +1,9 @@
-use crate::log::entry::Entry;
-
 mod entry;
 mod idx;
 mod term;
 mod term_idx;
 
+pub use entry::Entry;
 pub use idx::Idx;
 pub use term::Term;
 pub use term_idx::TermIdx;

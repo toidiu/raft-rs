@@ -11,7 +11,7 @@ use s2n_codec::{DecoderBuffer, DecoderBufferResult, DecoderError, DecoderValue, 
 mod append_entries;
 mod request_vote;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Rpc {
     RequestVote(RequestVote),
     RespRequestVote(RespRequestVote),
@@ -32,9 +32,10 @@ impl Rpc {
         Rpc::RespRequestVote(RespRequestVote { term, vote_granted })
     }
 
-    pub fn new_append_entry(term: Term, prev_log_term_idx: TermIdx) -> Rpc {
+    pub fn new_append_entry(term: Term, leader_id: ServerId, prev_log_term_idx: TermIdx) -> Rpc {
         Rpc::AppendEntries(AppendEntries {
             term,
+            leader_id,
             prev_log_term_idx,
         })
     }
@@ -135,6 +136,7 @@ mod tests {
     fn encode_decode_request_vote_res() {
         let rpc = Rpc::new_append_entry(
             Term::from(1),
+            ServerId::new([4; 16]),
             TermIdx::builder()
                 .with_term(Term::from(3))
                 .with_idx(Idx::from(4)),
