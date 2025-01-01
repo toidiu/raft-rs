@@ -1,7 +1,5 @@
 ## Citations
 
-# Requirements
-
 ## Fig 2: condensed summary of Raft
 
 ### State
