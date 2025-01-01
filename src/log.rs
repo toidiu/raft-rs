@@ -1,9 +1,12 @@
-use crate::log::{entry::Entry, idx::Idx, term_idx::TermIdx};
+use crate::log::{entry::Entry, idx::Idx};
 
 mod entry;
 mod idx;
 mod term;
 mod term_idx;
+
+pub use term::Term;
+pub use term_idx::TermIdx;
 
 #[derive(Debug)]
 struct Log {

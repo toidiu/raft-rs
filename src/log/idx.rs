@@ -6,7 +6,7 @@ use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 pub const INITIAL_IDX: Idx = Idx(0);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub(crate) struct Idx(u64);
+pub struct Idx(u64);
 
 impl From<u64> for Idx {
     fn from(value: u64) -> Self {
