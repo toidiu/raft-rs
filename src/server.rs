@@ -3,6 +3,12 @@ use s2n_codec::{DecoderValue, EncoderValue};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ServerId([u8; 16]);
 
+impl ServerId {
+    pub fn new(id: [u8; 16]) -> Self {
+        ServerId(id)
+    }
+}
+
 impl<'a> DecoderValue<'a> for ServerId {
     fn decode(buffer: s2n_codec::DecoderBuffer<'a>) -> s2n_codec::DecoderBufferResult<'a, Self> {
         let (candidate_id, buffer) = buffer.decode_slice(16)?;
