@@ -46,11 +46,11 @@
 ### AppendEntries RPC
 #### Arguments
 - [x] term: leader’s term
-- [ ] leaderId: so follower can redirect clients
+- [x] leaderId: so follower can redirect clients
 - [x] prevLogIndex: index of log entry immediately preceding new ones
 - [x] prevLogTerm: term of prevLogIndex entry
-- [ ] entries[]: log entries to store (empty for heartbeat; may send more than one for efficiency)
-- [ ] leaderCommit: leader’s commitIndex
+- [x] entries[]: log entries to store (empty for heartbeat; may send more than one for efficiency)
+- [x] leaderCommit: leader’s commitIndex
 #### Results
 - [x] term: currentTerm, for leader to update itself
 - [x] success: true if follower contained entry matching prevLogIndex and
