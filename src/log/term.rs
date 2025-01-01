@@ -6,7 +6,7 @@ use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 pub const INITIAL_TERM: Term = Term(0);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub(crate) struct Term(u64);
+pub struct Term(u64);
 
 impl From<u64> for Term {
     fn from(value: u64) -> Self {
