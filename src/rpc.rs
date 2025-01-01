@@ -1,5 +1,5 @@
 use crate::{
-    log::{Idx, Term, TermIdx},
+    log::{Entry, Idx, Term, TermIdx},
     rpc::{
         append_entries::{AppendEntries, RespAppendEntries},
         request_vote::{RequestVote, RespRequestVote},
@@ -37,12 +37,14 @@ impl Rpc {
         leader_id: ServerId,
         prev_log_term_idx: TermIdx,
         leader_commit_idx: Idx,
+        entries: Vec<Entry>,
     ) -> Rpc {
         Rpc::AppendEntries(AppendEntries {
             term,
             leader_id,
             prev_log_term_idx,
             leader_commit_idx,
+            entries,
         })
     }
 
@@ -111,12 +113,8 @@ impl EncoderValue for Rpc {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        log::Idx,
-        rpc::{Rpc, Term, TermIdx},
-        server::ServerId,
-    };
-    use s2n_codec::{DecoderBuffer, DecoderValue, EncoderBuffer, EncoderValue};
+    use super::*;
+    use s2n_codec::EncoderBuffer;
 
     #[test]
     fn encode_decode_request_vote() {
@@ -139,15 +137,8 @@ mod tests {
     }
 
     #[test]
-    fn encode_decode_request_vote_res() {
-        let rpc = Rpc::new_append_entry(
-            Term::from(1),
-            ServerId::new([4; 16]),
-            TermIdx::builder()
-                .with_term(Term::from(3))
-                .with_idx(Idx::from(4)),
-            Idx::from(4),
-        );
+    fn encode_decode_request_vote_resp() {
+        let rpc = Rpc::new_request_vote_resp(Term::from(1), true);
 
         let mut slice = vec![0; 50];
         let mut buf = EncoderBuffer::new(&mut slice);
@@ -160,10 +151,32 @@ mod tests {
     }
 
     #[test]
-    fn encode_decode_append_entry() {}
+    fn encode_decode_append_entry() {
+        let rpc = Rpc::new_append_entry(
+            Term::from(1),
+            ServerId::new([4; 16]),
+            TermIdx::builder()
+                .with_term(Term::from(3))
+                .with_idx(Idx::from(4)),
+            Idx::from(4),
+            vec![
+                Entry::new(Idx::from(1), Term::from(2), 3),
+                Entry::new(Idx::from(4), Term::from(5), 6),
+            ],
+        );
+
+        let mut slice = vec![0; 200];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        rpc.encode(&mut buf);
+
+        let d_buf = DecoderBuffer::new(&slice);
+        let (d_rpc, _) = Rpc::decode(d_buf).unwrap();
+
+        assert_eq!(rpc, d_rpc);
+    }
 
     #[test]
-    fn encode_decode_append_entry_res() {
+    fn encode_decode_append_entry_resp() {
         let rpc = Rpc::new_append_entry_resp(Term::from(1), true);
 
         let mut slice = vec![0; 50];

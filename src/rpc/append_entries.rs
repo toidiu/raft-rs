@@ -4,6 +4,9 @@ use crate::{
 };
 use s2n_codec::{DecoderValue, EncoderValue};
 
+// Type used to encode the number of entries sent over an AppendEntries RPC.
+type EntriesLenTypeEncoding = u16;
+
 // Add entries
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppendEntries {
@@ -24,7 +27,7 @@ pub struct AppendEntries {
     pub leader_commit_idx: Idx,
     //% Compliance:
     // entries[]: log entries to store (empty for heartbeat; may send more than one for efficiency)
-    // pub entries: Vec<Entry>,
+    pub entries: Vec<Entry>,
 }
 
 impl AppendEntries {
@@ -56,14 +59,25 @@ impl<'a> DecoderValue<'a> for AppendEntries {
         let (leader_id, buffer) = buffer.decode()?;
         let (prev_log_term_idx, buffer) = buffer.decode()?;
         let (leader_commit_idx, buffer) = buffer.decode()?;
-        // let (entries, buffer) = buffer.decode_with_len_prefix::<u8, Entry>()?;
+
+        // decode a vec of Entries
+        let (entries_cnt, buffer) = buffer.decode::<EntriesLenTypeEncoding>()?;
+        let entries_total_bytes = entries_cnt as usize * std::mem::size_of::<Entry>();
+        let (mut entry_buffer, buffer) = buffer.decode_slice(entries_total_bytes)?;
+        let mut entries = Vec::with_capacity(entries_cnt.into());
+        for _i in 0..entries_cnt {
+            let (entry, remaining_entry_buffer) = entry_buffer.decode()?;
+            // update entry_buffer
+            entry_buffer = remaining_entry_buffer;
+            entries.push(entry);
+        }
 
         let rpc = AppendEntries {
             term,
             leader_id,
             prev_log_term_idx,
             leader_commit_idx,
-            // entries,
+            entries,
         };
         Ok((rpc, buffer))
     }
@@ -75,6 +89,17 @@ impl EncoderValue for AppendEntries {
         encoder.encode(&self.leader_id);
         encoder.encode(&self.prev_log_term_idx);
         encoder.encode(&self.leader_commit_idx);
+
+        // encode a vec of Entries
+        //
+        // Encoding representation:
+        // [ entries_cnt, Vec<Entries> ]
+        // [ 3, Entry, Entry, Entry ]
+        let entries_cnt = self.entries.len() as EntriesLenTypeEncoding;
+        encoder.encode(&(entries_cnt));
+        for entry in self.entries.iter() {
+            encoder.encode(entry);
+        }
     }
 }
 
@@ -102,6 +127,29 @@ mod tests {
     use crate::log::Idx;
     use s2n_codec::{DecoderBuffer, EncoderBuffer};
 
+    // A Raft heartbeat doesn't have entries
+    #[test]
+    fn encode_decode_heartbeat_rpc() {
+        let rpc = AppendEntries {
+            term: Term::from(2),
+            leader_id: ServerId::new([10; 16]),
+            prev_log_term_idx: TermIdx::builder()
+                .with_term(Term::from(3))
+                .with_idx(Idx::from(4)),
+            leader_commit_idx: Idx::from(4),
+            entries: vec![],
+        };
+
+        let mut slice = vec![0; 200];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        rpc.encode(&mut buf);
+
+        let d_buf = DecoderBuffer::new(&slice);
+        let (d_rpc, _) = AppendEntries::decode(d_buf).unwrap();
+
+        assert_eq!(rpc, d_rpc);
+    }
+
     #[test]
     fn encode_decode_rpc() {
         let rpc = AppendEntries {
@@ -111,9 +159,13 @@ mod tests {
                 .with_term(Term::from(3))
                 .with_idx(Idx::from(4)),
             leader_commit_idx: Idx::from(4),
+            entries: vec![
+                Entry::new(Idx::from(1), Term::from(2), 3),
+                Entry::new(Idx::from(4), Term::from(5), 6),
+            ],
         };
 
-        let mut slice = vec![0; 50];
+        let mut slice = vec![0; 200];
         let mut buf = EncoderBuffer::new(&mut slice);
         rpc.encode(&mut buf);
 
