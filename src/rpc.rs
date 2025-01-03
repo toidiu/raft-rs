@@ -1,15 +1,14 @@
 use crate::{
     log::{Entry, Idx, Term, TermIdx},
-    rpc::{
-        append_entries::{AppendEntries, RespAppendEntries},
-        request_vote::{RequestVote, RespRequestVote},
-    },
     server::ServerId,
 };
 use s2n_codec::{DecoderBuffer, DecoderBufferResult, DecoderError, DecoderValue, EncoderValue};
 
 mod append_entries;
 mod request_vote;
+
+pub use append_entries::{AppendEntries, RespAppendEntries};
+pub use request_vote::{RequestVote, RespRequestVote};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Rpc {
