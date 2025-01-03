@@ -18,7 +18,7 @@ impl Log {
     pub fn new() -> Self {
         Log {
             entries: vec![],
-            last_committed_entry: todo!(),
+            last_committed_entry: Idx::initial(),
         }
     }
 

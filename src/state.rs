@@ -35,7 +35,6 @@ use crate::{
     log::{Idx, Log, Term, TermIdx},
     rpc::{AppendEntries, RequestVote, Rpc},
     server::ServerId,
-    timeout::Timeout,
 };
 use std::collections::HashSet;
 
@@ -72,7 +71,30 @@ struct State {
     // TODO
     mode: Mode,
     pub id: ServerId,
-    // list of all raft servers
-    server_list: Vec<ServerId>,
     pub votes_received: HashSet<ServerId>,
+    server_list: Vec<ServerId>,
+}
+
+#[derive(Default)]
+enum Mode {
+    #[default]
+    Follower,
+    Candidate,
+    Leader,
+}
+
+impl State {
+    pub fn new(server_list: Vec<ServerId>) -> Self {
+        State {
+            curr_term: Term::initial(),
+            voted_for: None,
+            log: Log::new(),
+            commit_idx: Idx::initial(),
+            last_applied: Idx::initial(),
+            mode: Mode::default(),
+            id: ServerId::new([55; 16]),
+            votes_received: HashSet::new(),
+            server_list,
+        }
+    }
 }

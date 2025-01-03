@@ -9,7 +9,7 @@ const INITIAL_IDX: Idx = Idx(0);
 pub struct Idx(u64);
 
 impl Idx {
-    pub fn initial() -> Self {
+    pub const fn initial() -> Self {
         INITIAL_IDX
     }
 }
