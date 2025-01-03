@@ -31,9 +31,7 @@
 //! https://textik.com/#8dbf6540e0dd1676
 
 use crate::{
-    io::ServerTx,
-    log::{Idx, Log, Term, TermIdx},
-    rpc::{AppendEntries, RequestVote, Rpc},
+    log::{Idx, Log, Term},
     server::ServerId,
 };
 use std::collections::BTreeMap;
