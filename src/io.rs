@@ -8,7 +8,7 @@ mod network;
 mod server;
 
 pub use network::{NetTx, NetworkIO};
-pub use server::{ServerIO, ServerRx, ServerTx};
+pub use server::{ServerIO, ServerRx};
 
 // The default size of the buffer used to send/recv from the IO queues
 pub const IO_BUF_LEN: usize = 1024;
