@@ -68,11 +68,11 @@ struct State {
     //% Compliance
     //% `matchIndex[]` for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
 
-    // TODO
+    // TODO other
     mode: Mode,
-    pub id: ServerId,
-    pub votes_received: HashSet<ServerId>,
-    server_list: Vec<ServerId>,
+    // pub id: ServerId,
+    // pub votes_received: HashSet<ServerId>,
+    // server_list: Vec<ServerId>,
 }
 
 #[derive(Default)]
@@ -84,7 +84,7 @@ enum Mode {
 }
 
 impl State {
-    pub fn new(server_list: Vec<ServerId>) -> Self {
+    pub fn new() -> Self {
         State {
             current_term: Term::initial(),
             voted_for: None,
@@ -92,9 +92,9 @@ impl State {
             commit_idx: Idx::initial(),
             last_applied: Idx::initial(),
             mode: Mode::default(),
-            id: ServerId::new([55; 16]),
-            votes_received: HashSet::new(),
-            server_list,
+            // id: ServerId::new([55; 16]),
+            // votes_received: HashSet::new(),
+            // server_list,
         }
     }
 }
