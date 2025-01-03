@@ -15,8 +15,8 @@
 - [x] `lastApplied` index of highest log entry applied to state machine (initialized to 0, increases monotonically)
 #### Volatile state on leaders
 - [ ] "Reinitialized after election"
-- [ ] `nextIndex[]` for each server, index of the next log entry to send to that server (initialized to leader last log index + 1)
-- [ ] `matchIndex[]` for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
+- [x] `nextIndex[]` for each server, index of the next log entry to send to that server (initialized to leader last log index + 1)
+- [x] `matchIndex[]` for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
 
 ### Rules for Servers
 #### All Servers
