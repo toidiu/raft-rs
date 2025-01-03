@@ -42,7 +42,7 @@ struct State {
     //  ==== Persistent state on all servers ====
     //% Compliance
     //% `currentTerm` latest term server has seen (initialized to 0 on first boot, increases monotonically)
-    pub curr_term: Term,
+    pub current_term: Term,
 
     //% Compliance
     //% `votedFor` `candidateId` that received vote in current term (or null if none)
@@ -86,7 +86,7 @@ enum Mode {
 impl State {
     pub fn new(server_list: Vec<ServerId>) -> Self {
         State {
-            curr_term: Term::initial(),
+            current_term: Term::initial(),
             voted_for: None,
             log: Log::new(),
             commit_idx: Idx::initial(),
