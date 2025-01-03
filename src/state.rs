@@ -36,7 +36,7 @@ use crate::{
     rpc::{AppendEntries, RequestVote, Rpc},
     server::ServerId,
 };
-use std::collections::HashSet;
+use std::collections::BTreeMap;
 
 struct State {
     //  ==== Persistent state on all servers ====
@@ -64,9 +64,11 @@ struct State {
     // ==== Volatile state on leaders ====
     //% Compliance
     //% `nextIndex[]` for each server, index of the next log entry to send to that server (initialized to leader last log index + 1)
+    next_idx: BTreeMap<ServerId, Idx>,
 
     //% Compliance
     //% `matchIndex[]` for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
+    match_idx: BTreeMap<ServerId, Idx>,
 
     // TODO other
     mode: Mode,
@@ -92,6 +94,8 @@ impl State {
             commit_idx: Idx::initial(),
             last_applied: Idx::initial(),
             mode: Mode::default(),
+            next_idx: BTreeMap::new(),
+            match_idx: BTreeMap::new(),
             // id: ServerId::new([55; 16]),
             // votes_received: HashSet::new(),
             // server_list,
