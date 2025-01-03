@@ -8,6 +8,12 @@ pub const INITIAL_TERM: Term = Term(0);
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Term(u64);
 
+impl Term {
+    pub const fn initial() -> Self {
+        INITIAL_TERM
+    }
+}
+
 impl From<u64> for Term {
     fn from(value: u64) -> Self {
         // term values should be greater than 0

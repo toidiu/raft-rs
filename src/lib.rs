@@ -5,6 +5,7 @@ mod io;
 mod log;
 mod rpc;
 mod server;
+mod state;
 mod timeout;
 
 #[cfg(test)]

@@ -9,12 +9,19 @@ pub use term::Term;
 pub use term_idx::TermIdx;
 
 #[derive(Debug)]
-struct Log {
+pub struct Log {
     entries: Vec<Entry>,
     last_committed_entry: Idx,
 }
 
 impl Log {
+    pub fn new() -> Self {
+        Log {
+            entries: vec![],
+            last_committed_entry: Idx::initial(),
+        }
+    }
+
     fn push_entry(&mut self, _entries: Vec<Entry>) {
         todo!()
     }
