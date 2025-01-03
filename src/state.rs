@@ -68,11 +68,8 @@ struct State {
     //% `matchIndex[]` for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
     match_idx: BTreeMap<ServerId, Idx>,
 
-    // TODO other
+    // === Other ===
     mode: Mode,
-    // pub id: ServerId,
-    // pub votes_received: HashSet<ServerId>,
-    // server_list: Vec<ServerId>,
 }
 
 #[derive(Default)]
@@ -94,9 +91,6 @@ impl State {
             mode: Mode::default(),
             next_idx: BTreeMap::new(),
             match_idx: BTreeMap::new(),
-            // id: ServerId::new([55; 16]),
-            // votes_received: HashSet::new(),
-            // server_list,
         }
     }
 }
