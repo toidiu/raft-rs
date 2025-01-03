@@ -3,10 +3,16 @@ use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 //% Compliance:
 //% `commitIndex` index of highest log entry known to be committed (initialized to 0, increases
 //% monotonically)
-pub const INITIAL_IDX: Idx = Idx(0);
+const INITIAL_IDX: Idx = Idx(0);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Idx(u64);
+
+impl Idx {
+    pub fn initial() -> Self {
+        INITIAL_IDX
+    }
+}
 
 impl From<u64> for Idx {
     fn from(value: u64) -> Self {

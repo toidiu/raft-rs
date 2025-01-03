@@ -1,7 +1,4 @@
-use crate::log::{
-    idx::{Idx, INITIAL_IDX},
-    term::Term,
-};
+use crate::log::{idx::Idx, term::Term};
 use core::cmp::Ordering;
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 
@@ -24,7 +21,7 @@ impl TermIdxWithTermBuilder {
     pub fn with_term(self, term: Term) -> TermIdxWithIdxBuilder {
         TermIdxWithIdxBuilder {
             term,
-            idx: INITIAL_IDX,
+            idx: Idx::initial(),
         }
     }
 }
