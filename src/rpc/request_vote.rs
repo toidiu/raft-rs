@@ -5,7 +5,7 @@ use crate::{
 use s2n_codec::{DecoderValue, EncoderValue};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RequestVote {
+pub struct RequestVoteState {
     //% Compliance:
     //% term: candidate’s term
     pub term: Term,
@@ -20,12 +20,12 @@ pub struct RequestVote {
     pub last_log_term_idx: TermIdx,
 }
 
-impl RequestVote {
+impl RequestVoteState {
     pub const TAG: u8 = 1;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RespRequestVote {
+pub struct RespRequestVoteState {
     //% Compliance:
     //% term: currentTerm, for candidate to update itself
     pub term: Term,
@@ -35,17 +35,17 @@ pub struct RespRequestVote {
     pub vote_granted: bool,
 }
 
-impl RespRequestVote {
+impl RespRequestVoteState {
     pub const TAG: u8 = 2;
 }
 
-impl<'a> DecoderValue<'a> for RequestVote {
+impl<'a> DecoderValue<'a> for RequestVoteState {
     fn decode(buffer: s2n_codec::DecoderBuffer<'a>) -> s2n_codec::DecoderBufferResult<'a, Self> {
         let (term, buffer) = buffer.decode()?;
         let (candidate_id, buffer) = buffer.decode()?;
         let (last_log_term_idx, buffer) = buffer.decode()?;
 
-        let rpc = RequestVote {
+        let rpc = RequestVoteState {
             term,
             candidate_id,
             last_log_term_idx,
@@ -54,7 +54,7 @@ impl<'a> DecoderValue<'a> for RequestVote {
     }
 }
 
-impl EncoderValue for RequestVote {
+impl EncoderValue for RequestVoteState {
     fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
         encoder.encode(&self.term);
         encoder.encode(&self.candidate_id);
@@ -62,18 +62,18 @@ impl EncoderValue for RequestVote {
     }
 }
 
-impl<'a> DecoderValue<'a> for RespRequestVote {
+impl<'a> DecoderValue<'a> for RespRequestVoteState {
     fn decode(buffer: s2n_codec::DecoderBuffer<'a>) -> s2n_codec::DecoderBufferResult<'a, Self> {
         let (term, buffer) = buffer.decode()?;
         let (vote_granted, buffer): (u8, _) = buffer.decode()?;
         let vote_granted = vote_granted != 0;
 
-        let rpc = RespRequestVote { term, vote_granted };
+        let rpc = RespRequestVoteState { term, vote_granted };
         Ok((rpc, buffer))
     }
 }
 
-impl EncoderValue for RespRequestVote {
+impl EncoderValue for RespRequestVoteState {
     fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
         encoder.encode(&self.term);
         encoder.write_slice(&(self.vote_granted as u8).to_be_bytes());
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn encode_decode_rpc() {
-        let rpc = RequestVote {
+        let rpc = RequestVoteState {
             term: Term::from(2),
             candidate_id: ServerId::new([10; 16]),
             last_log_term_idx: TermIdx::builder()
@@ -101,14 +101,14 @@ mod tests {
         rpc.encode(&mut buf);
 
         let d_buf = DecoderBuffer::new(&slice);
-        let (d_rpc, _) = RequestVote::decode(d_buf).unwrap();
+        let (d_rpc, _) = RequestVoteState::decode(d_buf).unwrap();
 
         assert_eq!(rpc, d_rpc);
     }
 
     #[test]
     fn encode_decode_rpc_resp() {
-        let rpc = RespRequestVote {
+        let rpc = RespRequestVoteState {
             term: Term::from(2),
             vote_granted: true,
         };
@@ -118,7 +118,7 @@ mod tests {
         rpc.encode(&mut buf);
 
         let d_buf = DecoderBuffer::new(&slice);
-        let (d_rpc, _) = RespRequestVote::decode(d_buf).unwrap();
+        let (d_rpc, _) = RespRequestVoteState::decode(d_buf).unwrap();
 
         assert_eq!(rpc, d_rpc);
     }
