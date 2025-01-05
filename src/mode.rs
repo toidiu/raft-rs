@@ -108,5 +108,5 @@ trait Action {
 
     fn on_timeout<T: ServerTx>(&mut self, tx: &mut T);
 
-    fn on_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc, state: &mut State) {}
+    fn on_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc, state: &mut State);
 }

@@ -11,4 +11,13 @@ impl Action for LeaderState {
     fn on_timeout<T: ServerTx>(&mut self, _io: &mut T) {
         todo!()
     }
+
+    fn on_recv<T: ServerTx>(
+        &mut self,
+        _tx: &mut T,
+        _rpc: crate::rpc::Rpc,
+        _state: &mut crate::state::State,
+    ) {
+        todo!()
+    }
 }
