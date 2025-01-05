@@ -3,6 +3,7 @@
 mod error;
 mod io;
 mod log;
+mod mode;
 mod rpc;
 mod server;
 mod state;

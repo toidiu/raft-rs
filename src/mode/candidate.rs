@@ -1,4 +1,4 @@
-use crate::state::{Action, ServerTx};
+use crate::mode::{Action, ServerTx};
 
 #[derive(Debug, Default)]
 pub struct CandidateState;

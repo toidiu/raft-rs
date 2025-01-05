@@ -1,4 +1,8 @@
-use crate::state::{Action, Idx, ServerId, ServerTx};
+use crate::{
+    log::Idx,
+    mode::{Action, ServerTx},
+    server::ServerId,
+};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Default)]
