@@ -26,7 +26,8 @@ pub struct AppendEntriesState {
     // leaderCommit: leader’s commitIndex
     pub leader_commit_idx: Idx,
     //% Compliance:
-    // entries[]: log entries to store (empty for heartbeat; may send more than one for efficiency)
+    //% entries[]: log entries to store (empty for heartbeat; may send more than one for
+    //% efficiency)
     pub entries: Vec<Entry>,
 }
 

@@ -142,7 +142,7 @@
 	- [ ] a timeout occurs and there is no winner (can happen if too many servers become candidates at the same time)
 		- [ ] increment its term
 		- [ ] start a new election by initiating another round of RequestVote
-- [ ] Election timeout is chosen randomly between 150-300ms
+- [x] Election timeout is chosen randomly between 150-300ms
 
 ### 5.3 Log replication
 - [ ] a leader services client requests
