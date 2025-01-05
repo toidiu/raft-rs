@@ -89,6 +89,17 @@ impl Action for Mode {
             state.current_term = *rpc.term();
             self.on_convert_to_follower(tx);
         }
+
+        match self {
+            Mode::Follower(follower) => {
+                //% Compliance:
+                //% If election timeout elapses without receiving AppendEntries RPC from current
+                //% leader or granting vote to candidate: convert to candidate
+                follower.on_recv(tx, rpc, state);
+            }
+            Mode::Candidate(candidate) => candidate.on_recv(tx, rpc, state),
+            Mode::Leader(leader) => leader.on_recv(tx, rpc, state),
+        }
     }
 }
 
