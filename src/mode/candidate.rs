@@ -19,8 +19,4 @@ impl Action for CandidateState {
         //% On conversion to candidate, start election:
         self.start_election();
     }
-
-    fn on_recv<T: ServerTx>(&mut self, _io: &mut T, _rpc: crate::rpc::Rpc) {
-        todo!()
-    }
 }

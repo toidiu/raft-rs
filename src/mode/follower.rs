@@ -11,8 +11,4 @@ impl Action for FollowerState {
     fn on_timeout<T: ServerTx>(&mut self, _io: &mut T) {
         unreachable!()
     }
-
-    fn on_recv<T: ServerTx>(&mut self, _io: &mut T, _rpc: crate::rpc::Rpc) {
-        todo!()
-    }
 }

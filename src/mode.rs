@@ -34,6 +34,7 @@ use crate::{
     io::ServerTx,
     mode::{candidate::CandidateState, follower::FollowerState, leader::LeaderState},
     rpc::Rpc,
+    state::State,
 };
 
 mod candidate;
@@ -51,7 +52,7 @@ trait Action {
 
     fn on_timeout<T: ServerTx>(&mut self, io: &mut T);
 
-    fn on_recv<T: ServerTx>(&mut self, io: &mut T, rpc: Rpc);
+    fn on_recv<T: ServerTx>(&mut self, io: &mut T, rpc: Rpc, state: &mut State) {}
 }
 
 impl Action for Mode {
@@ -59,7 +60,7 @@ impl Action for Mode {
         match self {
             Mode::Follower(follower) => follower.on_convert(io),
             Mode::Candidate(candidate) => candidate.on_convert(io),
-            Mode::Leader(_leader) => todo!(),
+            Mode::Leader(leader) => leader.on_convert(io),
         }
     }
 
@@ -73,9 +74,18 @@ impl Action for Mode {
                 self.on_convert(io);
             }
             Mode::Candidate(candidate) => candidate.on_timeout(io),
-            Mode::Leader(_leader) => todo!(),
+            Mode::Leader(leader) => leader.on_timeout(io),
         }
     }
 
-    fn on_recv<T: ServerTx>(&mut self, _io: &mut T, _rpc: Rpc) {}
+    fn on_recv<T: ServerTx>(&mut self, io: &mut T, rpc: Rpc, state: &mut State) {
+        //% Compliance
+        //% If RPC request or response contains term T > currentTerm: set currentTerm = T, convert
+        //% to follower (§5.1)
+        if rpc.term() > &state.current_term {
+            state.current_term = *rpc.term();
+            *self = Mode::Follower(FollowerState);
+            self.on_convert(io);
+        }
+    }
 }
