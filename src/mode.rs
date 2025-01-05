@@ -47,45 +47,55 @@ pub enum Mode {
     Leader(LeaderState),
 }
 
-trait Action {
-    fn on_convert<T: ServerTx>(&mut self, io: &mut T);
+impl Mode {
+    fn on_convert_to_follower<T: ServerTx>(&mut self, tx: &mut T) {
+        *self = Mode::Follower(FollowerState);
+        self.on_convert(tx);
+    }
 
-    fn on_timeout<T: ServerTx>(&mut self, io: &mut T);
-
-    fn on_recv<T: ServerTx>(&mut self, io: &mut T, rpc: Rpc, state: &mut State) {}
+    fn on_convert_to_candidate<T: ServerTx>(&mut self, tx: &mut T) {
+        *self = Mode::Candidate(CandidateState);
+        self.on_convert(tx);
+    }
 }
 
 impl Action for Mode {
-    fn on_convert<T: ServerTx>(&mut self, io: &mut T) {
+    fn on_convert<T: ServerTx>(&mut self, tx: &mut T) {
         match self {
-            Mode::Follower(follower) => follower.on_convert(io),
-            Mode::Candidate(candidate) => candidate.on_convert(io),
-            Mode::Leader(leader) => leader.on_convert(io),
+            Mode::Follower(follower) => follower.on_convert(tx),
+            Mode::Candidate(candidate) => candidate.on_convert(tx),
+            Mode::Leader(leader) => leader.on_convert(tx),
         }
     }
 
-    fn on_timeout<T: ServerTx>(&mut self, io: &mut T) {
+    fn on_timeout<T: ServerTx>(&mut self, tx: &mut T) {
         match self {
             Mode::Follower(_follower) => {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
                 //% leader or granting vote to candidate: convert to candidate
-                *self = Mode::Candidate(CandidateState);
-                self.on_convert(io);
+                self.on_convert_to_candidate(tx);
             }
-            Mode::Candidate(candidate) => candidate.on_timeout(io),
-            Mode::Leader(leader) => leader.on_timeout(io),
+            Mode::Candidate(candidate) => candidate.on_timeout(tx),
+            Mode::Leader(leader) => leader.on_timeout(tx),
         }
     }
 
-    fn on_recv<T: ServerTx>(&mut self, io: &mut T, rpc: Rpc, state: &mut State) {
+    fn on_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc, state: &mut State) {
         //% Compliance
         //% If RPC request or response contains term T > currentTerm: set currentTerm = T, convert
         //% to follower (§5.1)
         if rpc.term() > &state.current_term {
             state.current_term = *rpc.term();
-            *self = Mode::Follower(FollowerState);
-            self.on_convert(io);
+            self.on_convert_to_follower(tx);
         }
     }
+}
+
+trait Action {
+    fn on_convert<T: ServerTx>(&mut self, tx: &mut T);
+
+    fn on_timeout<T: ServerTx>(&mut self, tx: &mut T);
+
+    fn on_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc, state: &mut State) {}
 }
