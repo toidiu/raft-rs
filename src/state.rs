@@ -32,14 +32,15 @@
 
 mod candidate;
 mod follower;
+mod leader;
 
 use crate::{
     io::ServerTx,
     log::{Idx, Log, Term},
+    rpc::Rpc,
     server::ServerId,
-    state::{candidate::CandidateState, follower::FollowerState},
+    state::{candidate::CandidateState, follower::FollowerState, leader::LeaderState},
 };
-use std::collections::BTreeMap;
 
 struct State {
     //  ==== Persistent state on all servers ====
@@ -68,17 +69,6 @@ struct State {
     //% increases monotonically)
     last_applied: Idx,
 
-    // ==== Volatile state on leaders ====
-    //% Compliance
-    //% `nextIndex[]` for each server, index of the next log entry to send to that server
-    //% (initialized to leader last log index + 1)
-    next_idx: BTreeMap<ServerId, Idx>,
-
-    //% Compliance
-    //% `matchIndex[]` for each server, index of highest log entry known to be replicated on server
-    //% (initialized to 0, increases monotonically)
-    match_idx: BTreeMap<ServerId, Idx>,
-
     // === Other ===
     mode: Mode,
 }
@@ -86,13 +76,15 @@ struct State {
 enum Mode {
     Follower(FollowerState),
     Candidate(CandidateState),
-    Leader,
+    Leader(LeaderState),
 }
 
 trait Action {
     fn on_convert<T: ServerTx>(&mut self, io: &mut T);
 
     fn on_timeout<T: ServerTx>(&mut self, io: &mut T);
+
+    fn on_recv<T: ServerTx>(&mut self, io: &mut T, rpc: Rpc);
 }
 
 impl Action for Mode {
@@ -100,7 +92,7 @@ impl Action for Mode {
         match self {
             Mode::Follower(follower) => follower.on_convert(io),
             Mode::Candidate(candidate) => candidate.on_convert(io),
-            Mode::Leader => todo!(),
+            Mode::Leader(_leader) => todo!(),
         }
     }
 
@@ -114,8 +106,11 @@ impl Action for Mode {
                 self.on_convert(io);
             }
             Mode::Candidate(candidate) => candidate.on_timeout(io),
-            Mode::Leader => todo!(),
+            Mode::Leader(_leader) => todo!(),
         }
+    }
+
+    fn on_recv<T: ServerTx>(&mut self, _io: &mut T, rpc: Rpc) {
     }
 }
 
@@ -127,8 +122,6 @@ impl State {
             log: Log::new(),
             commit_idx: Idx::initial(),
             last_applied: Idx::initial(),
-            next_idx: BTreeMap::new(),
-            match_idx: BTreeMap::new(),
             mode: Mode::Follower(FollowerState),
         }
     }

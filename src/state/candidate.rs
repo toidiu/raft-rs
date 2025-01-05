@@ -1,5 +1,6 @@
 use crate::state::{Action, ServerTx};
 
+#[derive(Debug, Default)]
 pub struct CandidateState;
 
 impl CandidateState {
@@ -17,5 +18,9 @@ impl Action for CandidateState {
         //% Compliance:
         //% On conversion to candidate, start election:
         self.start_election();
+    }
+
+    fn on_recv<T: ServerTx>(&mut self, _io: &mut T, _rpc: crate::rpc::Rpc) {
+        todo!()
     }
 }
