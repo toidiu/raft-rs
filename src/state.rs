@@ -30,9 +30,14 @@
 //! ```
 //! https://textik.com/#8dbf6540e0dd1676
 
+mod candidate;
+mod follower;
+
 use crate::{
+    io::ServerTx,
     log::{Idx, Log, Term},
     server::ServerId,
+    state::{candidate::CandidateState, follower::FollowerState},
 };
 use std::collections::BTreeMap;
 
@@ -72,12 +77,39 @@ struct State {
     mode: Mode,
 }
 
-#[derive(Default)]
 enum Mode {
-    #[default]
-    Follower,
-    Candidate,
+    Follower(FollowerState),
+    Candidate(CandidateState),
     Leader,
+}
+
+trait Action {
+    fn on_convert<T: ServerTx>(&mut self, io: &mut T);
+
+    fn on_timeout<T: ServerTx>(&mut self, io: &mut T);
+}
+
+impl Action for Mode {
+    fn on_convert<T: ServerTx>(&mut self, io: &mut T) {
+        match self {
+            Mode::Follower(follower) => follower.on_convert(io),
+            Mode::Candidate(candidate) => candidate.on_convert(io),
+            Mode::Leader => todo!(),
+        }
+    }
+
+    fn on_timeout<T: ServerTx>(&mut self, io: &mut T) {
+        match self {
+            Mode::Follower(_follower) => {
+                //% Compliance:
+                //% If election timeout elapses without receiving AppendEntries RPC from current leader or granting vote to candidate: convert to candidate
+                *self = Mode::Candidate(CandidateState);
+                self.on_convert(io);
+            }
+            Mode::Candidate(candidate) => candidate.on_timeout(io),
+            Mode::Leader => todo!(),
+        }
+    }
 }
 
 impl State {
@@ -88,9 +120,24 @@ impl State {
             log: Log::new(),
             commit_idx: Idx::initial(),
             last_applied: Idx::initial(),
-            mode: Mode::default(),
             next_idx: BTreeMap::new(),
             match_idx: BTreeMap::new(),
+            mode: Mode::Follower(FollowerState),
         }
+    }
+
+    pub fn on_timeout<T: ServerTx>(&mut self, io: &mut T) {
+        self.mode.on_timeout(io);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn default_state() {
+        let s = State::new();
+        assert!(matches!(s.mode, Mode::Follower(_)));
     }
 }

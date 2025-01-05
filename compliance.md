@@ -25,9 +25,9 @@
 - [ ] If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
 #### Followers (§5.2)
 - [ ] Respond to RPCs from candidates and leaders
-- [ ] If election timeout elapses without receiving AppendEntries RPC from current leader or granting vote to candidate: convert to candidate
+- [x] If election timeout elapses without receiving AppendEntries RPC from current leader or granting vote to candidate: convert to candidate
 #### Candidates (§5.2)
-- [ ] On conversion to candidate, start election:
+- [x] On conversion to candidate, start election:
   - [ ] Increment currentTerm
   - [ ] Vote for self
   - [ ] Reset election timer

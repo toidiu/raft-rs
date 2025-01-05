@@ -7,8 +7,11 @@ use std::{
 mod network;
 mod server;
 
+#[cfg(test)]
+pub mod testing;
+
 pub use network::{NetTx, NetworkIO};
-pub use server::{ServerIO, ServerRx};
+pub use server::{ServerIO, ServerRx, ServerTx};
 
 // The default size of the buffer used to send/recv from the IO queues
 pub const IO_BUF_LEN: usize = 1024;
