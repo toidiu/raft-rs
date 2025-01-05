@@ -1,18 +1,18 @@
-use crate::mode::{Action, ServerTx};
+use crate::mode::ServerTx;
 
 #[derive(Debug, Default)]
 pub struct FollowerState;
 
-impl Action for FollowerState {
-    fn on_convert<T: ServerTx>(&mut self, _io: &mut T) {
+impl FollowerState {
+    pub fn on_follower<T: ServerTx>(&mut self, _io: &mut T) {
         todo!()
     }
 
-    fn on_timeout<T: ServerTx>(&mut self, _io: &mut T) {
+    pub fn on_timeout<T: ServerTx>(&mut self, _io: &mut T) {
         unreachable!()
     }
 
-    fn on_recv<T: ServerTx>(
+    pub fn on_recv<T: ServerTx>(
         &mut self,
         _tx: &mut T,
         _rpc: crate::rpc::Rpc,

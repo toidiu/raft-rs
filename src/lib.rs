@@ -3,13 +3,11 @@
 mod error;
 mod io;
 mod log;
+mod macros;
 mod mode;
 mod rpc;
 mod server;
 mod state;
 mod timeout;
-
-#[cfg(test)]
-mod testing;
 
 fn start() {}

@@ -32,6 +32,7 @@
 
 use crate::{
     io::ServerTx,
+    macros::cast_unsafe,
     mode::{candidate::CandidateState, follower::FollowerState, leader::LeaderState},
     rpc::Rpc,
     state::State,
@@ -48,33 +49,13 @@ pub enum Mode {
 }
 
 impl Mode {
-    fn on_convert_to_follower<T: ServerTx>(&mut self, tx: &mut T) {
-        *self = Mode::Follower(FollowerState);
-        self.on_convert(tx);
-    }
-
-    fn on_convert_to_candidate<T: ServerTx>(&mut self, tx: &mut T) {
-        *self = Mode::Candidate(CandidateState);
-        self.on_convert(tx);
-    }
-}
-
-impl Action for Mode {
-    fn on_convert<T: ServerTx>(&mut self, tx: &mut T) {
-        match self {
-            Mode::Follower(follower) => follower.on_convert(tx),
-            Mode::Candidate(candidate) => candidate.on_convert(tx),
-            Mode::Leader(leader) => leader.on_convert(tx),
-        }
-    }
-
     fn on_timeout<T: ServerTx>(&mut self, tx: &mut T) {
         match self {
             Mode::Follower(_follower) => {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
                 //% leader or granting vote to candidate: convert to candidate
-                self.on_convert_to_candidate(tx);
+                self.on_candidate(tx);
             }
             Mode::Candidate(candidate) => candidate.on_timeout(tx),
             Mode::Leader(leader) => leader.on_timeout(tx),
@@ -87,7 +68,7 @@ impl Action for Mode {
         //% to follower (§5.1)
         if rpc.term() > &state.current_term {
             state.current_term = *rpc.term();
-            self.on_convert_to_follower(tx);
+            self.on_follower(tx);
         }
 
         match self {
@@ -101,12 +82,22 @@ impl Action for Mode {
             Mode::Leader(leader) => leader.on_recv(tx, rpc, state),
         }
     }
-}
 
-trait Action {
-    fn on_convert<T: ServerTx>(&mut self, tx: &mut T);
+    fn on_follower<T: ServerTx>(&mut self, tx: &mut T) {
+        *self = Mode::Follower(FollowerState);
+        let follower = cast_unsafe!(self, Mode::Follower);
+        follower.on_follower(tx);
+    }
 
-    fn on_timeout<T: ServerTx>(&mut self, tx: &mut T);
+    fn on_candidate<T: ServerTx>(&mut self, tx: &mut T) {
+        *self = Mode::Candidate(CandidateState);
+        let candidate = cast_unsafe!(self, Mode::Candidate);
+        candidate.on_candidate(tx);
+    }
 
-    fn on_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc, state: &mut State);
+    fn on_leader<T: ServerTx>(&mut self, tx: &mut T) {
+        *self = Mode::Leader(LeaderState);
+        let leader = cast_unsafe!(self, Mode::Leader);
+        leader.on_leader(tx);
+    }
 }

@@ -1,18 +1,18 @@
-use crate::mode::{Action, ServerTx};
+use crate::mode::ServerTx;
 
 #[derive(Debug, Default)]
 pub struct LeaderState;
 
-impl Action for LeaderState {
-    fn on_convert<T: ServerTx>(&mut self, _io: &mut T) {
+impl LeaderState {
+    pub fn on_leader<T: ServerTx>(&mut self, _io: &mut T) {
         todo!()
     }
 
-    fn on_timeout<T: ServerTx>(&mut self, _io: &mut T) {
+    pub fn on_timeout<T: ServerTx>(&mut self, _io: &mut T) {
         todo!()
     }
 
-    fn on_recv<T: ServerTx>(
+    pub fn on_recv<T: ServerTx>(
         &mut self,
         _tx: &mut T,
         _rpc: crate::rpc::Rpc,
