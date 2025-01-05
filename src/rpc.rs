@@ -7,20 +7,20 @@ use s2n_codec::{DecoderBuffer, DecoderBufferResult, DecoderError, DecoderValue, 
 mod append_entries;
 mod request_vote;
 
-pub use append_entries::{AppendEntries, RespAppendEntries};
-pub use request_vote::{RequestVote, RespRequestVote};
+pub use append_entries::{AppendEntriesState, RespAppendEntriesState};
+pub use request_vote::{RequestVoteState, RespRequestVoteState};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Rpc {
-    RequestVote(RequestVote),
-    RespRequestVote(RespRequestVote),
-    AppendEntries(AppendEntries),
-    RespAppendEntries(RespAppendEntries),
+    RequestVote(RequestVoteState),
+    RespRequestVote(RespRequestVoteState),
+    AppendEntries(AppendEntriesState),
+    RespAppendEntries(RespAppendEntriesState),
 }
 
 impl Rpc {
     pub fn new_request_vote(term: Term, candidate_id: ServerId, last_log_term_idx: TermIdx) -> Rpc {
-        Rpc::RequestVote(RequestVote {
+        Rpc::RequestVote(RequestVoteState {
             term,
             candidate_id,
             last_log_term_idx,
@@ -28,7 +28,7 @@ impl Rpc {
     }
 
     pub fn new_request_vote_resp(term: Term, vote_granted: bool) -> Rpc {
-        Rpc::RespRequestVote(RespRequestVote { term, vote_granted })
+        Rpc::RespRequestVote(RespRequestVoteState { term, vote_granted })
     }
 
     pub fn new_append_entry(
@@ -38,7 +38,7 @@ impl Rpc {
         leader_commit_idx: Idx,
         entries: Vec<Entry>,
     ) -> Rpc {
-        Rpc::AppendEntries(AppendEntries {
+        Rpc::AppendEntries(AppendEntriesState {
             term,
             leader_id,
             prev_log_term_idx,
@@ -48,15 +48,15 @@ impl Rpc {
     }
 
     pub fn new_append_entry_resp(term: Term, success: bool) -> Rpc {
-        Rpc::RespAppendEntries(RespAppendEntries { term, success })
+        Rpc::RespAppendEntries(RespAppendEntriesState { term, success })
     }
 
     pub fn term(&self) -> &Term {
         match self {
-            Rpc::RequestVote(RequestVote { term, .. }) => term,
-            Rpc::RespRequestVote(RespRequestVote { term, .. }) => term,
-            Rpc::AppendEntries(AppendEntries { term, .. }) => term,
-            Rpc::RespAppendEntries(RespAppendEntries { term, .. }) => term,
+            Rpc::RequestVote(RequestVoteState { term, .. }) => term,
+            Rpc::RespRequestVote(RespRequestVoteState { term, .. }) => term,
+            Rpc::AppendEntries(AppendEntriesState { term, .. }) => term,
+            Rpc::RespAppendEntries(RespAppendEntriesState { term, .. }) => term,
         }
     }
 }
@@ -66,19 +66,19 @@ impl<'a> DecoderValue<'a> for Rpc {
         let (tag, buffer): (u8, _) = buffer.decode()?;
 
         match tag {
-            RequestVote::TAG => {
+            RequestVoteState::TAG => {
                 let (rpc, buffer) = buffer.decode()?;
                 Ok((Rpc::RequestVote(rpc), buffer))
             }
-            RespRequestVote::TAG => {
+            RespRequestVoteState::TAG => {
                 let (rpc, buffer) = buffer.decode()?;
                 Ok((Rpc::RespRequestVote(rpc), buffer))
             }
-            AppendEntries::TAG => {
+            AppendEntriesState::TAG => {
                 let (rpc, buffer) = buffer.decode()?;
                 Ok((Rpc::AppendEntries(rpc), buffer))
             }
-            RespAppendEntries::TAG => {
+            RespAppendEntriesState::TAG => {
                 let (rpc, buffer) = buffer.decode()?;
                 Ok((Rpc::RespAppendEntries(rpc), buffer))
             }
@@ -91,19 +91,19 @@ impl EncoderValue for Rpc {
     fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
         match self {
             Rpc::RequestVote(inner) => {
-                encoder.write_slice(&[RequestVote::TAG]);
+                encoder.write_slice(&[RequestVoteState::TAG]);
                 encoder.encode(inner);
             }
             Rpc::RespRequestVote(inner) => {
-                encoder.write_slice(&[RespRequestVote::TAG]);
+                encoder.write_slice(&[RespRequestVoteState::TAG]);
                 encoder.encode(inner);
             }
             Rpc::AppendEntries(inner) => {
-                encoder.write_slice(&[AppendEntries::TAG]);
+                encoder.write_slice(&[AppendEntriesState::TAG]);
                 encoder.encode(inner);
             }
             Rpc::RespAppendEntries(inner) => {
-                encoder.write_slice(&[RespAppendEntries::TAG]);
+                encoder.write_slice(&[RespAppendEntriesState::TAG]);
                 encoder.encode(inner);
             }
         }

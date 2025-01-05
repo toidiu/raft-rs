@@ -1,4 +1,10 @@
+use crate::{mode::Mode, state::State};
 use s2n_codec::{DecoderValue, EncoderValue};
+
+struct Server {
+    mode: Mode,
+    state: State,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ServerId([u8; 16]);

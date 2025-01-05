@@ -9,9 +9,8 @@ use rand::{Rng, RngCore};
 use rand_pcg::Pcg32;
 use tokio::time::{sleep_until, Instant, Sleep};
 
-// # Compliance: 5.2
-// To prevent split votes in the first place, election timeouts are
-// chosen randomly from a fixed interval (e.g., 150–300ms).
+//% Compliance
+//% Election timeout is chosen randomly between 150-300ms
 const MIN_REARM_DURATION: u64 = 150;
 const MAX_REARM_DURATION: u64 = 300;
 

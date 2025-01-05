@@ -22,12 +22,12 @@
 #### All Servers
 - [ ] If commitIndex > lastApplied: increment lastApplied
 - [ ] If commitIndex > lastApplied: apply log[lastApplied] to state machine (§5.3)
-- [ ] If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
+- [x] If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
 #### Followers (§5.2)
 - [ ] Respond to RPCs from candidates and leaders
-- [ ] If election timeout elapses without receiving AppendEntries RPC from current leader or granting vote to candidate: convert to candidate
+- [x] If election timeout elapses without receiving AppendEntries RPC from current leader or granting vote to candidate: convert to candidate
 #### Candidates (§5.2)
-- [ ] On conversion to candidate, start election:
+- [x] On conversion to candidate, start election:
   - [ ] Increment currentTerm
   - [ ] Vote for self
   - [ ] Reset election timer
@@ -142,7 +142,7 @@
 	- [ ] a timeout occurs and there is no winner (can happen if too many servers become candidates at the same time)
 		- [ ] increment its term
 		- [ ] start a new election by initiating another round of RequestVote
-- [ ] Election timeout is chosen randomly between 150-300ms
+- [x] Election timeout is chosen randomly between 150-300ms
 
 ### 5.3 Log replication
 - [ ] a leader services client requests

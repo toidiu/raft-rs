@@ -9,7 +9,7 @@ type EntriesLenTypeEncoding = u16;
 
 // Add entries
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AppendEntries {
+pub struct AppendEntriesState {
     //% Compliance:
     // term: leader’s term
     pub term: Term,
@@ -26,11 +26,12 @@ pub struct AppendEntries {
     // leaderCommit: leader’s commitIndex
     pub leader_commit_idx: Idx,
     //% Compliance:
-    // entries[]: log entries to store (empty for heartbeat; may send more than one for efficiency)
+    //% entries[]: log entries to store (empty for heartbeat; may send more than one for
+    //% efficiency)
     pub entries: Vec<Entry>,
 }
 
-impl AppendEntries {
+impl AppendEntriesState {
     pub const TAG: u8 = 3;
 
     pub fn term(&self) -> Term {
@@ -39,7 +40,7 @@ impl AppendEntries {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RespAppendEntries {
+pub struct RespAppendEntriesState {
     //% Compliance:
     //% term: currentTerm, for leader to update itself
     pub term: Term,
@@ -49,11 +50,11 @@ pub struct RespAppendEntries {
     pub success: bool,
 }
 
-impl RespAppendEntries {
+impl RespAppendEntriesState {
     pub const TAG: u8 = 4;
 }
 
-impl<'a> DecoderValue<'a> for AppendEntries {
+impl<'a> DecoderValue<'a> for AppendEntriesState {
     fn decode(buffer: s2n_codec::DecoderBuffer<'a>) -> s2n_codec::DecoderBufferResult<'a, Self> {
         let (term, buffer) = buffer.decode()?;
         let (leader_id, buffer) = buffer.decode()?;
@@ -72,7 +73,7 @@ impl<'a> DecoderValue<'a> for AppendEntries {
             entries.push(entry);
         }
 
-        let rpc = AppendEntries {
+        let rpc = AppendEntriesState {
             term,
             leader_id,
             prev_log_term_idx,
@@ -83,7 +84,7 @@ impl<'a> DecoderValue<'a> for AppendEntries {
     }
 }
 
-impl EncoderValue for AppendEntries {
+impl EncoderValue for AppendEntriesState {
     fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
         encoder.encode(&self.term);
         encoder.encode(&self.leader_id);
@@ -103,18 +104,18 @@ impl EncoderValue for AppendEntries {
     }
 }
 
-impl<'a> DecoderValue<'a> for RespAppendEntries {
+impl<'a> DecoderValue<'a> for RespAppendEntriesState {
     fn decode(buffer: s2n_codec::DecoderBuffer<'a>) -> s2n_codec::DecoderBufferResult<'a, Self> {
         let (term, buffer) = buffer.decode()?;
         let (success, buffer): (u8, _) = buffer.decode()?;
         let success = success != 0;
 
-        let rpc = RespAppendEntries { term, success };
+        let rpc = RespAppendEntriesState { term, success };
         Ok((rpc, buffer))
     }
 }
 
-impl EncoderValue for RespAppendEntries {
+impl EncoderValue for RespAppendEntriesState {
     fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
         encoder.encode(&self.term);
         encoder.write_slice(&(self.success as u8).to_be_bytes());
@@ -130,7 +131,7 @@ mod tests {
     // A Raft heartbeat doesn't have entries
     #[test]
     fn encode_decode_heartbeat_rpc() {
-        let rpc = AppendEntries {
+        let rpc = AppendEntriesState {
             term: Term::from(2),
             leader_id: ServerId::new([10; 16]),
             prev_log_term_idx: TermIdx::builder()
@@ -145,14 +146,14 @@ mod tests {
         rpc.encode(&mut buf);
 
         let d_buf = DecoderBuffer::new(&slice);
-        let (d_rpc, _) = AppendEntries::decode(d_buf).unwrap();
+        let (d_rpc, _) = AppendEntriesState::decode(d_buf).unwrap();
 
         assert_eq!(rpc, d_rpc);
     }
 
     #[test]
     fn encode_decode_rpc() {
-        let rpc = AppendEntries {
+        let rpc = AppendEntriesState {
             term: Term::from(2),
             leader_id: ServerId::new([10; 16]),
             prev_log_term_idx: TermIdx::builder()
@@ -170,14 +171,14 @@ mod tests {
         rpc.encode(&mut buf);
 
         let d_buf = DecoderBuffer::new(&slice);
-        let (d_rpc, _) = AppendEntries::decode(d_buf).unwrap();
+        let (d_rpc, _) = AppendEntriesState::decode(d_buf).unwrap();
 
         assert_eq!(rpc, d_rpc);
     }
 
     #[test]
     fn encode_decode_rpc_resp() {
-        let rpc = RespAppendEntries {
+        let rpc = RespAppendEntriesState {
             term: Term::from(2),
             success: true,
         };
@@ -187,7 +188,7 @@ mod tests {
         rpc.encode(&mut buf);
 
         let d_buf = DecoderBuffer::new(&slice);
-        let (d_rpc, _) = RespAppendEntries::decode(d_buf).unwrap();
+        let (d_rpc, _) = RespAppendEntriesState::decode(d_buf).unwrap();
 
         assert_eq!(rpc, d_rpc);
     }
