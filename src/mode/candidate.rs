@@ -129,7 +129,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_start_election() {
-        let mut candidate = CandidateState::default();
         let mut tx = MockTx::new();
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
@@ -142,6 +141,7 @@ mod tests {
             log: &Log::new(),
             peer_list: &vec![ServerId::new([1; 16])],
         };
+        let mut candidate = CandidateState::default();
 
         let _ = candidate.start_election(&mut tx, &mut context);
 
@@ -153,6 +153,30 @@ mod tests {
         let buffer = DecoderBuffer::new(&rpc_bytes);
         let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
         assert_eq!(expected_rpc, sent_request_vote);
+    }
+
+    #[tokio::test]
+    async fn test_start_election_with_no_peers() {
+        let mut tx = MockTx::new();
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+        let server_id = ServerId::new([6; 16]);
+        let mut state = State::new(timeout);
+        let mut context = Context {
+            server_id,
+            state: &mut state,
+            log: &Log::new(),
+            peer_list: &vec![],
+        };
+        let mut candidate = CandidateState::default();
+        assert_eq!(Mode::quorum(&context), 1);
+
+        // Elect self
+        let transition = candidate.start_election(&mut tx, &mut context);
+        assert!(matches!(transition, StateTransition::ToLeader));
+
+        // No RPC sent
+        assert!(tx.queue.is_empty());
     }
 
     #[tokio::test]
@@ -182,7 +206,7 @@ mod tests {
         ));
         assert!(Mode::quorum(&context) > candidate.votes_received.len());
 
-        // Dont count same vote
+        // Don't count same vote
         assert!(matches!(
             candidate.on_vote_received(peer_id_2, &context),
             ElectionResult::Pending

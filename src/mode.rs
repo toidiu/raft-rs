@@ -134,7 +134,11 @@ impl Mode {
                 // If the quorum size is 1, then a candidate will become leader immediately
                 self.on_leader(tx);
             }
-            StateTransition::ToCandidate | StateTransition::ToFollower => unreachable!(),
+            StateTransition::ToCandidate | StateTransition::ToFollower => {
+                unreachable!(
+                    "Its not possible to transistion to Follower or Candidate immediately after becoming a Candidate"
+                );
+            }
         }
     }
 
