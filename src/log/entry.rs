@@ -10,7 +10,7 @@ type Command = u8;
 //% 	- log index: integer
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
-    term_idx: TermIdx,
+    pub term_idx: TermIdx,
     command: Command,
 }
 

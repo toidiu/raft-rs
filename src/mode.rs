@@ -57,6 +57,14 @@ pub struct Context<'a> {
     peer_list: &'a Vec<ServerId>,
 }
 
+#[must_use]
+pub enum StateTransition {
+    None,
+    ToFollower,
+    ToCandidate,
+    ToLeader,
+}
+
 impl Mode {
     fn on_timeout<T: ServerTx>(&mut self, tx: &mut T, context: &mut Context) {
         match self {
@@ -66,7 +74,11 @@ impl Mode {
                 //% leader or granting vote to candidate: convert to candidate
                 self.on_candidate(tx, context);
             }
-            Mode::Candidate(candidate) => candidate.on_timeout(tx, context),
+            Mode::Candidate(candidate) => {
+                let transition = candidate.on_timeout(tx, context);
+                self.handle_state_transition(tx, transition, context);
+            }
+
             Mode::Leader(leader) => leader.on_timeout(tx),
         }
     }
@@ -92,6 +104,20 @@ impl Mode {
         }
     }
 
+    fn handle_state_transition<T: ServerTx>(
+        &mut self,
+        tx: &mut T,
+        transition: StateTransition,
+        context: &mut Context,
+    ) {
+        match transition {
+            StateTransition::None => (),
+            StateTransition::ToFollower => self.on_follower(tx),
+            StateTransition::ToCandidate => self.on_candidate(tx, context),
+            StateTransition::ToLeader => self.on_leader(tx),
+        }
+    }
+
     fn on_follower<T: ServerTx>(&mut self, tx: &mut T) {
         *self = Mode::Follower(FollowerState);
         let follower = cast_unsafe!(self, Mode::Follower);
@@ -99,14 +125,27 @@ impl Mode {
     }
 
     fn on_candidate<T: ServerTx>(&mut self, tx: &mut T, context: &mut Context) {
-        *self = Mode::Candidate(CandidateState);
+        *self = Mode::Candidate(CandidateState::default());
         let candidate = cast_unsafe!(self, Mode::Candidate);
-        candidate.on_candidate(tx, context);
+        match candidate.on_candidate(tx, context) {
+            StateTransition::None => (),
+            StateTransition::ToLeader => {
+                // If the quorum size is 1, then a candidate will become leader immediately
+                self.on_leader(tx);
+            }
+            StateTransition::ToCandidate | StateTransition::ToFollower => unreachable!(),
+        }
     }
 
     fn on_leader<T: ServerTx>(&mut self, tx: &mut T) {
         *self = Mode::Leader(LeaderState);
         let leader = cast_unsafe!(self, Mode::Leader);
         leader.on_leader(tx);
+    }
+
+    fn quorum(context: &Context) -> usize {
+        let peer_plus_self = context.peer_list.len() + 1;
+        let half = peer_plus_self / 2;
+        half + 1
     }
 }
