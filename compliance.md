@@ -28,9 +28,9 @@
 - [x] If election timeout elapses without receiving AppendEntries RPC from current leader or granting vote to candidate: convert to candidate
 #### Candidates (§5.2)
 - [x] On conversion to candidate, start election:
-  - [ ] Increment currentTerm
-  - [ ] Vote for self
-  - [ ] Reset election timer
+  - [x] Increment currentTerm
+  - [x] Vote for self
+  - [x] Reset election timer
   - [ ] Send RequestVote RPCs to all other servers
 - [ ] If votes received from majority of servers: become leader
 - [ ] If AppendEntries RPC received from new leader: convert to follower
