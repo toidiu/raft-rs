@@ -51,9 +51,10 @@ pub enum Mode {
 }
 
 pub struct Context<'a> {
-    state: &'a mut State,
     server_id: ServerId,
+    state: &'a mut State,
     log: &'a Log,
+    peer_list: &'a Vec<ServerId>,
 }
 
 impl Mode {
@@ -71,7 +72,7 @@ impl Mode {
     }
 
     fn on_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc, state: &mut State) {
-        //% Compliance
+        //% Compliance:
         //% If RPC request or response contains term T > currentTerm: set currentTerm = T, convert
         //% to follower (§5.1)
         if rpc.term() > &state.current_term {

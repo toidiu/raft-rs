@@ -4,6 +4,11 @@ use s2n_codec::{DecoderValue, EncoderValue};
 struct Server {
     mode: Mode,
     state: State,
+    peer_list: Vec<Peer>,
+}
+
+struct Peer {
+    id: ServerId,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
