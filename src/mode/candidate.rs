@@ -1,6 +1,6 @@
 use crate::{
     io::IO_BUF_LEN,
-    mode::{Context, Mode, ServerTx, StateTransition},
+    mode::{Context, Mode, ServerTx, ModeTransition},
     rpc::Rpc,
     server::ServerId,
 };
@@ -17,7 +17,7 @@ impl CandidateState {
         &mut self,
         tx: &mut T,
         context: &mut Context,
-    ) -> StateTransition {
+    ) -> ModeTransition {
         //% Compliance:
         //% On conversion to candidate, start election:
         self.start_election(tx, context)
@@ -27,7 +27,7 @@ impl CandidateState {
         &mut self,
         tx: &mut T,
         context: &mut Context,
-    ) -> StateTransition {
+    ) -> ModeTransition {
         //% Compliance:
         //% If election timeout elapses: start new election
         self.start_election(tx, context)
@@ -46,7 +46,7 @@ impl CandidateState {
         &mut self,
         tx: &mut T,
         context: &mut Context,
-    ) -> StateTransition {
+    ) -> ModeTransition {
         //% Compliance:
         //% Increment currentTerm
         context.state.current_term.increment();
@@ -58,7 +58,7 @@ impl CandidateState {
             self.cast_vote(context.server_id, context),
             ElectionResult::Elected
         ) {
-            return StateTransition::ToLeader;
+            return ModeTransition::ToLeader;
         }
 
         //% Compliance:
@@ -76,7 +76,7 @@ impl CandidateState {
         Rpc::new_request_vote(term, context.server_id, last_term_idx).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
 
-        StateTransition::None
+        ModeTransition::None
     }
 
     fn cast_vote(&mut self, vote_for_server: ServerId, context: &mut Context) -> ElectionResult {
@@ -173,7 +173,7 @@ mod tests {
 
         // Elect self
         let transition = candidate.start_election(&mut tx, &mut context);
-        assert!(matches!(transition, StateTransition::ToLeader));
+        assert!(matches!(transition, ModeTransition::ToLeader));
 
         // No RPC sent
         assert!(tx.queue.is_empty());

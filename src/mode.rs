@@ -58,14 +58,6 @@ pub struct Context<'a> {
     peer_list: &'a Vec<ServerId>,
 }
 
-#[must_use]
-pub enum StateTransition {
-    None,
-    ToFollower,
-    ToCandidate,
-    ToLeader,
-}
-
 impl Mode {
     fn on_timeout<T: ServerTx>(&mut self, tx: &mut T, context: &mut Context) {
         match self {
@@ -108,14 +100,14 @@ impl Mode {
     fn handle_state_transition<T: ServerTx>(
         &mut self,
         tx: &mut T,
-        transition: StateTransition,
+        transition: ModeTransition,
         context: &mut Context,
     ) {
         match transition {
-            StateTransition::None => (),
-            StateTransition::ToFollower => self.on_follower(tx),
-            StateTransition::ToCandidate => self.on_candidate(tx, context),
-            StateTransition::ToLeader => self.on_leader(tx),
+            ModeTransition::None => (),
+            ModeTransition::ToFollower => self.on_follower(tx),
+            ModeTransition::ToCandidate => self.on_candidate(tx, context),
+            ModeTransition::ToLeader => self.on_leader(tx),
         }
     }
 
@@ -129,12 +121,12 @@ impl Mode {
         *self = Mode::Candidate(CandidateState::default());
         let candidate = cast_unsafe!(self, Mode::Candidate);
         match candidate.on_candidate(tx, context) {
-            StateTransition::None => (),
-            StateTransition::ToLeader => {
+            ModeTransition::None => (),
+            ModeTransition::ToLeader => {
                 // If the quorum size is 1, then a candidate will become leader immediately
                 self.on_leader(tx);
             }
-            StateTransition::ToCandidate | StateTransition::ToFollower => {
+            ModeTransition::ToCandidate | ModeTransition::ToFollower => {
                 unreachable!(
                     "Its not possible to transistion to Follower or Candidate immediately after becoming a Candidate"
                 );
@@ -154,6 +146,15 @@ impl Mode {
         half + 1
     }
 }
+
+#[must_use]
+pub enum ModeTransition {
+    None,
+    ToFollower,
+    ToCandidate,
+    ToLeader,
+}
+
 
 #[cfg(test)]
 mod tests {
