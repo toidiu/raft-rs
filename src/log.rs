@@ -11,18 +11,16 @@ pub use term_idx::TermIdx;
 #[derive(Debug)]
 pub struct Log {
     entries: Vec<Entry>,
-    last_term_idx: TermIdx,
 }
 
 impl Log {
     pub fn new() -> Self {
-        Log {
-            entries: vec![],
-            last_term_idx: TermIdx::initial(),
-        }
+        Log { entries: vec![] }
     }
 
     pub fn last_term_idx(&self) -> TermIdx {
-        self.last_term_idx
+        self.entries
+            .last()
+            .map_or(TermIdx::initial(), |e| e.term_idx)
     }
 }

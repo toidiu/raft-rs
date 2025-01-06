@@ -4,6 +4,7 @@ use s2n_codec::{DecoderValue, EncoderValue};
 struct Server {
     mode: Mode,
     state: State,
+    // FIXME make into Set
     peer_list: Vec<Peer>,
 }
 
