@@ -1,4 +1,4 @@
-use crate::{mode::ServerTx, rpc::Rpc};
+use crate::mode::ServerTx;
 
 #[derive(Debug, Default)]
 pub struct FollowerState;
@@ -11,14 +11,8 @@ impl FollowerState {
     pub fn on_recv<T: ServerTx>(
         &mut self,
         _tx: &mut T,
-        rpc: crate::rpc::Rpc,
+        _rpc: crate::rpc::Rpc,
         _state: &mut crate::state::State,
     ) {
-        match rpc {
-            Rpc::RequestVote(_request_vote_state) => todo!(),
-            Rpc::RespRequestVote(_resp_request_vote_state) => todo!(),
-            Rpc::AppendEntries(_append_entries_state) => todo!(),
-            Rpc::RespAppendEntries(_resp_append_entries_state) => todo!(),
-        }
     }
 }
