@@ -3,7 +3,7 @@ use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 //% Compliance:
 //% `currentTerm` latest term server has seen (initialized to 0 on first boot, increases
 //% monotonically)
-pub const INITIAL_TERM: Term = Term(0);
+const INITIAL_TERM: Term = Term(0);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Term(u64);
@@ -11,6 +11,10 @@ pub struct Term(u64);
 impl Term {
     pub const fn initial() -> Self {
         INITIAL_TERM
+    }
+
+    pub fn increment(&mut self) {
+        self.0 += 1;
     }
 }
 

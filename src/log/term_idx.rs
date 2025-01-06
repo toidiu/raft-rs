@@ -2,6 +2,11 @@ use crate::log::{idx::Idx, term::Term};
 use core::cmp::Ordering;
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 
+const INITIAL_TERM_IDX: TermIdx = TermIdx {
+    term: Term::initial(),
+    idx: Idx::initial(),
+};
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct TermIdx {
     term: Term,
@@ -9,6 +14,10 @@ pub struct TermIdx {
 }
 
 impl TermIdx {
+    pub const fn initial() -> Self {
+        INITIAL_TERM_IDX
+    }
+
     pub fn builder() -> TermIdxWithTermBuilder {
         TermIdxWithTermBuilder
     }

@@ -13,6 +13,7 @@ pub mod testing;
 pub use network::{NetTx, NetworkIO};
 pub use server::{ServerIO, ServerRx, ServerTx};
 
+// FIXME this is allocated per recv/send. Instead allocate a common buffer that can be reused.
 // The default size of the buffer used to send/recv from the IO queues
 pub const IO_BUF_LEN: usize = 1024;
 
