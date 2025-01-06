@@ -58,12 +58,8 @@ impl Timeout {
     }
 
     /// Returns a Future which can be polled to check if the timeout has expired.
-    pub(crate) fn timeout_ready(
-        &mut self,
-    ) -> TimeoutReady<'_> {
-        TimeoutReady {
-            timeout: self,
-        }
+    pub(crate) fn timeout_ready(&mut self) -> TimeoutReady<'_> {
+        TimeoutReady { timeout: self }
     }
 
     /// Check if the timeout has expired.
