@@ -53,6 +53,8 @@ impl CandidateState {
             self.cast_vote(context.server_id, context),
             ElectionResult::Elected
         ) {
+            //% Compliance:
+            //% If votes received from majority of servers: become leader
             return ModeTransition::ToLeader;
         }
 
