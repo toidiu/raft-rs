@@ -74,7 +74,7 @@ impl Timeout {
     /// Reset the expiration time.
     ///
     /// Sets the next timeout to a duration relative to `Instant::now()`.
-    fn rearm(&mut self) {
+    pub fn reset(&mut self) {
         let duration = Self::rearm_duration(&mut self.prng);
         let expire = Instant::now() + duration;
 
@@ -108,7 +108,7 @@ impl Future for TimeoutReady<'_> {
 
         // rearm the timeout if expired to ensure perpetual progress
         if poll.is_ready() {
-            this.timeout.rearm();
+            this.timeout.reset();
         }
         poll
     }

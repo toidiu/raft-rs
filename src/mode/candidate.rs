@@ -46,8 +46,10 @@ impl CandidateState {
 
         //% Compliance:
         //% Reset election timer
+        state.election_timer.reset();
 
         //% Compliance:
         //% Send RequestVote RPCs to all other servers
+        // TODO
     }
 }
