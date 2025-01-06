@@ -69,7 +69,7 @@ impl Mode {
             }
             Mode::Candidate(candidate) => {
                 let transition = candidate.on_timeout(tx, context);
-                self.handle_state_transition(tx, transition, context);
+                self.handle_mode_transition(tx, transition, context);
             }
 
             Mode::Leader(leader) => leader.on_timeout(tx),
@@ -97,7 +97,7 @@ impl Mode {
         }
     }
 
-    fn handle_state_transition<T: ServerTx>(
+    fn handle_mode_transition<T: ServerTx>(
         &mut self,
         tx: &mut T,
         transition: ModeTransition,
@@ -120,6 +120,7 @@ impl Mode {
     fn on_candidate<T: ServerTx>(&mut self, tx: &mut T, context: &mut Context) {
         *self = Mode::Candidate(CandidateState::default());
         let candidate = cast_unsafe!(self, Mode::Candidate);
+
         match candidate.on_candidate(tx, context) {
             ModeTransition::None => (),
             ModeTransition::ToLeader => {
@@ -127,9 +128,7 @@ impl Mode {
                 self.on_leader(tx);
             }
             ModeTransition::ToCandidate | ModeTransition::ToFollower => {
-                unreachable!(
-                    "Its not possible to transistion to Follower or Candidate immediately after becoming a Candidate"
-                );
+                unreachable!("Invalid mode transition");
             }
         }
     }
@@ -154,7 +153,6 @@ pub enum ModeTransition {
     ToCandidate,
     ToLeader,
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -1,6 +1,6 @@
 use crate::{
     io::IO_BUF_LEN,
-    mode::{Context, Mode, ServerTx, ModeTransition},
+    mode::{Context, Mode, ModeTransition, ServerTx},
     rpc::Rpc,
     server::ServerId,
 };
@@ -42,18 +42,13 @@ impl CandidateState {
         todo!()
     }
 
-    fn start_election<T: ServerTx>(
-        &mut self,
-        tx: &mut T,
-        context: &mut Context,
-    ) -> ModeTransition {
+    fn start_election<T: ServerTx>(&mut self, tx: &mut T, context: &mut Context) -> ModeTransition {
         //% Compliance:
         //% Increment currentTerm
         context.state.current_term.increment();
 
         //% Compliance:
         //% Vote for self
-        // context.state.voted_for = Some(context.server_id);
         if matches!(
             self.cast_vote(context.server_id, context),
             ElectionResult::Elected
@@ -143,7 +138,8 @@ mod tests {
         };
         let mut candidate = CandidateState::default();
 
-        let _ = candidate.start_election(&mut tx, &mut context);
+        let transition = candidate.start_election(&mut tx, &mut context);
+        assert!(matches!(transition, ModeTransition::None));
 
         // construct RPC to compare
         current_term.increment();
