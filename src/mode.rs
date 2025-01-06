@@ -54,6 +54,7 @@ pub struct Context<'a> {
     server_id: ServerId,
     state: &'a mut State,
     log: &'a Log,
+    // FIXME make into Set
     peer_list: &'a Vec<ServerId>,
 }
 
@@ -147,5 +148,44 @@ impl Mode {
         let peer_plus_self = context.peer_list.len() + 1;
         let half = peer_plus_self / 2;
         half + 1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::timeout::Timeout;
+    use rand::SeedableRng;
+    use rand_pcg::Pcg32;
+
+    #[tokio::test]
+    async fn test_quorum() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+        let mut state = State::new(timeout);
+        let server_id = ServerId::new([6; 16]);
+        let mut context = Context {
+            server_id,
+            state: &mut state,
+            log: &Log::new(),
+            peer_list: &vec![],
+        };
+        assert_eq!(Mode::quorum(&context), 1);
+
+        let peer_list = vec![ServerId::new([1; 16])];
+        context.peer_list = &peer_list;
+        assert_eq!(Mode::quorum(&context), 2);
+
+        let peer_list = vec![ServerId::new([1; 16]), ServerId::new([2; 16])];
+        context.peer_list = &peer_list;
+        assert_eq!(Mode::quorum(&context), 2);
+
+        let peer_list = vec![
+            ServerId::new([1; 16]),
+            ServerId::new([2; 16]),
+            ServerId::new([3; 16]),
+        ];
+        context.peer_list = &peer_list;
+        assert_eq!(Mode::quorum(&context), 3);
     }
 }

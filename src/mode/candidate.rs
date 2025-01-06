@@ -1,7 +1,6 @@
-use crate::mode::StateTransition;
 use crate::{
     io::IO_BUF_LEN,
-    mode::{Context, Mode, ServerTx},
+    mode::{Context, Mode, ServerTx, StateTransition},
     rpc::Rpc,
     server::ServerId,
 };
@@ -14,13 +13,21 @@ pub struct CandidateState {
 }
 
 impl CandidateState {
-    pub fn on_candidate<T: ServerTx>(&mut self, tx: &mut T, context: &mut Context) -> StateTransition {
+    pub fn on_candidate<T: ServerTx>(
+        &mut self,
+        tx: &mut T,
+        context: &mut Context,
+    ) -> StateTransition {
         //% Compliance:
         //% On conversion to candidate, start election:
         self.start_election(tx, context)
     }
 
-    pub fn on_timeout<T: crate::io::ServerTx>(&mut self, tx: &mut T, context: &mut Context) -> StateTransition {
+    pub fn on_timeout<T: crate::io::ServerTx>(
+        &mut self,
+        tx: &mut T,
+        context: &mut Context,
+    ) -> StateTransition {
         //% Compliance:
         //% If election timeout elapses: start new election
         self.start_election(tx, context)
@@ -35,7 +42,11 @@ impl CandidateState {
         todo!()
     }
 
-    fn start_election<T: ServerTx>(&mut self, tx: &mut T, context: &mut Context) -> StateTransition {
+    fn start_election<T: ServerTx>(
+        &mut self,
+        tx: &mut T,
+        context: &mut Context,
+    ) -> StateTransition {
         //% Compliance:
         //% Increment currentTerm
         context.state.current_term.increment();
@@ -43,8 +54,11 @@ impl CandidateState {
         //% Compliance:
         //% Vote for self
         // context.state.voted_for = Some(context.server_id);
-        if matches!(self.cast_vote(context.server_id, context), ElectionResult::Elected) {
-            return StateTransition::ToLeader
+        if matches!(
+            self.cast_vote(context.server_id, context),
+            ElectionResult::Elected
+        ) {
+            return StateTransition::ToLeader;
         }
 
         //% Compliance:
@@ -67,7 +81,6 @@ impl CandidateState {
 
     fn cast_vote(&mut self, vote_for_server: ServerId, context: &mut Context) -> ElectionResult {
         let self_id = context.server_id;
-
         if self_id == vote_for_server {
             // voting for self
             context.state.voted_for = Some(self_id);
@@ -127,10 +140,10 @@ mod tests {
             server_id,
             state: &mut state,
             log: &Log::new(),
-            peer_list: &vec![],
+            peer_list: &vec![ServerId::new([1; 16])],
         };
 
-        candidate.start_election(&mut tx, &mut context);
+        let _ = candidate.start_election(&mut tx, &mut context);
 
         // construct RPC to compare
         current_term.increment();
@@ -140,5 +153,47 @@ mod tests {
         let buffer = DecoderBuffer::new(&rpc_bytes);
         let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
         assert_eq!(expected_rpc, sent_request_vote);
+    }
+
+    #[tokio::test]
+    async fn test_cast_vote() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+        let mut state = State::new(timeout);
+
+        let self_id = ServerId::new([1; 16]);
+        let peer_id_2 = ServerId::new([2; 16]);
+        let peer_id_3 = ServerId::new([3; 16]);
+        let peer_list = vec![peer_id_2, peer_id_3];
+        let context = Context {
+            server_id: self_id,
+            state: &mut state,
+            log: &Log::new(),
+            peer_list: &peer_list,
+        };
+        let mut candidate = CandidateState::default();
+        assert_eq!(Mode::quorum(&context), 2);
+        assert!(Mode::quorum(&context) > candidate.votes_received.len());
+
+        // Receive peer's vote
+        assert!(matches!(
+            candidate.on_vote_received(peer_id_2, &context),
+            ElectionResult::Pending
+        ));
+        assert!(Mode::quorum(&context) > candidate.votes_received.len());
+
+        // Dont count same vote
+        assert!(matches!(
+            candidate.on_vote_received(peer_id_2, &context),
+            ElectionResult::Pending
+        ));
+        assert!(Mode::quorum(&context) > candidate.votes_received.len());
+
+        // Vote for self and reach quorum
+        assert!(matches!(
+            candidate.on_vote_received(self_id, &context),
+            ElectionResult::Elected
+        ));
+        assert_eq!(Mode::quorum(&context), 2);
     }
 }
