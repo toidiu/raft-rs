@@ -58,13 +58,11 @@ impl Timeout {
     }
 
     /// Returns a Future which can be polled to check if the timeout has expired.
-    pub(crate) fn timeout_ready<'a, R: RngCore>(
-        &'a mut self,
-        prng: &'a mut R,
-    ) -> TimeoutReady<'a, R> {
+    pub(crate) fn timeout_ready(
+        &mut self,
+    ) -> TimeoutReady<'_> {
         TimeoutReady {
             timeout: self,
-            prng,
         }
     }
 
@@ -76,8 +74,8 @@ impl Timeout {
     /// Reset the expiration time.
     ///
     /// Sets the next timeout to a duration relative to `Instant::now()`.
-    fn rearm<R: RngCore>(&mut self, prng: &mut R) {
-        let duration = Self::rearm_duration(prng);
+    fn rearm(&mut self) {
+        let duration = Self::rearm_duration(&mut self.prng);
         let expire = Instant::now() + duration;
 
         // reset the sleep future
@@ -95,14 +93,13 @@ pin_project! {
     /// A handle to check if the timeout has expired.
     ///
     /// Auto-rearms the Timout upon expiration.
-    pub(crate) struct TimeoutReady<'a, R: RngCore> {
+    pub(crate) struct TimeoutReady<'a> {
         #[pin]
         timeout: &'a mut Timeout,
-        prng: &'a mut R
     }
 }
 
-impl<R: RngCore> Future for TimeoutReady<'_, R> {
+impl Future for TimeoutReady<'_> {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -111,7 +108,7 @@ impl<R: RngCore> Future for TimeoutReady<'_, R> {
 
         // rearm the timeout if expired to ensure perpetual progress
         if poll.is_ready() {
-            this.timeout.rearm(&mut this.prng);
+            this.timeout.rearm();
         }
         poll
     }
@@ -135,19 +132,19 @@ mod tests {
     #[tokio::test]
     async fn manually_check_elapsed_time() {
         tokio::time::pause();
-        let mut prng = Pcg32::from_seed([0; 16]);
+        let prng = Pcg32::from_seed([0; 16]);
         let mut timeout = Timeout::new(prng.clone());
 
         let (waker, cnt) = new_count_waker();
         let mut ctx = Context::from_waker(&waker);
 
-        let mut timeout_rdy = pin!(timeout.timeout_ready(&mut prng));
+        let mut timeout_rdy = pin!(timeout.timeout_ready());
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_pending());
         assert_eq!(cnt, 0);
 
         // wait less than timeout target
         advance(Duration::from_millis(149)).await;
-        let mut timeout_rdy = pin!(timeout.timeout_ready(&mut prng));
+        let mut timeout_rdy = pin!(timeout.timeout_ready());
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_pending());
         assert_eq!(cnt, 0);
 
@@ -156,7 +153,7 @@ mod tests {
             MAX_REARM_DURATION - MIN_REARM_DURATION,
         ))
         .await;
-        let mut timeout_rdy = pin!(timeout.timeout_ready(&mut prng));
+        let mut timeout_rdy = pin!(timeout.timeout_ready());
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_ready());
         assert_eq!(cnt, 1);
     }
@@ -164,13 +161,13 @@ mod tests {
     #[tokio::test]
     async fn test_auto_rearm_on_expiration() {
         tokio::time::pause();
-        let mut prng = Pcg32::from_seed([0; 16]);
+        let prng = Pcg32::from_seed([0; 16]);
         let mut timeout = Timeout::new(prng.clone());
 
         let (waker, cnt) = new_count_waker();
         let mut ctx = Context::from_waker(&waker);
 
-        let mut timeout_rdy = pin!(timeout.timeout_ready(&mut prng));
+        let mut timeout_rdy = pin!(timeout.timeout_ready());
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_pending());
         assert_eq!(cnt, 0);
 
@@ -178,13 +175,13 @@ mod tests {
         let expiration_duration_plus_1 =
             duration_to_expiration(&timeout) + Duration::from_millis(1);
         advance(expiration_duration_plus_1).await;
-        let mut timeout_rdy = pin!(timeout.timeout_ready(&mut prng));
+        let mut timeout_rdy = pin!(timeout.timeout_ready());
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_ready());
         assert_eq!(cnt, 1);
 
         // timeout should have rearmed but not expired
         assert!(duration_to_expiration(&timeout) > Duration::from_millis(MIN_REARM_DURATION));
-        let mut timeout_rdy = pin!(timeout.timeout_ready(&mut prng));
+        let mut timeout_rdy = pin!(timeout.timeout_ready());
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_pending());
         assert_eq!(cnt, 1);
 
@@ -192,7 +189,7 @@ mod tests {
         let expiration_duration_plus_1 =
             duration_to_expiration(&timeout) + Duration::from_millis(1);
         advance(expiration_duration_plus_1).await;
-        let mut timeout_rdy = pin!(timeout.timeout_ready(&mut prng));
+        let mut timeout_rdy = pin!(timeout.timeout_ready());
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_ready());
         assert_eq!(cnt, 2);
     }
