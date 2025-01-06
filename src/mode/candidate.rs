@@ -4,10 +4,6 @@ use crate::mode::ServerTx;
 pub struct CandidateState;
 
 impl CandidateState {
-    fn start_election(&mut self) {}
-}
-
-impl CandidateState {
     pub fn on_candidate<T: ServerTx>(&mut self, io: &mut T) {
         //% Compliance:
         //% On conversion to candidate, start election:
@@ -28,4 +24,6 @@ impl CandidateState {
     ) {
         todo!()
     }
+
+    fn start_election(&mut self) {}
 }
