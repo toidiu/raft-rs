@@ -12,6 +12,10 @@ impl Term {
     pub const fn initial() -> Self {
         INITIAL_TERM
     }
+
+    pub fn increment(&mut self) {
+        self.0 += 1;
+    }
 }
 
 impl From<u64> for Term {

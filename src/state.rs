@@ -13,7 +13,7 @@ pub struct State {
 
     //% Compliance
     //% `votedFor` `candidateId` that received vote in current term (or null if none)
-    voted_for: Option<ServerId>,
+    pub voted_for: Option<ServerId>,
 
     //% Compliance
     //% `log[]` log entries; each entry contains command for state machine, and term when entry was

@@ -35,6 +35,7 @@ use crate::{
     macros::cast_unsafe,
     mode::{candidate::CandidateState, follower::FollowerState, leader::LeaderState},
     rpc::Rpc,
+    server::ServerId,
     state::State,
 };
 
@@ -49,15 +50,15 @@ pub enum Mode {
 }
 
 impl Mode {
-    fn on_timeout<T: ServerTx>(&mut self, tx: &mut T) {
+    fn on_timeout<T: ServerTx>(&mut self, tx: &mut T, state: &mut State, server_id: ServerId) {
         match self {
             Mode::Follower(_follower) => {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
                 //% leader or granting vote to candidate: convert to candidate
-                self.on_candidate(tx);
+                self.on_candidate(tx, state, server_id);
             }
-            Mode::Candidate(candidate) => candidate.on_timeout(tx),
+            Mode::Candidate(candidate) => candidate.on_timeout(tx, state, server_id),
             Mode::Leader(leader) => leader.on_timeout(tx),
         }
     }
@@ -89,10 +90,10 @@ impl Mode {
         follower.on_follower(tx);
     }
 
-    fn on_candidate<T: ServerTx>(&mut self, tx: &mut T) {
+    fn on_candidate<T: ServerTx>(&mut self, tx: &mut T, state: &mut State, server_id: ServerId) {
         *self = Mode::Candidate(CandidateState);
         let candidate = cast_unsafe!(self, Mode::Candidate);
-        candidate.on_candidate(tx);
+        candidate.on_candidate(tx, state, server_id);
     }
 
     fn on_leader<T: ServerTx>(&mut self, tx: &mut T) {
