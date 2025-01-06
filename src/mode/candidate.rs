@@ -17,7 +17,7 @@ impl CandidateState {
 
     pub fn on_timeout<T: crate::io::ServerTx>(&mut self, tx: &mut T, context: &mut Context) {
         //% Compliance:
-        //% On conversion to candidate, start election:
+        //% If election timeout elapses: start new election
         self.start_election(tx, context);
     }
 
@@ -53,5 +53,45 @@ impl CandidateState {
         let last_term_idx = context.log.last_term_idx();
         Rpc::new_request_vote(term, context.server_id, last_term_idx).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        io::testing::MockTx, log::TermIdx, mode::Log, server::ServerId, state::State,
+        timeout::Timeout,
+    };
+    use rand::SeedableRng;
+    use rand_pcg::Pcg32;
+    use s2n_codec::DecoderBuffer;
+
+    #[tokio::test]
+    async fn test_start_election() {
+        let mut candidate = CandidateState;
+        let mut tx = MockTx::new();
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+        let server_id = ServerId::new([6; 16]);
+        let mut state = State::new(timeout);
+        let mut current_term = state.current_term;
+        let mut context = Context {
+            server_id,
+            state: &mut state,
+            log: &Log::new(),
+            peer_list: &vec![],
+        };
+
+        candidate.start_election(&mut tx, &mut context);
+
+        // construct RPC to compare
+        current_term.increment();
+        let expected_rpc = Rpc::new_request_vote(current_term, server_id, TermIdx::initial());
+
+        let rpc_bytes = tx.queue.pop().unwrap();
+        let buffer = DecoderBuffer::new(&rpc_bytes);
+        let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
+        assert_eq!(expected_rpc, sent_request_vote);
     }
 }
