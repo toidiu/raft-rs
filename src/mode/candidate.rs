@@ -35,11 +35,43 @@ impl CandidateState {
 
     pub fn on_recv<T: ServerTx>(
         &mut self,
-        _tx: &mut T,
-        _rpc: crate::rpc::Rpc,
-        _state: &mut crate::state::State,
-    ) {
-        todo!()
+        tx: &mut T,
+        rpc: crate::rpc::Rpc,
+        context: &mut Context,
+    ) -> (ModeTransition, Option<Rpc>) {
+        match rpc {
+            Rpc::RequestVote(_request_vote_state) => todo!(),
+            Rpc::RespRequestVote(_resp_request_vote_state) => todo!(),
+            Rpc::AppendEntries(ref append_entries_state) => {
+                //% Compliance:
+                //% If AppendEntries RPC received from new leader: convert to follower
+
+                //% Compliance:
+                //% a candidate receives AppendEntries from another server claiming to be a leader
+                if append_entries_state.term >= context.state.current_term {
+                    //% Compliance:
+                    //% if that leader's current term is >= the candidate's
+                    //
+                    //% Compliance:
+                    //% then the candidate reverts to a follower
+                    return (ModeTransition::ToFollower, Some(rpc));
+                } else {
+                    //% Compliance:
+                    //% if the leader's current term is < the candidate's
+                    //
+                    //% Compliance:
+                    //% reject the RPC and continue in the candidate state
+                    let mut slice = vec![0; IO_BUF_LEN];
+                    let mut buf = EncoderBuffer::new(&mut slice);
+                    let term = context.state.current_term;
+                    Rpc::new_append_entry_resp(term, false).encode_mut(&mut buf);
+                    tx.send(buf.as_mut_slice().to_vec());
+                }
+            }
+            Rpc::RespAppendEntries(_resp_append_entries_state) => todo!(),
+        }
+
+        (ModeTransition::None, None)
     }
 
     fn start_election<T: ServerTx>(&mut self, tx: &mut T, context: &mut Context) -> ModeTransition {

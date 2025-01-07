@@ -33,7 +33,7 @@
   - [x] Reset election timer
   - [ ] Send RequestVote RPCs to all other servers
 - [x] If votes received from majority of servers: become leader
-- [ ] If AppendEntries RPC received from new leader: convert to follower
+- [x] If AppendEntries RPC received from new leader: convert to follower
 - [x] If election timeout elapses: start new election
 #### Leaders
 - [ ] Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat during idle periods to prevent election timeouts (§5.2)
@@ -56,8 +56,8 @@
 - [x] success: true if follower contained entry matching prevLogIndex and
   prevLogTerm
 #### Receiver implementation
-- [ ] Reply false if term < currentTerm (§5.1)
-- [ ] Reply false if log doesn’t contain an entry at prevLogIndex whose term  matches prevLogTerm (§5.3)
+- [x] Reply false if term < currentTerm (§5.1)
+- [x] Reply false if log doesn’t contain an entry at prevLogIndex whose term  matches prevLogTerm (§5.3)
 - [ ] If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it (§5.3)
 - [ ] Append any new entries not already in the log
 - [ ] If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
@@ -132,13 +132,13 @@
 		- [ ] a server can only vote once for a given term (first-come basis)
 		- [ ] a candidate becomes `leader` if it wins the election
 		- [ ] sends a heartbeat to establish itself as a leader and prevent a new election
-	- [ ] another server establishes itself as a leader
-		- [ ] a candidate receives AppendEntries from another server claiming to be a leader
-		- [ ] if that leader's current term is >= the candidate's
-			- [ ] recognize the server as the new leader
-			- [ ] then the candidate reverts to a follower
-		- [ ] if the leader's current term is < the candidate's
-			- [ ] reject the RPC and continue in the candidate state
+	- [x] another server establishes itself as a leader
+		- [x] a candidate receives AppendEntries from another server claiming to be a leader
+		- [x] if that leader's current term is >= the candidate's
+			- [x] recognize the server as the new leader
+			- [x] then the candidate reverts to a follower
+		- [x] if the leader's current term is < the candidate's
+			- [x] reject the RPC and continue in the candidate state
 	- [ ] a timeout occurs and there is no winner (can happen if too many servers become candidates at the same time)
 		- [ ] increment its term
 		- [ ] start a new election by initiating another round of RequestVote
@@ -165,7 +165,7 @@
 		- [ ] includes that number in future AppendEntries
 		- [ ] once a follower learns an entry is committed (`leaderCommit` in AppendEntries), it applies the entry to its state machine
 - **Log Matching Property**
-	- if two entries in different logs have the same index/term, they store the same command
+	- [x] if two entries in different logs have the same index/term, they store the same command
 	- if two entries in different logs have the same index/term, all preceding entries are identical
 - AppendEntries helps perform a consistency check
 	- [ ] the leader includes the index and term of the entry immediately preceding the new entries

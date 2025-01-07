@@ -76,24 +76,47 @@ impl Mode {
         }
     }
 
-    fn on_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc, state: &mut State) {
+    fn on_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc, context: &mut Context) {
         //% Compliance:
         //% If RPC request or response contains term T > currentTerm: set currentTerm = T, convert
         //% to follower (§5.1)
-        if rpc.term() > &state.current_term {
-            state.current_term = *rpc.term();
+        if rpc.term() > &context.state.current_term {
+            context.state.current_term = *rpc.term();
             self.on_follower(tx);
         }
 
-        match self {
+        let rpc = match self {
             Mode::Follower(follower) => {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
                 //% leader or granting vote to candidate: convert to candidate
-                follower.on_recv(tx, rpc, state);
+                follower.on_recv(tx, rpc, context);
+                None
             }
-            Mode::Candidate(candidate) => candidate.on_recv(tx, rpc, state),
-            Mode::Leader(leader) => leader.on_recv(tx, rpc, state),
+            Mode::Candidate(candidate) => {
+                let (transition, rpc) = candidate.on_recv(tx, rpc, context);
+                self.handle_mode_transition(tx, transition, context);
+
+                //% Compliance:
+                //% another server establishes itself as a leader
+                //
+                //% Compliance:
+                //% recognize the server as the new leader
+                // If converted
+                rpc
+            }
+            Mode::Leader(leader) => {
+                leader.on_recv(tx, rpc, context);
+                None
+            }
+        };
+
+        // Attempt to process the RPC again.
+        //
+        // An RPC might only be partially processed if it results in a ModeTransition and should be
+        // processed again by the new Mode.
+        if let Some(rpc) = rpc {
+            self.on_recv(tx, rpc, context)
         }
     }
 
@@ -157,9 +180,14 @@ pub enum ModeTransition {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::timeout::Timeout;
+    use crate::{
+        io::testing::MockTx,
+        log::{Idx, Term, TermIdx},
+        timeout::Timeout,
+    };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
+    use s2n_codec::DecoderBuffer;
 
     #[tokio::test]
     async fn test_quorum() {
@@ -190,5 +218,91 @@ mod tests {
         ];
         context.peer_list = &peer_list;
         assert_eq!(Mode::quorum(&context), 3);
+    }
+
+    #[tokio::test]
+    async fn candidate_recv_append_entries_with_gt_eq_term() {
+        let current_term = Term::from(2);
+
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+        let mut state = State::new(timeout);
+        state.current_term = current_term;
+
+        let peer_id = ServerId::new([2; 16]);
+        let peer_list = vec![peer_id];
+        let mut context = Context {
+            server_id: ServerId::new([1; 16]),
+            state: &mut state,
+            log: &Log::new(),
+            peer_list: &peer_list,
+        };
+        let mut mode = Mode::Candidate(CandidateState::default());
+        let mut tx = MockTx::new();
+
+        // Mock send AppendEntries to Candidate with `term => current_term`
+        let append_entries = Rpc::new_append_entry(
+            current_term,
+            peer_id,
+            TermIdx::initial(),
+            Idx::initial(),
+            vec![],
+        );
+        mode.on_recv(&mut tx, append_entries, &mut context);
+
+        // expect Mode::Follower
+        assert!(matches!(mode, Mode::Follower(_)));
+
+        // expect Follower to send RespAppendEntries acknowleding the leader
+        // construct RPC to compare
+        let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
+        let rpc_bytes = tx.queue.pop().unwrap();
+        assert!(tx.queue.is_empty());
+        let buffer = DecoderBuffer::new(&rpc_bytes);
+        let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
+        assert_eq!(expected_rpc, sent_request_vote);
+    }
+
+    #[tokio::test]
+    async fn candidate_recv_append_entries_with_smaller_term() {
+        let current_term = Term::from(2);
+
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+        let mut state = State::new(timeout);
+        state.current_term = current_term;
+
+        let peer_id = ServerId::new([2; 16]);
+        let peer_list = vec![peer_id];
+        let mut context = Context {
+            server_id: ServerId::new([1; 16]),
+            state: &mut state,
+            log: &Log::new(),
+            peer_list: &peer_list,
+        };
+        let mut mode = Mode::Candidate(CandidateState::default());
+        let mut tx = MockTx::new();
+
+        // Mock send AppendEntries to Candidate with `term => current_term`
+        let append_entries = Rpc::new_append_entry(
+            Term::from(1),
+            peer_id,
+            TermIdx::initial(),
+            Idx::initial(),
+            vec![],
+        );
+        mode.on_recv(&mut tx, append_entries, &mut context);
+
+        // expect Mode::Follower
+        assert!(matches!(mode, Mode::Candidate(_)));
+
+        // expect Follower to send RespAppendEntries acknowleding the leader
+        // construct RPC to compare
+        let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
+        let rpc_bytes = tx.queue.pop().unwrap();
+        assert!(tx.queue.is_empty());
+        let buffer = DecoderBuffer::new(&rpc_bytes);
+        let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
+        assert_eq!(expected_rpc, sent_request_vote);
     }
 }

@@ -1,4 +1,4 @@
-use crate::mode::ServerTx;
+use crate::mode::{Context, ServerTx};
 
 #[derive(Debug, Default)]
 pub struct LeaderState;
@@ -16,7 +16,7 @@ impl LeaderState {
         &mut self,
         _tx: &mut T,
         _rpc: crate::rpc::Rpc,
-        _state: &mut crate::state::State,
+        _context: &mut Context,
     ) {
         todo!()
     }
