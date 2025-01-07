@@ -29,7 +29,7 @@ impl FollowerState {
                     false
                 } else if !context
                     .log
-                    .contains_matching_entry(append_entries_state.prev_log_term_idx)
+                    .log_matches_at_idx(append_entries_state.prev_log_term_idx)
                 {
                     //% Compliance:
                     //% Reply false if log doesn’t contain an entry at prevLogIndex whose term  matches prevLogTerm (§5.3)

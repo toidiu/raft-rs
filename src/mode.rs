@@ -221,7 +221,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_candidate_recv_append_entries() {
+    async fn candidate_recv_append_entries_with_gt_eq_term() {
         let current_term = Term::from(2);
 
         let prng = Pcg32::from_seed([0; 16]);
@@ -238,9 +238,9 @@ mod tests {
             peer_list: &peer_list,
         };
         let mut mode = Mode::Candidate(CandidateState::default());
-
-        // Mock send AppendEntries to Candidate
         let mut tx = MockTx::new();
+
+        // Mock send AppendEntries to Candidate with `term => current_term`
         let append_entries = Rpc::new_append_entry(
             current_term,
             peer_id,
@@ -257,6 +257,50 @@ mod tests {
         // construct RPC to compare
         let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
         let rpc_bytes = tx.queue.pop().unwrap();
+        assert!(tx.queue.is_empty());
+        let buffer = DecoderBuffer::new(&rpc_bytes);
+        let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
+        assert_eq!(expected_rpc, sent_request_vote);
+    }
+
+    #[tokio::test]
+    async fn candidate_recv_append_entries_with_smaller_term() {
+        let current_term = Term::from(2);
+
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+        let mut state = State::new(timeout);
+        state.current_term = current_term;
+
+        let peer_id = ServerId::new([2; 16]);
+        let peer_list = vec![peer_id];
+        let mut context = Context {
+            server_id: ServerId::new([1; 16]),
+            state: &mut state,
+            log: &Log::new(),
+            peer_list: &peer_list,
+        };
+        let mut mode = Mode::Candidate(CandidateState::default());
+        let mut tx = MockTx::new();
+
+        // Mock send AppendEntries to Candidate with `term => current_term`
+        let append_entries = Rpc::new_append_entry(
+            Term::from(1),
+            peer_id,
+            TermIdx::initial(),
+            Idx::initial(),
+            vec![],
+        );
+        mode.on_recv(&mut tx, append_entries, &mut context);
+
+        // expect Mode::Follower
+        assert!(matches!(mode, Mode::Candidate(_)));
+
+        // expect Follower to send RespAppendEntries acknowleding the leader
+        // construct RPC to compare
+        let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
+        let rpc_bytes = tx.queue.pop().unwrap();
+        assert!(tx.queue.is_empty());
         let buffer = DecoderBuffer::new(&rpc_bytes);
         let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
         assert_eq!(expected_rpc, sent_request_vote);

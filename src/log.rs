@@ -26,7 +26,12 @@ impl Log {
 
     //% Compliance:
     //% if two entries in different logs have the same index/term, they store the same command
-    pub fn contains_matching_entry(&self, term_idx: TermIdx) -> bool {
+    pub fn log_matches_at_idx(&self, term_idx: TermIdx) -> bool {
+        // TermIdx::initial indicates that both logs are empty
+        if term_idx == TermIdx::initial() {
+            return self.entries.is_empty();
+        }
+
         let entry = self.find_log_entry(term_idx.idx);
         entry.map_or(false, |entry| entry.term_idx == term_idx)
     }
