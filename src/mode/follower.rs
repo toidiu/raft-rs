@@ -23,7 +23,6 @@ impl FollowerState {
             crate::rpc::Rpc::RequestVote(_request_vote_state) => todo!(),
             crate::rpc::Rpc::RespRequestVote(_resp_request_vote_state) => todo!(),
             crate::rpc::Rpc::AppendEntries(append_entries_state) => {
-                #[allow(clippy::needless_bool)]
                 let response = if append_entries_state.term() < context.state.current_term {
                     //% Compliance:
                     //% Reply false if term < currentTerm (§5.1)
