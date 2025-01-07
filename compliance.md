@@ -33,7 +33,7 @@
   - [x] Reset election timer
   - [ ] Send RequestVote RPCs to all other servers
 - [x] If votes received from majority of servers: become leader
-- [ ] If AppendEntries RPC received from new leader: convert to follower
+- [x] If AppendEntries RPC received from new leader: convert to follower
 - [x] If election timeout elapses: start new election
 #### Leaders
 - [ ] Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat during idle periods to prevent election timeouts (§5.2)
@@ -132,13 +132,13 @@
 		- [ ] a server can only vote once for a given term (first-come basis)
 		- [ ] a candidate becomes `leader` if it wins the election
 		- [ ] sends a heartbeat to establish itself as a leader and prevent a new election
-	- [ ] another server establishes itself as a leader
-		- [ ] a candidate receives AppendEntries from another server claiming to be a leader
-		- [ ] if that leader's current term is >= the candidate's
-			- [ ] recognize the server as the new leader
-			- [ ] then the candidate reverts to a follower
-		- [ ] if the leader's current term is < the candidate's
-			- [ ] reject the RPC and continue in the candidate state
+	- [x] another server establishes itself as a leader
+		- [x] a candidate receives AppendEntries from another server claiming to be a leader
+		- [x] if that leader's current term is >= the candidate's
+			- [x] recognize the server as the new leader
+			- [x] then the candidate reverts to a follower
+		- [x] if the leader's current term is < the candidate's
+			- [x] reject the RPC and continue in the candidate state
 	- [ ] a timeout occurs and there is no winner (can happen if too many servers become candidates at the same time)
 		- [ ] increment its term
 		- [ ] start a new election by initiating another round of RequestVote

@@ -76,24 +76,43 @@ impl Mode {
         }
     }
 
-    fn on_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc, state: &mut State) {
+    fn on_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc, context: &mut Context) {
         //% Compliance:
         //% If RPC request or response contains term T > currentTerm: set currentTerm = T, convert
         //% to follower (§5.1)
-        if rpc.term() > &state.current_term {
-            state.current_term = *rpc.term();
+        if rpc.term() > &context.state.current_term {
+            context.state.current_term = *rpc.term();
             self.on_follower(tx);
         }
 
-        match self {
+        let rpc = match self {
             Mode::Follower(follower) => {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
                 //% leader or granting vote to candidate: convert to candidate
-                follower.on_recv(tx, rpc, state);
+                follower.on_recv(tx, rpc, context);
+                None
             }
-            Mode::Candidate(candidate) => candidate.on_recv(tx, rpc, state),
-            Mode::Leader(leader) => leader.on_recv(tx, rpc, state),
+            Mode::Candidate(candidate) => {
+                let (transition, rpc) = candidate.on_recv(tx, rpc, context);
+                self.handle_mode_transition(tx, transition, context);
+
+                //% Compliance:
+                //% another server establishes itself as a leader
+                //
+                //% Compliance:
+                //% recognize the server as the new leader
+                // If converted
+                rpc
+            }
+            Mode::Leader(leader) => {
+                leader.on_recv(tx, rpc, context);
+                None
+            }
+        };
+
+        if let Some(rpc) = rpc {
+            self.on_recv(tx, rpc, context)
         }
     }
 
