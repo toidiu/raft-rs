@@ -11,7 +11,7 @@ type Command = u8;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
     pub term_idx: TermIdx,
-    command: Command,
+    pub command: Command,
 }
 
 impl Entry {
