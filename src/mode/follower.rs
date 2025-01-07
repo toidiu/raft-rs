@@ -17,6 +17,8 @@ impl FollowerState {
         rpc: crate::rpc::Rpc,
         context: &mut Context,
     ) {
+        //% Compliance:
+        //% Respond to RPCs from candidates and leaders
         match rpc {
             crate::rpc::Rpc::RequestVote(_request_vote_state) => todo!(),
             crate::rpc::Rpc::RespRequestVote(_resp_request_vote_state) => todo!(),
