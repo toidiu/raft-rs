@@ -111,6 +111,10 @@ impl Mode {
             }
         };
 
+        // Attempt to process the RPC again.
+        //
+        // An RPC might only be partially processed if it results in a ModeTransition and should be
+        // processed again by the new Mode.
         if let Some(rpc) = rpc {
             self.on_recv(tx, rpc, context)
         }
