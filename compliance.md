@@ -56,8 +56,8 @@
 - [x] success: true if follower contained entry matching prevLogIndex and
   prevLogTerm
 #### Receiver implementation
-- [ ] Reply false if term < currentTerm (§5.1)
-- [ ] Reply false if log doesn’t contain an entry at prevLogIndex whose term  matches prevLogTerm (§5.3)
+- [x] Reply false if term < currentTerm (§5.1)
+- [x] Reply false if log doesn’t contain an entry at prevLogIndex whose term  matches prevLogTerm (§5.3)
 - [ ] If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it (§5.3)
 - [ ] Append any new entries not already in the log
 - [ ] If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
@@ -165,7 +165,7 @@
 		- [ ] includes that number in future AppendEntries
 		- [ ] once a follower learns an entry is committed (`leaderCommit` in AppendEntries), it applies the entry to its state machine
 - **Log Matching Property**
-	- if two entries in different logs have the same index/term, they store the same command
+	- [x] if two entries in different logs have the same index/term, they store the same command
 	- if two entries in different logs have the same index/term, all preceding entries are identical
 - AppendEntries helps perform a consistency check
 	- [ ] the leader includes the index and term of the entry immediately preceding the new entries

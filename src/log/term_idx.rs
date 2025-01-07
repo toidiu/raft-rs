@@ -9,8 +9,8 @@ const INITIAL_TERM_IDX: TermIdx = TermIdx {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct TermIdx {
-    term: Term,
-    idx: Idx,
+    pub term: Term,
+    pub idx: Idx,
 }
 
 impl TermIdx {

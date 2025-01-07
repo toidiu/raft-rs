@@ -23,4 +23,23 @@ impl Log {
             .last()
             .map_or(TermIdx::initial(), |e| e.term_idx)
     }
+
+    //% Compliance:
+    //% if two entries in different logs have the same index/term, they store the same command
+    pub fn contains_matching_entry(&self, term_idx: TermIdx) -> bool {
+        let entry = self.find_log_entry(term_idx.idx);
+        entry.map_or(false, |entry| entry.term_idx == term_idx)
+    }
+
+    pub fn find_log_entry(&self, idx: Idx) -> Option<&Entry> {
+        //% Compliance:
+        //% `log[]` log entries; each entry contains command for state machine, and term when entry
+        //% was received by leader (first index is 1)
+        if idx == Idx::initial() {
+            return None;
+        }
+        let idx = (idx.0 - 1) as usize;
+
+        self.entries.get(idx)
+    }
 }
