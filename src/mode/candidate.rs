@@ -1,3 +1,5 @@
+use crate::log::TermIdx;
+use crate::log::Idx;
 use crate::{
     io::IO_BUF_LEN,
     mode::{Context, Mode, ModeTransition, ServerTx},
@@ -99,9 +101,21 @@ impl CandidateState {
         //% Reset election timer
         context.state.election_timer.reset();
 
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        let current_term = context.state.current_term;
         //% Compliance:
         //% Send RequestVote RPCs to all other servers
-        //
+        for peer in context.peer_list.iter_mut() {
+            let next_log_idx = context.state.next_idx.get(&peer.id).unwrap();
+            let prev_log_idx = Idx::from(next_log_idx.0 - 1);
+            let prev_log_term = context.state.log.last_term();
+            let prev_log_term_idx = TermIdx::builder()
+                .with_term(prev_log_term)
+                .with_idx(prev_log_idx);
+            Rpc::new_request_vote(current_term, context.server_id, prev_log_term_idx).encode_mut(&mut buf);
+            peer.send(buf.as_mut_slice().to_vec());
+        }
         // FIXME send a RequestVote to all peers
         // let mut slice = vec![0; IO_BUF_LEN];
         // let mut buf = EncoderBuffer::new(&mut slice);
@@ -172,7 +186,7 @@ mod tests {
         let mut context = Context {
             server_id,
             state: &mut state,
-            peer_list: &vec![Peer::new(ServerId::new([1; 16]))],
+            peer_list: &mut vec![Peer::new(ServerId::new([1; 16]))],
         };
         let mut candidate = CandidateState::default();
 
@@ -200,7 +214,7 @@ mod tests {
         let mut context = Context {
             server_id,
             state: &mut state,
-            peer_list: &vec![],
+            peer_list: &mut vec![],
         };
         let mut candidate = CandidateState::default();
         assert_eq!(Mode::quorum(&context), 1);
@@ -223,11 +237,11 @@ mod tests {
         let peer_2_id = ServerId::new([2; 16]);
         let peer_2 = Peer::new(peer_2_id);
         let peer_3 = Peer::new(ServerId::new([3; 16]));
-        let peer_list = vec![peer_2, peer_3];
+        let mut peer_list = vec![peer_2, peer_3];
         let context = Context {
             server_id: self_id,
             state: &mut state,
-            peer_list: &peer_list,
+            peer_list: &mut peer_list,
         };
         let mut candidate = CandidateState::default();
         assert_eq!(Mode::quorum(&context), 2);

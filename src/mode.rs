@@ -191,27 +191,27 @@ mod tests {
         let mut context = Context {
             server_id,
             state: &mut state,
-            peer_list: &vec![],
+            peer_list: &mut vec![],
         };
         assert_eq!(Mode::quorum(&context), 1);
 
-        let peer_list = vec![Peer::new(ServerId::new([1; 16]))];
-        context.peer_list = &peer_list;
+        let mut peer_list = vec![Peer::new(ServerId::new([1; 16]))];
+        context.peer_list = &mut peer_list;
         assert_eq!(Mode::quorum(&context), 2);
 
-        let peer_list = vec![
+        let mut peer_list = vec![
             Peer::new(ServerId::new([1; 16])),
             Peer::new(ServerId::new([2; 16])),
         ];
-        context.peer_list = &peer_list;
+        context.peer_list = &mut peer_list;
         assert_eq!(Mode::quorum(&context), 2);
 
-        let peer_list = vec![
+        let mut peer_list = vec![
             Peer::new(ServerId::new([1; 16])),
             Peer::new(ServerId::new([2; 16])),
             Peer::new(ServerId::new([3; 16])),
         ];
-        context.peer_list = &peer_list;
+        context.peer_list = &mut peer_list;
         assert_eq!(Mode::quorum(&context), 3);
     }
 
@@ -225,11 +225,11 @@ mod tests {
         state.current_term = current_term;
 
         let peer_id = ServerId::new([2; 16]);
-        let peer_list = vec![Peer::new(peer_id)];
+        let mut peer_list = vec![Peer::new(peer_id)];
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
             state: &mut state,
-            peer_list: &peer_list,
+            peer_list: &mut peer_list,
         };
         let mut mode = Mode::Candidate(CandidateState::default());
         let mut tx = MockTx::new();
@@ -267,11 +267,11 @@ mod tests {
         state.current_term = current_term;
 
         let peer_id = ServerId::new([2; 16]);
-        let peer_list = vec![Peer::new(peer_id)];
+        let mut peer_list = vec![Peer::new(peer_id)];
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
             state: &mut state,
-            peer_list: &peer_list,
+            peer_list: &mut peer_list,
         };
         let mut mode = Mode::Candidate(CandidateState::default());
         let mut tx = MockTx::new();
