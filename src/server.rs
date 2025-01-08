@@ -1,4 +1,4 @@
-use crate::{mode::Mode, state::State};
+use crate::{mode::Mode, peer::Peer, state::State};
 use s2n_codec::{DecoderValue, EncoderValue};
 
 struct Server {
@@ -8,8 +8,11 @@ struct Server {
     peer_list: Vec<Peer>,
 }
 
-struct Peer {
-    id: ServerId,
+pub struct Context<'a> {
+    pub server_id: ServerId,
+    pub state: &'a mut State,
+    // FIXME make into Set
+    pub peer_list: &'a Vec<Peer>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]

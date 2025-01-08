@@ -35,8 +35,7 @@ use crate::{
     macros::cast_unsafe,
     mode::{candidate::CandidateState, follower::FollowerState, leader::LeaderState},
     rpc::Rpc,
-    server::ServerId,
-    state::State,
+    server::Context,
 };
 
 mod candidate;
@@ -47,13 +46,6 @@ pub enum Mode {
     Follower(FollowerState),
     Candidate(CandidateState),
     Leader(LeaderState),
-}
-
-pub struct Context<'a> {
-    server_id: ServerId,
-    state: &'a mut State,
-    // FIXME make into Set
-    peer_list: &'a Vec<ServerId>,
 }
 
 impl Mode {
@@ -181,6 +173,9 @@ mod tests {
     use crate::{
         io::testing::MockTx,
         log::{Idx, Term, TermIdx},
+        peer::Peer,
+        server::ServerId,
+        state::State,
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -200,18 +195,21 @@ mod tests {
         };
         assert_eq!(Mode::quorum(&context), 1);
 
-        let peer_list = vec![ServerId::new([1; 16])];
-        context.peer_list = &peer_list;
-        assert_eq!(Mode::quorum(&context), 2);
-
-        let peer_list = vec![ServerId::new([1; 16]), ServerId::new([2; 16])];
+        let peer_list = vec![Peer::new(ServerId::new([1; 16]))];
         context.peer_list = &peer_list;
         assert_eq!(Mode::quorum(&context), 2);
 
         let peer_list = vec![
-            ServerId::new([1; 16]),
-            ServerId::new([2; 16]),
-            ServerId::new([3; 16]),
+            Peer::new(ServerId::new([1; 16])),
+            Peer::new(ServerId::new([2; 16])),
+        ];
+        context.peer_list = &peer_list;
+        assert_eq!(Mode::quorum(&context), 2);
+
+        let peer_list = vec![
+            Peer::new(ServerId::new([1; 16])),
+            Peer::new(ServerId::new([2; 16])),
+            Peer::new(ServerId::new([3; 16])),
         ];
         context.peer_list = &peer_list;
         assert_eq!(Mode::quorum(&context), 3);
@@ -227,7 +225,7 @@ mod tests {
         state.current_term = current_term;
 
         let peer_id = ServerId::new([2; 16]);
-        let peer_list = vec![peer_id];
+        let peer_list = vec![Peer::new(peer_id)];
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
             state: &mut state,
@@ -269,7 +267,7 @@ mod tests {
         state.current_term = current_term;
 
         let peer_id = ServerId::new([2; 16]);
-        let peer_list = vec![peer_id];
+        let peer_list = vec![Peer::new(peer_id)];
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
             state: &mut state,

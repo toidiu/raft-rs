@@ -5,6 +5,7 @@ mod io;
 mod log;
 mod macros;
 mod mode;
+mod peer;
 mod rpc;
 mod server;
 mod state;

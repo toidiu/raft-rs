@@ -1,6 +1,7 @@
 use crate::{
     io::IO_BUF_LEN,
     mode::{Context, Mode, ModeTransition, ServerTx},
+    peer::Peer,
     rpc::Rpc,
     server::ServerId,
 };
@@ -125,7 +126,7 @@ impl CandidateState {
             self.on_vote_received(self_id, context)
         } else {
             debug_assert!(
-                context.peer_list.contains(&vote_for_server),
+                context.peer_list.contains(&Peer::new(vote_for_server)),
                 "voted for invalid server id"
             );
             context.state.voted_for = Some(vote_for_server);
@@ -135,7 +136,7 @@ impl CandidateState {
 
     fn on_vote_received(&mut self, id: ServerId, context: &Context) -> ElectionResult {
         debug_assert!(
-            context.peer_list.contains(&id) || id == context.server_id,
+            context.peer_list.contains(&Peer::new(id)) || id == context.server_id,
             "voted for invalid server id"
         );
         self.votes_received.insert(id);
@@ -171,7 +172,7 @@ mod tests {
         let mut context = Context {
             server_id,
             state: &mut state,
-            peer_list: &vec![ServerId::new([1; 16])],
+            peer_list: &vec![Peer::new(ServerId::new([1; 16]))],
         };
         let mut candidate = CandidateState::default();
 
@@ -219,9 +220,10 @@ mod tests {
         let mut state = State::new(timeout);
 
         let self_id = ServerId::new([1; 16]);
-        let peer_id_2 = ServerId::new([2; 16]);
-        let peer_id_3 = ServerId::new([3; 16]);
-        let peer_list = vec![peer_id_2, peer_id_3];
+        let peer_2_id = ServerId::new([2; 16]);
+        let peer_2 = Peer::new(peer_2_id);
+        let peer_3 = Peer::new(ServerId::new([3; 16]));
+        let peer_list = vec![peer_2, peer_3];
         let context = Context {
             server_id: self_id,
             state: &mut state,
@@ -233,14 +235,14 @@ mod tests {
 
         // Receive peer's vote
         assert!(matches!(
-            candidate.on_vote_received(peer_id_2, &context),
+            candidate.on_vote_received(peer_2_id, &context),
             ElectionResult::Pending
         ));
         assert!(Mode::quorum(&context) > candidate.votes_received.len());
 
         // Don't count same vote
         assert!(matches!(
-            candidate.on_vote_received(peer_id_2, &context),
+            candidate.on_vote_received(peer_2_id, &context),
             ElectionResult::Pending
         ));
         assert!(Mode::quorum(&context) > candidate.votes_received.len());
