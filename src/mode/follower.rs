@@ -20,14 +20,14 @@ impl FollowerState {
         //% Compliance:
         //% Respond to RPCs from candidates and leaders
         match rpc {
-            crate::rpc::Rpc::RequestVote(_request_vote_state) => todo!(),
-            crate::rpc::Rpc::RespRequestVote(_resp_request_vote_state) => todo!(),
-            crate::rpc::Rpc::AppendEntries(append_entries_state) => {
+            Rpc::RequestVote(_request_vote_state) => todo!(),
+            Rpc::AppendEntries(append_entries_state) => {
                 let response = if append_entries_state.term() < context.state.current_term {
                     //% Compliance:
                     //% Reply false if term < currentTerm (§5.1)
                     false
                 } else if !context
+                    .state
                     .log
                     .entry_matches(append_entries_state.prev_log_term_idx)
                 {
@@ -44,7 +44,7 @@ impl FollowerState {
                 Rpc::new_append_entry_resp(term, response).encode_mut(&mut buf);
                 tx.send(buf.as_mut_slice().to_vec());
             }
-            crate::rpc::Rpc::RespAppendEntries(_resp_append_entries_state) => todo!(),
+            Rpc::RespRequestVote(_) | Rpc::RespAppendEntries(_) => (),
         }
     }
 }
