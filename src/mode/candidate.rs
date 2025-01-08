@@ -149,12 +149,11 @@ pub enum ElectionResult {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::MockTx, log::TermIdx, mode::Log, server::ServerId, state::State,
+        io::testing::MockTx, server::ServerId, state::State,
         timeout::Timeout,
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
-    use s2n_codec::DecoderBuffer;
 
     #[tokio::test]
     async fn test_start_election() {
@@ -163,11 +162,9 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
         let server_id = ServerId::new([6; 16]);
         let mut state = State::new(timeout);
-        let mut current_term = state.current_term;
         let mut context = Context {
             server_id,
             state: &mut state,
-            log: &Log::new(),
             peer_list: &vec![ServerId::new([1; 16])],
         };
         let mut candidate = CandidateState::default();
@@ -195,7 +192,6 @@ mod tests {
         let mut context = Context {
             server_id,
             state: &mut state,
-            log: &Log::new(),
             peer_list: &vec![],
         };
         let mut candidate = CandidateState::default();
@@ -222,7 +218,6 @@ mod tests {
         let context = Context {
             server_id: self_id,
             state: &mut state,
-            log: &Log::new(),
             peer_list: &peer_list,
         };
         let mut candidate = CandidateState::default();

@@ -18,6 +18,10 @@ impl TermIdx {
         INITIAL_TERM_IDX
     }
 
+    pub fn is_initial(&self) -> bool {
+        *self == INITIAL_TERM_IDX
+    }
+
     pub fn builder() -> TermIdxWithTermBuilder {
         TermIdxWithTermBuilder
     }

@@ -1,4 +1,4 @@
-use crate::log::{idx::Idx, term::Term, term_idx::TermIdx};
+use crate::log::term::Term;
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 
 type Command = u8;
@@ -10,16 +10,13 @@ type Command = u8;
 //% 	- log index: integer
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
-    pub term_idx: TermIdx,
+    pub term: Term,
     pub command: Command,
 }
 
 impl Entry {
-    pub fn new(idx: Idx, term: Term, command: Command) -> Self {
-        Entry {
-            term_idx: TermIdx::builder().with_term(term).with_idx(idx),
-            command,
-        }
+    pub fn new(term: Term, command: Command) -> Self {
+        Entry { term, command }
     }
 }
 
@@ -28,14 +25,17 @@ impl<'a> DecoderValue<'a> for Entry {
         let (term_idx, buffer) = buffer.decode()?;
         let (command, buffer) = buffer.decode()?;
 
-        let entry = Entry { term_idx, command };
+        let entry = Entry {
+            term: term_idx,
+            command,
+        };
         Ok((entry, buffer))
     }
 }
 
 impl EncoderValue for Entry {
     fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
-        encoder.encode(&self.term_idx);
+        encoder.encode(&self.term);
         encoder.encode(&self.command);
     }
 }
@@ -47,7 +47,7 @@ mod tests {
 
     #[test]
     fn encode_decode() {
-        let entry = Entry::new(Idx::from(1), Term::from(2), 5);
+        let entry = Entry::new(Term::from(2), 5);
 
         let mut slice = vec![0; 30];
         let mut buf = EncoderBuffer::new(&mut slice);
