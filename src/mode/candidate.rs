@@ -68,13 +68,17 @@ impl CandidateState {
                     tx.send(buf.as_mut_slice().to_vec());
                 }
             }
-            Rpc::RespAppendEntries(_resp_append_entries_state) => ()
+            Rpc::RespAppendEntries(_resp_append_entries_state) => (),
         }
 
         (ModeTransition::None, None)
     }
 
-    fn start_election<T: ServerTx>(&mut self, _tx: &mut T, context: &mut Context) -> ModeTransition {
+    fn start_election<T: ServerTx>(
+        &mut self,
+        _tx: &mut T,
+        context: &mut Context,
+    ) -> ModeTransition {
         //% Compliance:
         //% Increment currentTerm
         context.state.current_term.increment();
@@ -153,10 +157,7 @@ pub enum ElectionResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        io::testing::MockTx, server::ServerId, state::State,
-        timeout::Timeout,
-    };
+    use crate::{io::testing::MockTx, server::ServerId, state::State, timeout::Timeout};
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
 
