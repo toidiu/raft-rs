@@ -12,7 +12,7 @@ struct Peer {
     id: ServerId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct ServerId([u8; 16]);
 
 impl ServerId {

@@ -160,10 +160,7 @@ mod tests {
                 .with_term(Term::from(3))
                 .with_idx(Idx::from(4)),
             leader_commit_idx: Idx::from(4),
-            entries: vec![
-                Entry::new(Idx::from(1), Term::from(2), 3),
-                Entry::new(Idx::from(4), Term::from(5), 6),
-            ],
+            entries: vec![Entry::new(Term::from(2), 3), Entry::new(Term::from(5), 6)],
         };
 
         let mut slice = vec![0; 200];

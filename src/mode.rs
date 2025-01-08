@@ -32,7 +32,6 @@
 
 use crate::{
     io::ServerTx,
-    log::Log,
     macros::cast_unsafe,
     mode::{candidate::CandidateState, follower::FollowerState, leader::LeaderState},
     rpc::Rpc,
@@ -53,7 +52,6 @@ pub enum Mode {
 pub struct Context<'a> {
     server_id: ServerId,
     state: &'a mut State,
-    log: &'a Log,
     // FIXME make into Set
     peer_list: &'a Vec<ServerId>,
 }
@@ -198,7 +196,6 @@ mod tests {
         let mut context = Context {
             server_id,
             state: &mut state,
-            log: &Log::new(),
             peer_list: &vec![],
         };
         assert_eq!(Mode::quorum(&context), 1);
@@ -234,7 +231,6 @@ mod tests {
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
             state: &mut state,
-            log: &Log::new(),
             peer_list: &peer_list,
         };
         let mut mode = Mode::Candidate(CandidateState::default());
@@ -277,7 +273,6 @@ mod tests {
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
             state: &mut state,
-            log: &Log::new(),
             peer_list: &peer_list,
         };
         let mut mode = Mode::Candidate(CandidateState::default());

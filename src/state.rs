@@ -19,29 +19,29 @@ pub struct State {
     //% Compliance:
     //% `log[]` log entries; each entry contains command for state machine, and term when entry was
     //% received by leader (first index is 1)
-    log: Log,
+    pub log: Log,
 
     // ==== Volatile state on all servers ====
     //% Compliance:
     //% `commitIndex` index of highest log entry known to be committed (initialized to 0, increases
     //% monotonically)
-    commit_idx: Idx,
+    pub commit_idx: Idx,
 
     //% Compliance:
     //% lastApplied: index of highest log entry applied to state machine (initialized to 0,
     //% increases monotonically)
-    last_applied: Idx,
+    pub last_applied: Idx,
 
     // ==== Volatile state on leaders ====
     //% Compliance:
     //% `nextIndex[]` for each server, index of the next log entry to send to that server
     //% (initialized to leader last log index + 1)
-    next_idx: BTreeMap<ServerId, Idx>,
+    pub next_idx: BTreeMap<ServerId, Idx>,
 
     //% Compliance:
     //% `matchIndex[]` for each server, index of highest log entry known to be replicated on server
     //% (initialized to 0, increases monotonically)
-    match_idx: BTreeMap<ServerId, Idx>,
+    pub match_idx: BTreeMap<ServerId, Idx>,
 
     pub election_timer: Timeout,
 }
