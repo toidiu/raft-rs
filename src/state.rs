@@ -49,28 +49,33 @@ pub struct State {
 
 impl State {
     pub fn new(election_timer: Timeout, peer_map: &BTreeMap<ServerId, Peer>) -> Self {
-        let mut next_idx = BTreeMap::new();
-        let mut match_idx = BTreeMap::new();
+        let log = Log::new();
+        let mut next_idx_map = BTreeMap::new();
+        let mut match_idx_map = BTreeMap::new();
 
         //% Compliance:
         //% `nextIndex[]` for each server, index of the next log entry to send to that server
         //% (initialized to leader last log index + 1)
-        let last_log_index_plus_1 = Idx::from(1);
+        let next_log_idx = log.next_idx();
+
+        //% `matchIndex[]` for each server, index of highest log entry known to be replicated on server
+        //% (initialized to 0, increases monotonically)
+        let match_idx = Idx::initial();
 
         for (id, peer) in peer_map.iter() {
             let Peer { id: _, io: _ } = peer;
 
-            next_idx.insert(*id, last_log_index_plus_1);
-            match_idx.insert(*id, last_log_index_plus_1);
+            next_idx_map.insert(*id, next_log_idx);
+            match_idx_map.insert(*id, match_idx);
         }
         State {
             current_term: Term::initial(),
             voted_for: None,
-            log: Log::new(),
+            log,
             commit_idx: Idx::initial(),
             last_applied: Idx::initial(),
-            next_idx,
-            match_idx,
+            next_idx: next_idx_map,
+            match_idx: match_idx_map,
             election_timer,
         }
     }

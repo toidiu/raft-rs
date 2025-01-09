@@ -24,6 +24,11 @@ impl Log {
         }
     }
 
+    pub fn next_idx(&self) -> Idx {
+        let next_idx = self.entries.len() + 1;
+        Idx::from(next_idx as u64)
+    }
+
     pub fn last_term(&self) -> Term {
         self.entries.last().map_or(Term::initial(), |e| e.term)
     }
