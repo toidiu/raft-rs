@@ -1,5 +1,5 @@
 use crate::{
-    io::{BufferIo, ServerIO, ServerRx, ServerTx},
+    io::{BufferIo, ServerIO, ServerIoImpl, ServerRx, ServerTx},
     server::ServerId,
 };
 
@@ -7,16 +7,13 @@ use crate::{
 mod testing;
 
 #[derive(Debug)]
-pub struct Peer {
+pub struct Peer<T: ServerIO> {
     pub id: ServerId,
-    pub io: ServerIO,
+    pub io: T,
 }
 
-impl Peer {
-    pub fn new(id: ServerId) -> Self {
-        // FIXME pass in IO when this is used
-        let (io, _) = BufferIo::split();
-
+impl<T: ServerIO> Peer<T> {
+    pub fn new(id: ServerId, io: T) -> Self {
         Peer { id, io }
     }
 
@@ -29,22 +26,22 @@ impl Peer {
     }
 }
 
-impl PartialOrd for Peer {
+impl<T: ServerIO> PartialOrd for Peer<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.id.cmp(&other.id))
     }
 }
 
-impl Ord for Peer {
+impl<T: ServerIO> Ord for Peer<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.id.cmp(&other.id)
     }
 }
 
-impl PartialEq for Peer {
+impl<T: ServerIO> PartialEq for Peer<T> {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl Eq for Peer {}
+impl<T: ServerIO> Eq for Peer<T> {}
