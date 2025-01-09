@@ -1,5 +1,6 @@
 use crate::{
     io::IO_BUF_LEN,
+    log::TermIdx,
     mode::{Context, Mode, ModeTransition, ServerTx},
     rpc::Rpc,
     server::ServerId,
@@ -98,21 +99,17 @@ impl CandidateState {
         //% Reset election timer
         context.state.election_timer.reset();
 
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        let current_term = context.state.current_term;
         //% Compliance:
         //% Send RequestVote RPCs to all other servers
-        //
-        // FIXME send a RequestVote to all peers
-        // let mut slice = vec![0; IO_BUF_LEN];
-        // let mut buf = EncoderBuffer::new(&mut slice);
-        // let term = context.state.current_term;
-        //
-        // FIXME cleanup
-        // let next_log_idx = context.state.next_idx.get(&ServerId::new([0; 16])).unwrap();
-        // let prev_log_idx = Idx::from(next_log_idx.0 - 1);
-        // let prev_log_term = context.log.last_term();
-        // let prev_log_term_idx = TermIdx::builder().with_term(prev_log_term).with_idx(prev_log_idx);
-        // Rpc::new_request_vote(term, context.server_id, prev_log_term_idx).encode_mut(&mut buf);
-        // tx.send(buf.as_mut_slice().to_vec());
+        for (_id, peer) in context.peer_map.iter_mut() {
+            let prev_log_term_idx = TermIdx::prev_term_idx(peer, context.state);
+            Rpc::new_request_vote(current_term, context.server_id, prev_log_term_idx)
+                .encode_mut(&mut buf);
+            peer.send(buf.as_mut_slice().to_vec());
+        }
 
         ModeTransition::None
     }
@@ -125,7 +122,7 @@ impl CandidateState {
             self.on_vote_received(self_id, context)
         } else {
             debug_assert!(
-                context.peer_list.contains(&vote_for_server),
+                context.peer_map.contains_key(&vote_for_server),
                 "voted for invalid server id"
             );
             context.state.voted_for = Some(vote_for_server);
@@ -135,7 +132,7 @@ impl CandidateState {
 
     fn on_vote_received(&mut self, id: ServerId, context: &Context) -> ElectionResult {
         debug_assert!(
-            context.peer_list.contains(&id) || id == context.server_id,
+            context.peer_map.contains_key(&id) || id == context.server_id,
             "voted for invalid server id"
         );
         self.votes_received.insert(id);
@@ -156,8 +153,11 @@ pub enum ElectionResult {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
-    use crate::{io::testing::MockTx, server::ServerId, state::State, timeout::Timeout};
+    use crate::{
+        io::testing::MockTx, peer::Peer, server::ServerId, state::State, timeout::Timeout,
+    };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
 
@@ -166,23 +166,29 @@ mod tests {
         let mut tx = MockTx::new();
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let server_id = ServerId::new([6; 16]);
-        let mut state = State::new(timeout);
+
+        let peer_fill = 6;
+        let server_id = ServerId::new([peer_fill; 16]);
+        let mut peer_map = Peer::mock_as_map(&[peer_fill]);
+        // let server_id = ServerId::new([6; 16]);
+        // let mut peer_map = vec![Peer::new(ServerId::new([1; 16]))];
+        let mut state = State::new(timeout, &peer_map);
         let mut context = Context {
             server_id,
             state: &mut state,
-            peer_list: &vec![ServerId::new([1; 16])],
+            peer_map: &mut peer_map,
         };
         let mut candidate = CandidateState::default();
 
         let transition = candidate.start_election(&mut tx, &mut context);
         assert!(matches!(transition, ModeTransition::None));
 
-        // // construct RPC to compare
-        // let current_term = state.current_term;
-        // current_term.increment();
-        // let expected_rpc = Rpc::new_request_vote(current_term, server_id, TermIdx::initial());
+        // construct RPC to compare
+        let mut current_term = state.current_term;
+        current_term.increment();
+        let _expected_rpc = Rpc::new_request_vote(current_term, server_id, TermIdx::initial());
 
+        // FIXME revive test
         // let rpc_bytes = tx.queue.pop().unwrap();
         // let buffer = DecoderBuffer::new(&rpc_bytes);
         // let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
@@ -195,11 +201,13 @@ mod tests {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
         let server_id = ServerId::new([6; 16]);
-        let mut state = State::new(timeout);
+
+        let mut peer_map = Peer::mock_as_map(&[]);
+        let mut state = State::new(timeout, &peer_map);
         let mut context = Context {
             server_id,
             state: &mut state,
-            peer_list: &vec![],
+            peer_map: &mut peer_map,
         };
         let mut candidate = CandidateState::default();
         assert_eq!(Mode::quorum(&context), 1);
@@ -216,16 +224,17 @@ mod tests {
     async fn test_cast_vote() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let mut state = State::new(timeout);
 
         let self_id = ServerId::new([1; 16]);
-        let peer_id_2 = ServerId::new([2; 16]);
-        let peer_id_3 = ServerId::new([3; 16]);
-        let peer_list = vec![peer_id_2, peer_id_3];
+        let peer2_fill = 2;
+        let peer2_id = ServerId::new([peer2_fill; 16]);
+        let mut peer_map = Peer::mock_as_map(&[peer2_fill, 3]);
+        let mut state = State::new(timeout, &peer_map);
+
         let context = Context {
             server_id: self_id,
             state: &mut state,
-            peer_list: &peer_list,
+            peer_map: &mut peer_map,
         };
         let mut candidate = CandidateState::default();
         assert_eq!(Mode::quorum(&context), 2);
@@ -233,14 +242,14 @@ mod tests {
 
         // Receive peer's vote
         assert!(matches!(
-            candidate.on_vote_received(peer_id_2, &context),
+            candidate.on_vote_received(peer2_id, &context),
             ElectionResult::Pending
         ));
         assert!(Mode::quorum(&context) > candidate.votes_received.len());
 
         // Don't count same vote
         assert!(matches!(
-            candidate.on_vote_received(peer_id_2, &context),
+            candidate.on_vote_received(peer2_id, &context),
             ElectionResult::Pending
         ));
         assert!(Mode::quorum(&context) > candidate.votes_received.len());

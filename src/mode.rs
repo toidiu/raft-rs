@@ -35,8 +35,7 @@ use crate::{
     macros::cast_unsafe,
     mode::{candidate::CandidateState, follower::FollowerState, leader::LeaderState},
     rpc::Rpc,
-    server::ServerId,
-    state::State,
+    server::Context,
 };
 
 mod candidate;
@@ -47,13 +46,6 @@ pub enum Mode {
     Follower(FollowerState),
     Candidate(CandidateState),
     Leader(LeaderState),
-}
-
-pub struct Context<'a> {
-    server_id: ServerId,
-    state: &'a mut State,
-    // FIXME make into Set
-    peer_list: &'a Vec<ServerId>,
 }
 
 impl Mode {
@@ -161,7 +153,7 @@ impl Mode {
     }
 
     fn quorum(context: &Context) -> usize {
-        let peer_plus_self = context.peer_list.len() + 1;
+        let peer_plus_self = context.peer_map.len() + 1;
         let half = peer_plus_self / 2;
         half + 1
     }
@@ -181,6 +173,9 @@ mod tests {
     use crate::{
         io::testing::MockTx,
         log::{Idx, Term, TermIdx},
+        peer::Peer,
+        server::ServerId,
+        state::State,
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -191,47 +186,46 @@ mod tests {
     async fn test_quorum() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let mut state = State::new(timeout);
+
+        let mut peer_map = Peer::mock_as_map(&[]);
+        let mut state = State::new(timeout, &peer_map);
         let server_id = ServerId::new([6; 16]);
         let mut context = Context {
             server_id,
             state: &mut state,
-            peer_list: &vec![],
+            peer_map: &mut peer_map,
         };
         assert_eq!(Mode::quorum(&context), 1);
 
-        let peer_list = vec![ServerId::new([1; 16])];
-        context.peer_list = &peer_list;
+        let mut peer_map = Peer::mock_as_map(&[1]);
+        context.peer_map = &mut peer_map;
         assert_eq!(Mode::quorum(&context), 2);
 
-        let peer_list = vec![ServerId::new([1; 16]), ServerId::new([2; 16])];
-        context.peer_list = &peer_list;
+        let mut peer_map = Peer::mock_as_map(&[1, 2]);
+        context.peer_map = &mut peer_map;
         assert_eq!(Mode::quorum(&context), 2);
 
-        let peer_list = vec![
-            ServerId::new([1; 16]),
-            ServerId::new([2; 16]),
-            ServerId::new([3; 16]),
-        ];
-        context.peer_list = &peer_list;
+        let mut peer_map = Peer::mock_as_map(&[1, 2, 3]);
+        context.peer_map = &mut peer_map;
         assert_eq!(Mode::quorum(&context), 3);
     }
 
     #[tokio::test]
     async fn candidate_recv_append_entries_with_gt_eq_term() {
         let current_term = Term::from(2);
-
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let mut state = State::new(timeout);
+
+        let peer_fill = 2;
+        let peer_id = ServerId::new([peer_fill; 16]);
+        let mut peer_map = Peer::mock_as_map(&[peer_fill]);
+        let mut state = State::new(timeout, &peer_map);
         state.current_term = current_term;
 
-        let peer_id = ServerId::new([2; 16]);
-        let peer_list = vec![peer_id];
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
             state: &mut state,
-            peer_list: &peer_list,
+            peer_map: &mut peer_map,
         };
         let mut mode = Mode::Candidate(CandidateState::default());
         let mut tx = MockTx::new();
@@ -265,15 +259,17 @@ mod tests {
 
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let mut state = State::new(timeout);
+
+        let peer_fill = 2;
+        let peer_id = ServerId::new([peer_fill; 16]);
+        let mut peer_map = Peer::mock_as_map(&[peer_fill]);
+        let mut state = State::new(timeout, &peer_map);
         state.current_term = current_term;
 
-        let peer_id = ServerId::new([2; 16]);
-        let peer_list = vec![peer_id];
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
             state: &mut state,
-            peer_list: &peer_list,
+            peer_map: &mut peer_map,
         };
         let mut mode = Mode::Candidate(CandidateState::default());
         let mut tx = MockTx::new();
