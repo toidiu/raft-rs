@@ -58,6 +58,7 @@ impl State {
         //% (initialized to leader last log index + 1)
         let next_log_idx = log.next_idx();
 
+        //% Compliance:
         //% `matchIndex[]` for each server, index of highest log entry known to be replicated on server
         //% (initialized to 0, increases monotonically)
         let match_idx = Idx::initial();
