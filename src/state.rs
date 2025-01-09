@@ -48,7 +48,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(election_timer: Timeout, peer_list: &[Peer]) -> Self {
+    pub fn new(election_timer: Timeout, peer_list: &BTreeMap<ServerId, Peer>) -> Self {
         let mut next_idx = BTreeMap::new();
         let mut match_idx = BTreeMap::new();
 
@@ -57,8 +57,8 @@ impl State {
         //% (initialized to leader last log index + 1)
         let last_log_index_plus_1 = Idx::from(1);
 
-        for peer in peer_list.iter() {
-            let Peer { id, io: _ } = peer;
+        for (id, peer) in peer_list.iter() {
+            let Peer { id: _, io: _ } = peer;
 
             next_idx.insert(*id, last_log_index_plus_1);
             match_idx.insert(*id, last_log_index_plus_1);

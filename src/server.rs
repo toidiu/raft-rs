@@ -1,18 +1,17 @@
 use crate::{mode::Mode, peer::Peer, state::State};
 use s2n_codec::{DecoderValue, EncoderValue};
+use std::collections::BTreeMap;
 
 struct Server {
     mode: Mode,
     state: State,
-    // FIXME make into Set
-    peer_list: Vec<Peer>,
+    peer_list: BTreeMap<ServerId, Peer>,
 }
 
 pub struct Context<'a> {
     pub server_id: ServerId,
     pub state: &'a mut State,
-    // FIXME make into Set
-    pub peer_list: &'a mut Vec<Peer>,
+    pub peer_list: &'a mut BTreeMap<ServerId, Peer>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]

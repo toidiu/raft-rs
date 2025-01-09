@@ -3,6 +3,9 @@ use crate::{
     server::ServerId,
 };
 
+#[cfg(test)]
+mod testing;
+
 #[derive(Debug)]
 pub struct Peer {
     pub id: ServerId,

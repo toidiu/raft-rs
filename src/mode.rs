@@ -169,7 +169,7 @@ pub enum ModeTransition {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+use super::*;
     use crate::{
         io::testing::MockTx,
         log::{Idx, Term, TermIdx},
@@ -187,32 +187,29 @@ mod tests {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
-        let peer_list = &mut vec![];
+        let mut peer_list = Peer::mock_as_map(&[]);
         let mut state = State::new(timeout, &peer_list);
         let server_id = ServerId::new([6; 16]);
         let mut context = Context {
             server_id,
             state: &mut state,
-            peer_list,
+            peer_list: &mut peer_list,
         };
         assert_eq!(Mode::quorum(&context), 1);
 
-        let mut peer_list = vec![Peer::new(ServerId::new([1; 16]))];
+        let mut peer_list = Peer::mock_as_map(&[1]);
         context.peer_list = &mut peer_list;
         assert_eq!(Mode::quorum(&context), 2);
 
-        let mut peer_list = vec![
-            Peer::new(ServerId::new([1; 16])),
-            Peer::new(ServerId::new([2; 16])),
-        ];
+        let mut peer_list = Peer::mock_as_map(&[1, 2]);
         context.peer_list = &mut peer_list;
         assert_eq!(Mode::quorum(&context), 2);
 
-        let mut peer_list = vec![
-            Peer::new(ServerId::new([1; 16])),
-            Peer::new(ServerId::new([2; 16])),
-            Peer::new(ServerId::new([3; 16])),
-        ];
+        let mut peer_list = Peer::mock_as_map(&[
+            1,
+            2,
+            3,
+        ]);
         context.peer_list = &mut peer_list;
         assert_eq!(Mode::quorum(&context), 3);
     }
@@ -220,11 +217,12 @@ mod tests {
     #[tokio::test]
     async fn candidate_recv_append_entries_with_gt_eq_term() {
         let current_term = Term::from(2);
-
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let peer_id = ServerId::new([2; 16]);
-        let mut peer_list = vec![Peer::new(peer_id)];
+
+        let peer_fill = 2;
+        let peer_id = ServerId::new([peer_fill; 16]);
+        let mut peer_list = Peer::mock_as_map(&[peer_fill]);
         let mut state = State::new(timeout, &peer_list);
         state.current_term = current_term;
 
@@ -265,8 +263,10 @@ mod tests {
 
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let peer_id = ServerId::new([2; 16]);
-        let mut peer_list = vec![Peer::new(peer_id)];
+
+        let peer_fill = 2;
+        let peer_id = ServerId::new([peer_fill; 16]);
+        let mut peer_list = Peer::mock_as_map(&[peer_fill]);
         let mut state = State::new(timeout, &peer_list);
         state.current_term = current_term;
 

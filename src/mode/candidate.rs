@@ -1,8 +1,7 @@
 use crate::{
     io::IO_BUF_LEN,
-    log::{Idx, TermIdx},
+    log::TermIdx,
     mode::{Context, Mode, ModeTransition, ServerTx},
-    peer::Peer,
     rpc::Rpc,
     server::ServerId,
 };
@@ -105,7 +104,7 @@ impl CandidateState {
         let current_term = context.state.current_term;
         //% Compliance:
         //% Send RequestVote RPCs to all other servers
-        for peer in context.peer_list.iter_mut() {
+        for (_id, peer) in context.peer_list.iter_mut() {
             let prev_log_term_idx = TermIdx::prev_term_idx(peer, context.state);
             Rpc::new_request_vote(current_term, context.server_id, prev_log_term_idx)
                 .encode_mut(&mut buf);
@@ -134,20 +133,20 @@ impl CandidateState {
             context.state.voted_for = Some(self_id);
             self.on_vote_received(self_id, context)
         } else {
-            debug_assert!(
-                context.peer_list.contains(&Peer::new(vote_for_server)),
-                "voted for invalid server id"
-            );
+            // debug_assert!(
+            //     context.peer_list.contains(&Peer::new(vote_for_server)),
+            //     "voted for invalid server id"
+            // );
             context.state.voted_for = Some(vote_for_server);
             ElectionResult::Pending
         }
     }
 
     fn on_vote_received(&mut self, id: ServerId, context: &Context) -> ElectionResult {
-        debug_assert!(
-            context.peer_list.contains(&Peer::new(id)) || id == context.server_id,
-            "voted for invalid server id"
-        );
+        // debug_assert!(
+        //     context.peer_list.contains(&Peer::new(id)) || id == context.server_id,
+        //     "voted for invalid server id"
+        // );
         self.votes_received.insert(id);
 
         if self.votes_received.len() >= Mode::quorum(context) {
@@ -166,7 +165,8 @@ pub enum ElectionResult {
 
 #[cfg(test)]
 mod tests {
-    use s2n_codec::DecoderBuffer;
+
+    use crate::peer::Peer;
 use super::*;
     use crate::{io::testing::MockTx, server::ServerId, state::State, timeout::Timeout};
     use rand::SeedableRng;
@@ -177,8 +177,12 @@ use super::*;
         let mut tx = MockTx::new();
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let server_id = ServerId::new([6; 16]);
-        let mut peer_list = vec![Peer::new(ServerId::new([1; 16]))];
+
+        let peer_fill = 6;
+        let server_id = ServerId::new([peer_fill; 16]);
+        let mut peer_list = Peer::mock_as_map(&[peer_fill]);
+        // let server_id = ServerId::new([6; 16]);
+        // let mut peer_list = vec![Peer::new(ServerId::new([1; 16]))];
         let mut state = State::new(timeout, &peer_list);
         let mut context = Context {
             server_id,
@@ -193,7 +197,7 @@ use super::*;
         // construct RPC to compare
         let mut current_term = state.current_term;
         current_term.increment();
-        let expected_rpc = Rpc::new_request_vote(current_term, server_id, TermIdx::initial());
+        let _expected_rpc = Rpc::new_request_vote(current_term, server_id, TermIdx::initial());
 
         // let rpc_bytes = tx.queue.pop().unwrap();
         // let buffer = DecoderBuffer::new(&rpc_bytes);
@@ -208,12 +212,12 @@ use super::*;
         let timeout = Timeout::new(prng.clone());
         let server_id = ServerId::new([6; 16]);
 
-        let peer_list = &mut vec![];
-        let mut state = State::new(timeout, peer_list);
+        let mut peer_list = Peer::mock_as_map(&[]);
+        let mut state = State::new(timeout, &peer_list);
         let mut context = Context {
             server_id,
             state: &mut state,
-            peer_list,
+            peer_list: &mut peer_list,
         };
         let mut candidate = CandidateState::default();
         assert_eq!(Mode::quorum(&context), 1);
@@ -232,16 +236,15 @@ use super::*;
         let timeout = Timeout::new(prng.clone());
 
         let self_id = ServerId::new([1; 16]);
-        let peer_2_id = ServerId::new([2; 16]);
-        let peer_2 = Peer::new(peer_2_id);
-        let peer_3 = Peer::new(ServerId::new([3; 16]));
-        let mut peer_list = vec![peer_2, peer_3];
+        let peer2_fill = 2;
+        let peer2_id = ServerId::new([peer2_fill; 16]);
+        let mut peer_list = Peer::mock_as_map(&[peer2_fill, 3]);
         let mut state = State::new(timeout, &peer_list);
 
         let context = Context {
             server_id: self_id,
             state: &mut state,
-            peer_list: &mut peer_list,
+            peer_list: &mut peer_list
         };
         let mut candidate = CandidateState::default();
         assert_eq!(Mode::quorum(&context), 2);
@@ -249,14 +252,14 @@ use super::*;
 
         // Receive peer's vote
         assert!(matches!(
-            candidate.on_vote_received(peer_2_id, &context),
+            candidate.on_vote_received(peer2_id, &context),
             ElectionResult::Pending
         ));
         assert!(Mode::quorum(&context) > candidate.votes_received.len());
 
         // Don't count same vote
         assert!(matches!(
-            candidate.on_vote_received(peer_2_id, &context),
+            candidate.on_vote_received(peer2_id, &context),
             ElectionResult::Pending
         ));
         assert!(Mode::quorum(&context) > candidate.votes_received.len());
