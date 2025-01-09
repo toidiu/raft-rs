@@ -110,18 +110,6 @@ impl CandidateState {
                 .encode_mut(&mut buf);
             peer.send(buf.as_mut_slice().to_vec());
         }
-        // FIXME send a RequestVote to all peers
-        // let mut slice = vec![0; IO_BUF_LEN];
-        // let mut buf = EncoderBuffer::new(&mut slice);
-        // let term = context.state.current_term;
-        //
-        // FIXME cleanup
-        // let next_log_idx = context.state.next_idx.get(&ServerId::new([0; 16])).unwrap();
-        // let prev_log_idx = Idx::from(next_log_idx.0 - 1);
-        // let prev_log_term = context.log.last_term();
-        // let prev_log_term_idx = TermIdx::builder().with_term(prev_log_term).with_idx(prev_log_idx);
-        // Rpc::new_request_vote(term, context.server_id, prev_log_term_idx).encode_mut(&mut buf);
-        // tx.send(buf.as_mut_slice().to_vec());
 
         ModeTransition::None
     }
@@ -133,20 +121,20 @@ impl CandidateState {
             context.state.voted_for = Some(self_id);
             self.on_vote_received(self_id, context)
         } else {
-            // debug_assert!(
-            //     context.peer_map.contains(&Peer::new(vote_for_server)),
-            //     "voted for invalid server id"
-            // );
+            debug_assert!(
+                context.peer_map.contains_key(&vote_for_server),
+                "voted for invalid server id"
+            );
             context.state.voted_for = Some(vote_for_server);
             ElectionResult::Pending
         }
     }
 
     fn on_vote_received(&mut self, id: ServerId, context: &Context) -> ElectionResult {
-        // debug_assert!(
-        //     context.peer_map.contains(&Peer::new(id)) || id == context.server_id,
-        //     "voted for invalid server id"
-        // );
+        debug_assert!(
+            context.peer_map.contains_key(&id) || id == context.server_id,
+            "voted for invalid server id"
+        );
         self.votes_received.insert(id);
 
         if self.votes_received.len() >= Mode::quorum(context) {
