@@ -166,9 +166,10 @@ pub enum ElectionResult {
 #[cfg(test)]
 mod tests {
 
-    use crate::peer::Peer;
-use super::*;
-    use crate::{io::testing::MockTx, server::ServerId, state::State, timeout::Timeout};
+    use super::*;
+    use crate::{
+        io::testing::MockTx, peer::Peer, server::ServerId, state::State, timeout::Timeout,
+    };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
 
@@ -244,7 +245,7 @@ use super::*;
         let context = Context {
             server_id: self_id,
             state: &mut state,
-            peer_map: &mut peer_map
+            peer_map: &mut peer_map,
         };
         let mut candidate = CandidateState::default();
         assert_eq!(Mode::quorum(&context), 2);

@@ -169,7 +169,7 @@ pub enum ModeTransition {
 
 #[cfg(test)]
 mod tests {
-use super::*;
+    use super::*;
     use crate::{
         io::testing::MockTx,
         log::{Idx, Term, TermIdx},
@@ -205,11 +205,7 @@ use super::*;
         context.peer_map = &mut peer_map;
         assert_eq!(Mode::quorum(&context), 2);
 
-        let mut peer_map = Peer::mock_as_map(&[
-            1,
-            2,
-            3,
-        ]);
+        let mut peer_map = Peer::mock_as_map(&[1, 2, 3]);
         context.peer_map = &mut peer_map;
         assert_eq!(Mode::quorum(&context), 3);
     }
