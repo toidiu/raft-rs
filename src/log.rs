@@ -42,7 +42,7 @@ impl Log {
         }
 
         let entry = self.find_entry_by(term_idx.idx);
-        entry.map_or(false, |entry| entry.term == term_idx.term)
+        entry.is_some_and(|entry| entry.term == term_idx.term)
     }
 
     fn find_entry_by(&self, idx: Idx) -> Option<&Entry> {
