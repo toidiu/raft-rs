@@ -188,6 +188,7 @@ mod tests {
         current_term.increment();
         let _expected_rpc = Rpc::new_request_vote(current_term, server_id, TermIdx::initial());
 
+        // FIXME revive test
         // let rpc_bytes = tx.queue.pop().unwrap();
         // let buffer = DecoderBuffer::new(&rpc_bytes);
         // let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
