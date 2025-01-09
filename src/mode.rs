@@ -153,7 +153,7 @@ impl Mode {
     }
 
     fn quorum(context: &Context) -> usize {
-        let peer_plus_self = context.peer_list.len() + 1;
+        let peer_plus_self = context.peer_map.len() + 1;
         let half = peer_plus_self / 2;
         half + 1
     }
@@ -187,30 +187,30 @@ use super::*;
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
-        let mut peer_list = Peer::mock_as_map(&[]);
-        let mut state = State::new(timeout, &peer_list);
+        let mut peer_map = Peer::mock_as_map(&[]);
+        let mut state = State::new(timeout, &peer_map);
         let server_id = ServerId::new([6; 16]);
         let mut context = Context {
             server_id,
             state: &mut state,
-            peer_list: &mut peer_list,
+            peer_map: &mut peer_map,
         };
         assert_eq!(Mode::quorum(&context), 1);
 
-        let mut peer_list = Peer::mock_as_map(&[1]);
-        context.peer_list = &mut peer_list;
+        let mut peer_map = Peer::mock_as_map(&[1]);
+        context.peer_map = &mut peer_map;
         assert_eq!(Mode::quorum(&context), 2);
 
-        let mut peer_list = Peer::mock_as_map(&[1, 2]);
-        context.peer_list = &mut peer_list;
+        let mut peer_map = Peer::mock_as_map(&[1, 2]);
+        context.peer_map = &mut peer_map;
         assert_eq!(Mode::quorum(&context), 2);
 
-        let mut peer_list = Peer::mock_as_map(&[
+        let mut peer_map = Peer::mock_as_map(&[
             1,
             2,
             3,
         ]);
-        context.peer_list = &mut peer_list;
+        context.peer_map = &mut peer_map;
         assert_eq!(Mode::quorum(&context), 3);
     }
 
@@ -222,14 +222,14 @@ use super::*;
 
         let peer_fill = 2;
         let peer_id = ServerId::new([peer_fill; 16]);
-        let mut peer_list = Peer::mock_as_map(&[peer_fill]);
-        let mut state = State::new(timeout, &peer_list);
+        let mut peer_map = Peer::mock_as_map(&[peer_fill]);
+        let mut state = State::new(timeout, &peer_map);
         state.current_term = current_term;
 
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
             state: &mut state,
-            peer_list: &mut peer_list,
+            peer_map: &mut peer_map,
         };
         let mut mode = Mode::Candidate(CandidateState::default());
         let mut tx = MockTx::new();
@@ -266,14 +266,14 @@ use super::*;
 
         let peer_fill = 2;
         let peer_id = ServerId::new([peer_fill; 16]);
-        let mut peer_list = Peer::mock_as_map(&[peer_fill]);
-        let mut state = State::new(timeout, &peer_list);
+        let mut peer_map = Peer::mock_as_map(&[peer_fill]);
+        let mut state = State::new(timeout, &peer_map);
         state.current_term = current_term;
 
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
             state: &mut state,
-            peer_list: &mut peer_list,
+            peer_map: &mut peer_map,
         };
         let mut mode = Mode::Candidate(CandidateState::default());
         let mut tx = MockTx::new();

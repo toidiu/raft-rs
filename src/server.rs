@@ -5,13 +5,13 @@ use std::collections::BTreeMap;
 struct Server {
     mode: Mode,
     state: State,
-    peer_list: BTreeMap<ServerId, Peer>,
+    peer_map: BTreeMap<ServerId, Peer>,
 }
 
 pub struct Context<'a> {
     pub server_id: ServerId,
     pub state: &'a mut State,
-    pub peer_list: &'a mut BTreeMap<ServerId, Peer>,
+    pub peer_map: &'a mut BTreeMap<ServerId, Peer>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
