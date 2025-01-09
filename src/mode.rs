@@ -186,12 +186,14 @@ mod tests {
     async fn test_quorum() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let mut state = State::new(timeout);
+
+        let peer_list = &mut vec![];
+        let mut state = State::new(timeout, &peer_list);
         let server_id = ServerId::new([6; 16]);
         let mut context = Context {
             server_id,
             state: &mut state,
-            peer_list: &mut vec![],
+            peer_list,
         };
         assert_eq!(Mode::quorum(&context), 1);
 
@@ -221,11 +223,11 @@ mod tests {
 
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let mut state = State::new(timeout);
-        state.current_term = current_term;
-
         let peer_id = ServerId::new([2; 16]);
         let mut peer_list = vec![Peer::new(peer_id)];
+        let mut state = State::new(timeout, &peer_list);
+        state.current_term = current_term;
+
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
             state: &mut state,
@@ -263,11 +265,11 @@ mod tests {
 
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let mut state = State::new(timeout);
-        state.current_term = current_term;
-
         let peer_id = ServerId::new([2; 16]);
         let mut peer_list = vec![Peer::new(peer_id)];
+        let mut state = State::new(timeout, &peer_list);
+        state.current_term = current_term;
+
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
             state: &mut state,

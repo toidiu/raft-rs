@@ -1,5 +1,6 @@
 use crate::{
     log::{Idx, Log, Term},
+    peer::Peer,
     server::ServerId,
     timeout::Timeout,
 };
@@ -47,15 +48,29 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(election_timer: Timeout) -> Self {
+    pub fn new(election_timer: Timeout, peer_list: &[Peer]) -> Self {
+        let mut next_idx = BTreeMap::new();
+        let mut match_idx = BTreeMap::new();
+
+        //% Compliance:
+        //% `nextIndex[]` for each server, index of the next log entry to send to that server
+        //% (initialized to leader last log index + 1)
+        let last_log_index_plus_1 = Idx::from(1);
+
+        for peer in peer_list.iter() {
+            let Peer { id, io: _ } = peer;
+
+            next_idx.insert(*id, last_log_index_plus_1);
+            match_idx.insert(*id, last_log_index_plus_1);
+        }
         State {
             current_term: Term::initial(),
             voted_for: None,
             log: Log::new(),
             commit_idx: Idx::initial(),
             last_applied: Idx::initial(),
-            next_idx: BTreeMap::new(),
-            match_idx: BTreeMap::new(),
+            next_idx,
+            match_idx,
             election_timer,
         }
     }

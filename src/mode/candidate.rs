@@ -1,7 +1,6 @@
-use crate::log::TermIdx;
-use crate::log::Idx;
 use crate::{
     io::IO_BUF_LEN,
+    log::{Idx, TermIdx},
     mode::{Context, Mode, ModeTransition, ServerTx},
     peer::Peer,
     rpc::Rpc,
@@ -107,13 +106,9 @@ impl CandidateState {
         //% Compliance:
         //% Send RequestVote RPCs to all other servers
         for peer in context.peer_list.iter_mut() {
-            let next_log_idx = context.state.next_idx.get(&peer.id).unwrap();
-            let prev_log_idx = Idx::from(next_log_idx.0 - 1);
-            let prev_log_term = context.state.log.last_term();
-            let prev_log_term_idx = TermIdx::builder()
-                .with_term(prev_log_term)
-                .with_idx(prev_log_idx);
-            Rpc::new_request_vote(current_term, context.server_id, prev_log_term_idx).encode_mut(&mut buf);
+            let prev_log_term_idx = TermIdx::prev_term_idx(peer, context.state);
+            Rpc::new_request_vote(current_term, context.server_id, prev_log_term_idx)
+                .encode_mut(&mut buf);
             peer.send(buf.as_mut_slice().to_vec());
         }
         // FIXME send a RequestVote to all peers
@@ -171,7 +166,8 @@ pub enum ElectionResult {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use s2n_codec::DecoderBuffer;
+use super::*;
     use crate::{io::testing::MockTx, server::ServerId, state::State, timeout::Timeout};
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
@@ -182,21 +178,22 @@ mod tests {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
         let server_id = ServerId::new([6; 16]);
-        let mut state = State::new(timeout);
+        let mut peer_list = vec![Peer::new(ServerId::new([1; 16]))];
+        let mut state = State::new(timeout, &peer_list);
         let mut context = Context {
             server_id,
             state: &mut state,
-            peer_list: &mut vec![Peer::new(ServerId::new([1; 16]))],
+            peer_list: &mut peer_list,
         };
         let mut candidate = CandidateState::default();
 
         let transition = candidate.start_election(&mut tx, &mut context);
         assert!(matches!(transition, ModeTransition::None));
 
-        // // construct RPC to compare
-        // let current_term = state.current_term;
-        // current_term.increment();
-        // let expected_rpc = Rpc::new_request_vote(current_term, server_id, TermIdx::initial());
+        // construct RPC to compare
+        let mut current_term = state.current_term;
+        current_term.increment();
+        let expected_rpc = Rpc::new_request_vote(current_term, server_id, TermIdx::initial());
 
         // let rpc_bytes = tx.queue.pop().unwrap();
         // let buffer = DecoderBuffer::new(&rpc_bytes);
@@ -210,11 +207,13 @@ mod tests {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
         let server_id = ServerId::new([6; 16]);
-        let mut state = State::new(timeout);
+
+        let peer_list = &mut vec![];
+        let mut state = State::new(timeout, peer_list);
         let mut context = Context {
             server_id,
             state: &mut state,
-            peer_list: &mut vec![],
+            peer_list,
         };
         let mut candidate = CandidateState::default();
         assert_eq!(Mode::quorum(&context), 1);
@@ -231,13 +230,14 @@ mod tests {
     async fn test_cast_vote() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let mut state = State::new(timeout);
 
         let self_id = ServerId::new([1; 16]);
         let peer_2_id = ServerId::new([2; 16]);
         let peer_2 = Peer::new(peer_2_id);
         let peer_3 = Peer::new(ServerId::new([3; 16]));
         let mut peer_list = vec![peer_2, peer_3];
+        let mut state = State::new(timeout, &peer_list);
+
         let context = Context {
             server_id: self_id,
             state: &mut state,

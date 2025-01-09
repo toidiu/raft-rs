@@ -1,4 +1,8 @@
-use crate::log::{idx::Idx, term::Term};
+use crate::{
+    log::{idx::Idx, term::Term},
+    peer::Peer,
+    state::State,
+};
 use core::cmp::Ordering;
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 
@@ -14,6 +18,10 @@ pub struct TermIdx {
 }
 
 impl TermIdx {
+    pub fn builder() -> TermIdxWithTermBuilder {
+        TermIdxWithTermBuilder
+    }
+
     pub const fn initial() -> Self {
         INITIAL_TERM_IDX
     }
@@ -22,8 +30,18 @@ impl TermIdx {
         *self == INITIAL_TERM_IDX
     }
 
-    pub fn builder() -> TermIdxWithTermBuilder {
-        TermIdxWithTermBuilder
+    pub fn prev_term_idx(peer: &Peer, state: &State) -> TermIdx {
+        let next_log_idx = state.next_idx.get(&peer.id).unwrap();
+        if *next_log_idx == Idx::from(1) {
+            // peer's log is empty
+            TermIdx::initial()
+        } else {
+            let prev_log_idx = Idx::from(next_log_idx.0 - 1);
+            let prev_log_term = state.log.last_term();
+            TermIdx::builder()
+                .with_term(prev_log_term)
+                .with_idx(prev_log_idx)
+        }
     }
 }
 
