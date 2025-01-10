@@ -86,13 +86,6 @@ impl Mode {
             Mode::Candidate(candidate) => {
                 let (transition, rpc) = candidate.on_recv(rpc, context);
                 self.handle_mode_transition(transition, context);
-
-                //% Compliance:
-                //% another server establishes itself as a leader
-                //
-                //% Compliance:
-                //% recognize the server as the new leader
-                // If converted
                 rpc
             }
             Mode::Leader(leader) => {

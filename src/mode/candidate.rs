@@ -43,25 +43,24 @@ impl CandidateState {
                     entries: _,
                 } = append_entries_state;
                 let leader_io = &mut context.peer_map.get_mut(leader_id).unwrap().io;
-
                 //% Compliance:
-                //% If AppendEntries RPC received from new leader: convert to follower
-
-                //% Compliance:
-                //% a candidate receives AppendEntries from another server claiming to be a leader
+                //% another server establishes itself as a leader
+                //% - a candidate receives AppendEntries from another server claiming to be a leader
                 if *term >= context.state.current_term {
                     //% Compliance:
                     //% if that leader's current term is >= the candidate's
+                    //% - recognize the server as the new leader
+                    //% - then the candidate reverts to a follower
                     //
                     //% Compliance:
-                    //% then the candidate reverts to a follower
+                    //% If AppendEntries RPC received from new leader: convert to follower
+
+                    // Convert to Follower and process/respond to the RPC
                     return (ModeTransition::ToFollower, Some(rpc));
                 } else {
                     //% Compliance:
                     //% if the leader's current term is < the candidate's
-                    //
-                    //% Compliance:
-                    //% reject the RPC and continue in the candidate state
+                    //% - reject the RPC and continue in the candidate state
                     let mut slice = vec![0; IO_BUF_LEN];
                     let mut buf = EncoderBuffer::new(&mut slice);
                     let term = context.state.current_term;
