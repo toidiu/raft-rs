@@ -49,30 +49,30 @@ pub enum Mode {
 }
 
 impl Mode {
-    fn on_timeout<IO: ServerIO>(&mut self, tx: &mut IO, context: &mut Context<IO>) {
+    fn on_timeout<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
         match self {
             Mode::Follower(_follower) => {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
                 //% leader or granting vote to candidate: convert to candidate
-                self.on_candidate(tx, context);
+                self.on_candidate(context);
             }
             Mode::Candidate(candidate) => {
                 let transition = candidate.on_timeout(context);
-                self.handle_mode_transition(tx, transition, context);
+                self.handle_mode_transition(transition, context);
             }
 
-            Mode::Leader(leader) => leader.on_timeout(tx),
+            Mode::Leader(leader) => leader.on_timeout(context),
         }
     }
 
-    fn on_recv<IO: ServerIO>(&mut self, tx: &mut IO, rpc: Rpc, context: &mut Context<IO>) {
+    fn on_recv<IO: ServerIO>(&mut self, rpc: Rpc, context: &mut Context<IO>) {
         //% Compliance:
         //% If RPC request or response contains term T > currentTerm: set currentTerm = T, convert
         //% to follower (§5.1)
         if rpc.term() > &context.state.current_term {
             context.state.current_term = *rpc.term();
-            self.on_follower(tx);
+            self.on_follower(context);
         }
 
         let rpc = match self {
@@ -84,8 +84,8 @@ impl Mode {
                 None
             }
             Mode::Candidate(candidate) => {
-                let (transition, rpc) = candidate.on_recv(tx, rpc, context);
-                self.handle_mode_transition(tx, transition, context);
+                let (transition, rpc) = candidate.on_recv(rpc, context);
+                self.handle_mode_transition(transition, context);
 
                 //% Compliance:
                 //% another server establishes itself as a leader
@@ -106,31 +106,30 @@ impl Mode {
         // An RPC might only be partially processed if it results in a ModeTransition and should be
         // processed again by the new Mode.
         if let Some(rpc) = rpc {
-            self.on_recv(tx, rpc, context)
+            self.on_recv(rpc, context)
         }
     }
 
     fn handle_mode_transition<IO: ServerIO>(
         &mut self,
-        tx: &mut IO,
         transition: ModeTransition,
         context: &mut Context<IO>,
     ) {
         match transition {
             ModeTransition::None => (),
-            ModeTransition::ToFollower => self.on_follower(tx),
-            ModeTransition::ToCandidate => self.on_candidate(tx, context),
-            ModeTransition::ToLeader => self.on_leader(tx),
+            ModeTransition::ToFollower => self.on_follower(context),
+            ModeTransition::ToCandidate => self.on_candidate(context),
+            ModeTransition::ToLeader => self.on_leader(context),
         }
     }
 
-    fn on_follower<IO: ServerIO>(&mut self, tx: &mut IO) {
+    fn on_follower<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
         *self = Mode::Follower(FollowerState);
         let follower = cast_unsafe!(self, Mode::Follower);
-        follower.on_follower(tx);
+        follower.on_follower(context);
     }
 
-    fn on_candidate<IO: ServerIO>(&mut self, tx: &mut IO, context: &mut Context<IO>) {
+    fn on_candidate<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
         *self = Mode::Candidate(CandidateState::default());
         let candidate = cast_unsafe!(self, Mode::Candidate);
 
@@ -138,7 +137,7 @@ impl Mode {
             ModeTransition::None => (),
             ModeTransition::ToLeader => {
                 // If the quorum size is 1, then a candidate will become leader immediately
-                self.on_leader(tx);
+                self.on_leader(context);
             }
             ModeTransition::ToCandidate | ModeTransition::ToFollower => {
                 unreachable!("Invalid mode transition");
@@ -146,10 +145,10 @@ impl Mode {
         }
     }
 
-    fn on_leader<IO: ServerIO>(&mut self, tx: &mut IO) {
+    fn on_leader<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
         *self = Mode::Leader(LeaderState);
         let leader = cast_unsafe!(self, Mode::Leader);
-        leader.on_leader(tx);
+        leader.on_leader(context);
     }
 
     fn quorum<IO: ServerIO>(context: &Context<IO>) -> usize {
@@ -171,7 +170,6 @@ pub enum ModeTransition {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::MockIO,
         log::{Idx, Term, TermIdx},
         peer::Peer,
         server::ServerId,
@@ -228,7 +226,6 @@ mod tests {
             peer_map: &mut peer_map,
         };
         let mut mode = Mode::Candidate(CandidateState::default());
-        let mut io = MockIO::new();
 
         // Mock send AppendEntries to Candidate with `term => current_term`
         let append_entries = Rpc::new_append_entry(
@@ -238,7 +235,7 @@ mod tests {
             Idx::initial(),
             vec![],
         );
-        mode.on_recv(&mut io, append_entries, &mut context);
+        mode.on_recv(append_entries, &mut context);
 
         // expect Mode::Follower
         assert!(matches!(mode, Mode::Follower(_)));
@@ -274,7 +271,6 @@ mod tests {
             peer_map: &mut peer_map,
         };
         let mut mode = Mode::Candidate(CandidateState::default());
-        let mut io = MockIO::new();
 
         // Mock send AppendEntries to Candidate with `term => current_term`
         let append_entries = Rpc::new_append_entry(
@@ -284,16 +280,17 @@ mod tests {
             Idx::initial(),
             vec![],
         );
-        mode.on_recv(&mut io, append_entries, &mut context);
+        mode.on_recv(append_entries, &mut context);
 
         // expect Mode::Follower
         assert!(matches!(mode, Mode::Candidate(_)));
 
         // expect Follower to send RespAppendEntries acknowledging the leader
         // construct RPC to compare
+        let peer_io = &mut peer_map.get_mut(&peer_id).unwrap().io;
         let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
-        let rpc_bytes = io.send_queue.pop().unwrap();
-        assert!(io.send_queue.is_empty());
+        let rpc_bytes = peer_io.send_queue.pop().unwrap();
+        assert!(peer_io.send_queue.is_empty());
         let buffer = DecoderBuffer::new(&rpc_bytes);
         let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
         assert_eq!(expected_rpc, sent_request_vote);

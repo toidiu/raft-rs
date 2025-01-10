@@ -9,7 +9,7 @@ use s2n_codec::{EncoderBuffer, EncoderValue};
 pub struct FollowerState;
 
 impl FollowerState {
-    pub fn on_follower<IO: ServerIO>(&mut self, _io: &mut IO) {}
+    pub fn on_follower<IO: ServerIO>(&mut self, _context: &mut Context<IO>) {}
 
     pub fn on_recv<IO: ServerIO>(&mut self, rpc: crate::rpc::Rpc, context: &mut Context<IO>) {
         //% Compliance:

@@ -4,11 +4,11 @@ use crate::{io::ServerIO, mode::Context};
 pub struct LeaderState;
 
 impl LeaderState {
-    pub fn on_leader<IO: ServerIO>(&mut self, _io: &mut IO) {
+    pub fn on_leader<IO: ServerIO>(&mut self, _context: &mut Context<IO>) {
         todo!()
     }
 
-    pub fn on_timeout<IO: ServerIO>(&mut self, _io: &mut IO) {
+    pub fn on_timeout<IO: ServerIO>(&mut self, _context: &mut Context<IO>) {
         todo!()
     }
 

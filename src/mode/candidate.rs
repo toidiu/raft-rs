@@ -2,7 +2,7 @@ use crate::{
     io::{ServerIO, IO_BUF_LEN},
     log::TermIdx,
     mode::{Context, Mode, ModeTransition},
-    rpc::Rpc,
+    rpc::{AppendEntriesState, Rpc},
     server::ServerId,
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
@@ -14,19 +14,13 @@ pub struct CandidateState {
 }
 
 impl CandidateState {
-    pub fn on_candidate<IO: ServerIO>(
-        &mut self,
-        context: &mut Context<IO>,
-    ) -> ModeTransition {
+    pub fn on_candidate<IO: ServerIO>(&mut self, context: &mut Context<IO>) -> ModeTransition {
         //% Compliance:
         //% On conversion to candidate, start election:
         self.start_election(context)
     }
 
-    pub fn on_timeout<IO: ServerIO>(
-        &mut self,
-        context: &mut Context<IO>,
-    ) -> ModeTransition {
+    pub fn on_timeout<IO: ServerIO>(&mut self, context: &mut Context<IO>) -> ModeTransition {
         //% Compliance:
         //% If election timeout elapses: start new election
         self.start_election(context)
@@ -34,7 +28,6 @@ impl CandidateState {
 
     pub fn on_recv<IO: ServerIO>(
         &mut self,
-        tx: &mut IO,
         rpc: crate::rpc::Rpc,
         context: &mut Context<IO>,
     ) -> (ModeTransition, Option<Rpc>) {
@@ -42,12 +35,21 @@ impl CandidateState {
             Rpc::RequestVote(_request_vote_state) => todo!(),
             Rpc::RespRequestVote(_resp_request_vote_state) => todo!(),
             Rpc::AppendEntries(ref append_entries_state) => {
+                let AppendEntriesState {
+                    term,
+                    leader_id,
+                    prev_log_term_idx: _,
+                    leader_commit_idx: _,
+                    entries: _,
+                } = append_entries_state;
+                let leader_io = &mut context.peer_map.get_mut(leader_id).unwrap().io;
+
                 //% Compliance:
                 //% If AppendEntries RPC received from new leader: convert to follower
 
                 //% Compliance:
                 //% a candidate receives AppendEntries from another server claiming to be a leader
-                if append_entries_state.term >= context.state.current_term {
+                if *term >= context.state.current_term {
                     //% Compliance:
                     //% if that leader's current term is >= the candidate's
                     //
@@ -64,7 +66,7 @@ impl CandidateState {
                     let mut buf = EncoderBuffer::new(&mut slice);
                     let term = context.state.current_term;
                     Rpc::new_append_entry_resp(term, false).encode_mut(&mut buf);
-                    tx.send(buf.as_mut_slice().to_vec());
+                    leader_io.send(buf.as_mut_slice().to_vec());
                 }
             }
             Rpc::RespAppendEntries(_resp_append_entries_state) => (),
