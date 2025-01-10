@@ -9,7 +9,7 @@ use std::{
 
 /// A handle held by the network task.
 #[derive(Debug, Clone)]
-pub struct NetworkIO {
+pub struct NetworkIoImpl {
     pub buf: [u8; IO_BUF_LEN],
     pub rx_queue: Arc<Mutex<VecDeque<u8>>>,
     pub tx_queue: Arc<Mutex<VecDeque<u8>>>,
@@ -34,7 +34,7 @@ pub trait NetTx {
     }
 }
 
-impl NetRx for NetworkIO {
+impl NetRx for NetworkIoImpl {
     fn recv(&mut self, data: Vec<u8>) {
         dbg!("  network <--- {:?}", &data);
 
@@ -45,7 +45,7 @@ impl NetRx for NetworkIO {
     }
 }
 
-impl NetTx for NetworkIO {
+impl NetTx for NetworkIoImpl {
     fn send(&mut self) -> Option<Vec<u8>> {
         let bytes_to_send = self
             .tx_queue

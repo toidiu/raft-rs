@@ -9,7 +9,7 @@ use std::{
 
 /// A handle held by the Raft server task.
 #[derive(Debug)]
-pub struct ServerIO {
+pub struct ServerIoImpl {
     pub buf: [u8; IO_BUF_LEN],
     pub rx_queue: Arc<Mutex<VecDeque<u8>>>,
     pub tx_queue: Arc<Mutex<VecDeque<u8>>>,
@@ -33,7 +33,7 @@ pub trait ServerTx {
     fn send(&mut self, data: Vec<u8>);
 }
 
-impl ServerRx for ServerIO {
+impl ServerRx for ServerIoImpl {
     // Retrieve data for the Server to process
     fn recv(&mut self) -> Option<Vec<u8>> {
         let bytes_to_recv = self
@@ -63,7 +63,7 @@ impl ServerRx for ServerIO {
     }
 }
 
-impl ServerTx for ServerIO {
+impl ServerTx for ServerIoImpl {
     fn send(&mut self, data: Vec<u8>) {
         dbg!("  server ---> {:?}", &data);
 

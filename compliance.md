@@ -31,7 +31,7 @@
   - [x] Increment currentTerm
   - [x] Vote for self
   - [x] Reset election timer
-  - [ ] Send RequestVote RPCs to all other servers
+  - [x] Send RequestVote RPCs to all other servers
 - [x] If votes received from majority of servers: become leader
 - [x] If AppendEntries RPC received from new leader: convert to follower
 - [x] If election timeout elapses: start new election

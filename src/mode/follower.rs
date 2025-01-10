@@ -1,6 +1,6 @@
 use crate::{
-    io::IO_BUF_LEN,
-    mode::{Context, ServerTx},
+    io::{ServerIO, IO_BUF_LEN},
+    mode::Context,
     rpc::Rpc,
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
@@ -9,13 +9,13 @@ use s2n_codec::{EncoderBuffer, EncoderValue};
 pub struct FollowerState;
 
 impl FollowerState {
-    pub fn on_follower<T: ServerTx>(&mut self, _io: &mut T) {}
+    pub fn on_follower<IO: ServerIO>(&mut self, _io: &mut IO) {}
 
-    pub fn on_recv<T: ServerTx>(
+    pub fn on_recv<IO: ServerIO>(
         &mut self,
-        tx: &mut T,
+        tx: &mut IO,
         rpc: crate::rpc::Rpc,
-        context: &mut Context,
+        context: &mut Context<IO>,
     ) {
         //% Compliance:
         //% Respond to RPCs from candidates and leaders

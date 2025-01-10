@@ -10,8 +10,12 @@ mod server;
 #[cfg(test)]
 pub mod testing;
 
-pub use network::{NetTx, NetworkIO};
-pub use server::{ServerIO, ServerRx, ServerTx};
+pub use network::{NetTx, NetworkIoImpl};
+pub use server::{ServerIoImpl, ServerRx, ServerTx};
+
+pub trait ServerIO: ServerTx + ServerRx {}
+
+impl<IO: ServerTx + ServerRx> ServerIO for IO {}
 
 // FIXME this is allocated per recv/send. Instead allocate a common buffer that can be reused.
 // The default size of the buffer used to send/recv from the IO queues
@@ -64,14 +68,14 @@ pub const IO_BUF_LEN: usize = 1024;
 pub struct BufferIo;
 
 impl BufferIo {
-    pub fn split() -> (ServerIO, NetworkIO) {
+    pub fn split() -> (ServerIoImpl, NetworkIoImpl) {
         let rx_queue = Arc::new(Mutex::new(VecDeque::with_capacity(IO_BUF_LEN)));
         let rx_waker = Arc::new(Mutex::new(None));
 
         let tx_queue = Arc::new(Mutex::new(VecDeque::with_capacity(IO_BUF_LEN)));
         let tx_waker = Arc::new(Mutex::new(None));
 
-        let network_io_handle = NetworkIO {
+        let network_io_handle = NetworkIoImpl {
             buf: [0; IO_BUF_LEN],
             rx_queue: rx_queue.clone(),
             tx_queue: tx_queue.clone(),
@@ -79,7 +83,7 @@ impl BufferIo {
             tx_waker: tx_waker.clone(),
         };
 
-        let server_io_handle = ServerIO {
+        let server_io_handle = ServerIoImpl {
             buf: [0; IO_BUF_LEN],
             rx_queue,
             tx_queue,
@@ -114,8 +118,8 @@ macro_rules! impl_io_ready(($io:ident, $fut:ident, $poll_fn:ident) => {
 });
 
 // Implement Future for Server and Network IO
-impl_io_ready!(ServerIO, RxReady, poll_rx_ready);
-impl_io_ready!(NetworkIO, TxReady, poll_tx_ready);
+impl_io_ready!(ServerIoImpl, RxReady, poll_rx_ready);
+impl_io_ready!(NetworkIoImpl, TxReady, poll_tx_ready);
 
 #[cfg(test)]
 mod tests {
@@ -125,7 +129,7 @@ mod tests {
     use network::NetRx;
     use server::ServerTx;
 
-    fn test_helper_io_setup() -> (ServerIO, NetworkIO, AwokenCount, AwokenCount) {
+    fn test_helper_io_setup() -> (ServerIoImpl, NetworkIoImpl, AwokenCount, AwokenCount) {
         let (mut server_io, mut network_io) = BufferIo::split();
 
         let (rx_waker, rx_cnt) = new_count_waker();

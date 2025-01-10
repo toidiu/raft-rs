@@ -31,7 +31,7 @@
 //! https://textik.com/#8dbf6540e0dd1676
 
 use crate::{
-    io::ServerTx,
+    io::ServerIO,
     macros::cast_unsafe,
     mode::{candidate::CandidateState, follower::FollowerState, leader::LeaderState},
     rpc::Rpc,
@@ -49,7 +49,7 @@ pub enum Mode {
 }
 
 impl Mode {
-    fn on_timeout<T: ServerTx>(&mut self, tx: &mut T, context: &mut Context) {
+    fn on_timeout<IO: ServerIO>(&mut self, tx: &mut IO, context: &mut Context<IO>) {
         match self {
             Mode::Follower(_follower) => {
                 //% Compliance:
@@ -66,7 +66,7 @@ impl Mode {
         }
     }
 
-    fn on_recv<T: ServerTx>(&mut self, tx: &mut T, rpc: Rpc, context: &mut Context) {
+    fn on_recv<IO: ServerIO>(&mut self, tx: &mut IO, rpc: Rpc, context: &mut Context<IO>) {
         //% Compliance:
         //% If RPC request or response contains term T > currentTerm: set currentTerm = T, convert
         //% to follower (§5.1)
@@ -110,11 +110,11 @@ impl Mode {
         }
     }
 
-    fn handle_mode_transition<T: ServerTx>(
+    fn handle_mode_transition<IO: ServerIO>(
         &mut self,
-        tx: &mut T,
+        tx: &mut IO,
         transition: ModeTransition,
-        context: &mut Context,
+        context: &mut Context<IO>,
     ) {
         match transition {
             ModeTransition::None => (),
@@ -124,13 +124,13 @@ impl Mode {
         }
     }
 
-    fn on_follower<T: ServerTx>(&mut self, tx: &mut T) {
+    fn on_follower<IO: ServerIO>(&mut self, tx: &mut IO) {
         *self = Mode::Follower(FollowerState);
         let follower = cast_unsafe!(self, Mode::Follower);
         follower.on_follower(tx);
     }
 
-    fn on_candidate<T: ServerTx>(&mut self, tx: &mut T, context: &mut Context) {
+    fn on_candidate<IO: ServerIO>(&mut self, tx: &mut IO, context: &mut Context<IO>) {
         *self = Mode::Candidate(CandidateState::default());
         let candidate = cast_unsafe!(self, Mode::Candidate);
 
@@ -146,13 +146,13 @@ impl Mode {
         }
     }
 
-    fn on_leader<T: ServerTx>(&mut self, tx: &mut T) {
+    fn on_leader<IO: ServerIO>(&mut self, tx: &mut IO) {
         *self = Mode::Leader(LeaderState);
         let leader = cast_unsafe!(self, Mode::Leader);
         leader.on_leader(tx);
     }
 
-    fn quorum(context: &Context) -> usize {
+    fn quorum<IO: ServerIO>(context: &Context<IO>) -> usize {
         let peer_plus_self = context.peer_map.len() + 1;
         let half = peer_plus_self / 2;
         half + 1
@@ -171,7 +171,7 @@ pub enum ModeTransition {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::MockTx,
+        io::testing::MockIO,
         log::{Idx, Term, TermIdx},
         peer::Peer,
         server::ServerId,
@@ -228,7 +228,7 @@ mod tests {
             peer_map: &mut peer_map,
         };
         let mut mode = Mode::Candidate(CandidateState::default());
-        let mut tx = MockTx::new();
+        let mut io = MockIO::new();
 
         // Mock send AppendEntries to Candidate with `term => current_term`
         let append_entries = Rpc::new_append_entry(
@@ -238,16 +238,16 @@ mod tests {
             Idx::initial(),
             vec![],
         );
-        mode.on_recv(&mut tx, append_entries, &mut context);
+        mode.on_recv(&mut io, append_entries, &mut context);
 
         // expect Mode::Follower
         assert!(matches!(mode, Mode::Follower(_)));
 
-        // expect Follower to send RespAppendEntries acknowleding the leader
+        // expect Follower to send RespAppendEntries acknowledging the leader
         // construct RPC to compare
         let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
-        let rpc_bytes = tx.queue.pop().unwrap();
-        assert!(tx.queue.is_empty());
+        let rpc_bytes = io.send_queue.pop().unwrap();
+        assert!(io.send_queue.is_empty());
         let buffer = DecoderBuffer::new(&rpc_bytes);
         let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
         assert_eq!(expected_rpc, sent_request_vote);
@@ -272,7 +272,7 @@ mod tests {
             peer_map: &mut peer_map,
         };
         let mut mode = Mode::Candidate(CandidateState::default());
-        let mut tx = MockTx::new();
+        let mut io = MockIO::new();
 
         // Mock send AppendEntries to Candidate with `term => current_term`
         let append_entries = Rpc::new_append_entry(
@@ -282,16 +282,16 @@ mod tests {
             Idx::initial(),
             vec![],
         );
-        mode.on_recv(&mut tx, append_entries, &mut context);
+        mode.on_recv(&mut io, append_entries, &mut context);
 
         // expect Mode::Follower
         assert!(matches!(mode, Mode::Candidate(_)));
 
-        // expect Follower to send RespAppendEntries acknowleding the leader
+        // expect Follower to send RespAppendEntries acknowledging the leader
         // construct RPC to compare
         let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
-        let rpc_bytes = tx.queue.pop().unwrap();
-        assert!(tx.queue.is_empty());
+        let rpc_bytes = io.send_queue.pop().unwrap();
+        assert!(io.send_queue.is_empty());
         let buffer = DecoderBuffer::new(&rpc_bytes);
         let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
         assert_eq!(expected_rpc, sent_request_vote);

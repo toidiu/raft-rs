@@ -1,4 +1,5 @@
 use crate::{
+    io::ServerIO,
     log::{Idx, Log, Term},
     peer::Peer,
     server::ServerId,
@@ -48,7 +49,10 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(election_timer: Timeout, peer_map: &BTreeMap<ServerId, Peer>) -> Self {
+    pub fn new<T: ServerIO>(
+        election_timer: Timeout,
+        peer_map: &BTreeMap<ServerId, Peer<T>>,
+    ) -> Self {
         let log = Log::new();
         let mut next_idx_map = BTreeMap::new();
         let mut match_idx_map = BTreeMap::new();

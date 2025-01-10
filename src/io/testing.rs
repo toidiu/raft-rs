@@ -1,18 +1,37 @@
-use crate::io::ServerTx;
+use crate::io::{ServerRx, ServerTx};
+use std::task::Poll;
 
 #[derive(Debug)]
-pub struct MockTx {
-    pub queue: Vec<Vec<u8>>,
+pub struct MockIO {
+    pub send_queue: Vec<Vec<u8>>,
+    pub recv_queue: Vec<Vec<u8>>,
 }
 
-impl MockTx {
+impl MockIO {
     pub fn new() -> Self {
-        MockTx { queue: vec![] }
+        MockIO {
+            send_queue: vec![],
+            recv_queue: vec![],
+        }
     }
 }
 
-impl ServerTx for MockTx {
+impl ServerTx for MockIO {
     fn send(&mut self, data: Vec<u8>) {
-        self.queue.push(data);
+        self.send_queue.push(data);
+    }
+}
+
+impl ServerRx for MockIO {
+    fn recv(&mut self) -> Option<Vec<u8>> {
+        self.recv_queue.pop()
+    }
+
+    fn poll_rx_ready(&mut self, _cx: &mut std::task::Context) -> Poll<()> {
+        if self.recv_queue.is_empty() {
+            Poll::Pending
+        } else {
+            Poll::Ready(())
+        }
     }
 }
