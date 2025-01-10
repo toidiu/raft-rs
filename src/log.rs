@@ -34,6 +34,19 @@ impl Log {
     }
 
     //% Compliance:
+    //% If an existing entry conflicts with a new one (same index but different terms),
+    //% delete the existing entry and all that follow it (§5.3)
+    pub fn match_or_delete_trailing(&mut self, entry: Entry, entry_term_idx: TermIdx) {
+        let TermIdx { term: _, idx } = entry_term_idx;
+        if !self.entry_matches(entry_term_idx) {
+            // remove entry at current idx and all trailing ones
+            self.entries.truncate(idx.into_log_idx());
+            // insert the new entry
+            self.entries.push(entry);
+        }
+    }
+
+    //% Compliance:
     //% if two entries in different logs have the same index/term, they store the same command
     pub fn entry_matches(&self, term_idx: TermIdx) -> bool {
         // TermIdx::initial indicates that both logs are empty
@@ -52,9 +65,7 @@ impl Log {
         if idx == Idx::initial() {
             return None;
         }
-        let idx = (idx.0 - 1) as usize;
-
-        self.entries.get(idx)
+        self.entries.get(idx.into_log_idx())
     }
 }
 

@@ -1,5 +1,6 @@
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
+    log::{Idx, TermIdx},
     mode::Context,
     rpc::{AppendEntriesState, Rpc},
 };
@@ -22,7 +23,7 @@ impl FollowerState {
                     leader_id,
                     prev_log_term_idx,
                     leader_commit_idx: _,
-                    entries: _,
+                    entries,
                 } = append_entries_state;
                 let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
                 let response = if term < context.state.current_term {
@@ -37,8 +38,20 @@ impl FollowerState {
                     true
                 };
 
+                //% Compliance:
+                //% If an existing entry conflicts with a new one (same index but different terms),
+                //% delete the existing entry and all that follow it (§5.3)
+                let mut entry_idx_val = prev_log_term_idx.idx.0 + 1;
+                for entry in entries.into_iter() {
+                    let term_idx = TermIdx::builder()
+                        .with_term(entry.term)
+                        .with_idx(Idx::from(entry_idx_val));
+                    context.state.log.match_or_delete_trailing(entry, term_idx);
+
+                    entry_idx_val += 1;
+                }
+
                 // TODO
-                // - [ ] If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it (§5.3)
                 // - [ ] Append any new entries not already in the log
                 // - [ ] If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
 

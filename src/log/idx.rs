@@ -12,6 +12,10 @@ impl Idx {
     pub const fn initial() -> Self {
         INITIAL_IDX
     }
+
+    pub fn into_log_idx(self) -> usize {
+        self.0 as usize - 1
+    }
 }
 
 impl From<u64> for Idx {
