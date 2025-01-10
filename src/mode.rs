@@ -80,7 +80,7 @@ impl Mode {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
                 //% leader or granting vote to candidate: convert to candidate
-                follower.on_recv(tx, rpc, context);
+                follower.on_recv(rpc, context);
                 None
             }
             Mode::Candidate(candidate) => {
@@ -216,9 +216,9 @@ mod tests {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
-        let peer_fill = 2;
-        let peer_id = ServerId::new([peer_fill; 16]);
-        let mut peer_map = Peer::mock_as_map(&[peer_fill]);
+        let leader_id_fill = 2;
+        let leader_id = ServerId::new([leader_id_fill; 16]);
+        let mut peer_map = Peer::mock_as_map(&[leader_id_fill]);
         let mut state = State::new(timeout, &peer_map);
         state.current_term = current_term;
 
@@ -233,7 +233,7 @@ mod tests {
         // Mock send AppendEntries to Candidate with `term => current_term`
         let append_entries = Rpc::new_append_entry(
             current_term,
-            peer_id,
+            leader_id,
             TermIdx::initial(),
             Idx::initial(),
             vec![],
@@ -246,8 +246,10 @@ mod tests {
         // expect Follower to send RespAppendEntries acknowledging the leader
         // construct RPC to compare
         let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
-        let rpc_bytes = io.send_queue.pop().unwrap();
-        assert!(io.send_queue.is_empty());
+
+        let leader_io = &mut peer_map.get_mut(&leader_id).unwrap().io;
+        let rpc_bytes = leader_io.send_queue.pop().unwrap();
+        assert!(leader_io.send_queue.is_empty());
         let buffer = DecoderBuffer::new(&rpc_bytes);
         let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
         assert_eq!(expected_rpc, sent_request_vote);
