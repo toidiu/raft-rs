@@ -12,12 +12,7 @@ impl LeaderState {
         todo!()
     }
 
-    pub fn on_recv<IO: ServerIO>(
-        &mut self,
-        _tx: &mut IO,
-        _rpc: crate::rpc::Rpc,
-        _context: &mut Context<IO>,
-    ) {
+    pub fn on_recv<IO: ServerIO>(&mut self, _rpc: crate::rpc::Rpc, _context: &mut Context<IO>) {
         todo!()
     }
 }

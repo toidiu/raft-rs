@@ -58,7 +58,7 @@ impl Mode {
                 self.on_candidate(tx, context);
             }
             Mode::Candidate(candidate) => {
-                let transition = candidate.on_timeout(tx, context);
+                let transition = candidate.on_timeout(context);
                 self.handle_mode_transition(tx, transition, context);
             }
 
@@ -96,7 +96,7 @@ impl Mode {
                 rpc
             }
             Mode::Leader(leader) => {
-                leader.on_recv(tx, rpc, context);
+                leader.on_recv(rpc, context);
                 None
             }
         };
@@ -134,7 +134,7 @@ impl Mode {
         *self = Mode::Candidate(CandidateState::default());
         let candidate = cast_unsafe!(self, Mode::Candidate);
 
-        match candidate.on_candidate(tx, context) {
+        match candidate.on_candidate(context) {
             ModeTransition::None => (),
             ModeTransition::ToLeader => {
                 // If the quorum size is 1, then a candidate will become leader immediately

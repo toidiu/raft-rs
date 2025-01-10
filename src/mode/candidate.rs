@@ -16,7 +16,6 @@ pub struct CandidateState {
 impl CandidateState {
     pub fn on_candidate<IO: ServerIO>(
         &mut self,
-        _tx: &mut IO,
         context: &mut Context<IO>,
     ) -> ModeTransition {
         //% Compliance:
@@ -26,7 +25,6 @@ impl CandidateState {
 
     pub fn on_timeout<IO: ServerIO>(
         &mut self,
-        _tx: &mut IO,
         context: &mut Context<IO>,
     ) -> ModeTransition {
         //% Compliance:
