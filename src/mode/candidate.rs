@@ -16,22 +16,22 @@ pub struct CandidateState {
 impl CandidateState {
     pub fn on_candidate<IO: ServerIO>(
         &mut self,
-        tx: &mut IO,
+        _tx: &mut IO,
         context: &mut Context<IO>,
     ) -> ModeTransition {
         //% Compliance:
         //% On conversion to candidate, start election:
-        self.start_election(tx, context)
+        self.start_election(context)
     }
 
     pub fn on_timeout<IO: ServerIO>(
         &mut self,
-        tx: &mut IO,
+        _tx: &mut IO,
         context: &mut Context<IO>,
     ) -> ModeTransition {
         //% Compliance:
         //% If election timeout elapses: start new election
-        self.start_election(tx, context)
+        self.start_election(context)
     }
 
     pub fn on_recv<IO: ServerIO>(
@@ -75,11 +75,7 @@ impl CandidateState {
         (ModeTransition::None, None)
     }
 
-    fn start_election<IO: ServerIO>(
-        &mut self,
-        _tx: &mut IO,
-        context: &mut Context<IO>,
-    ) -> ModeTransition {
+    fn start_election<IO: ServerIO>(&mut self, context: &mut Context<IO>) -> ModeTransition {
         //% Compliance:
         //% Increment currentTerm
         context.state.current_term.increment();
@@ -162,25 +158,22 @@ pub enum ElectionResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        io::testing::MockIO, peer::Peer, server::ServerId, state::State, timeout::Timeout,
-    };
+    use crate::{log::Term, peer::Peer, state::State, timeout::Timeout};
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
     use s2n_codec::DecoderBuffer;
 
     #[tokio::test]
     async fn test_start_election() {
-        let mut io = MockIO::new();
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
-        let peer_fill = 6;
+        let peer_fill = 11;
         let server_id = ServerId::new([peer_fill; 16]);
-        let mut peer_map = Peer::mock_as_map(&[peer_fill]);
-        // let server_id = ServerId::new([6; 16]);
-        // let mut peer_map = vec![Peer::new(ServerId::new([1; 16]))];
+        let mut peer_map = Peer::mock_as_map(&[peer_fill, 12]);
         let mut state = State::new(timeout, &peer_map);
+        assert!(state.current_term.is_initial());
+
         let mut context = Context {
             server_id,
             state: &mut state,
@@ -188,24 +181,27 @@ mod tests {
         };
         let mut candidate = CandidateState::default();
 
-        let transition = candidate.start_election(&mut io, &mut context);
+        // Trigger election
+        let transition = candidate.start_election(&mut context);
+
+        // Expect no transitions since quorum is >1
         assert!(matches!(transition, ModeTransition::None));
+        // Expect current_term to be incremented
+        assert_eq!(state.current_term, Term::from(1));
 
-        // construct RPC to compare
-        let mut current_term = state.current_term;
-        current_term.increment();
-        let expected_rpc = Rpc::new_request_vote(current_term, server_id, TermIdx::initial());
-
-        // FIXME revive test
-        // let rpc_bytes = io.send_queue.pop().unwrap();
-        // let buffer = DecoderBuffer::new(&rpc_bytes);
-        // let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
-        // assert_eq!(expected_rpc, sent_request_vote);
+        // Expect RequestVote RPC sent to all peers
+        let expected_rpc = Rpc::new_request_vote(state.current_term, server_id, TermIdx::initial());
+        for (_id, peer) in peer_map.iter_mut() {
+            let Peer { id: _, io } = peer;
+            let rpc_bytes = io.send_queue.pop().unwrap();
+            let buffer = DecoderBuffer::new(&rpc_bytes);
+            let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
+            assert_eq!(expected_rpc, sent_request_vote);
+        }
     }
 
     #[tokio::test]
     async fn test_start_election_with_no_peers() {
-        let mut io = MockIO::new();
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
         let server_id = ServerId::new([6; 16]);
@@ -221,11 +217,11 @@ mod tests {
         assert_eq!(Mode::quorum(&context), 1);
 
         // Elect self
-        let transition = candidate.start_election(&mut io, &mut context);
+        let transition = candidate.start_election(&mut context);
         assert!(matches!(transition, ModeTransition::ToLeader));
 
-        // No RPC sent
-        assert!(io.send_queue.is_empty());
+        // No RPC sent. Unable to inspect IO since there are no peers
+        assert!(peer_map.first_entry().is_none());
     }
 
     #[tokio::test]

@@ -16,6 +16,10 @@ impl Term {
     pub fn increment(&mut self) {
         self.0 += 1;
     }
+
+    pub fn is_initial(&self) -> bool {
+        *self == INITIAL_TERM
+    }
 }
 
 impl From<u64> for Term {
