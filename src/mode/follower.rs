@@ -37,6 +37,11 @@ impl FollowerState {
                     true
                 };
 
+                // TODO
+                // - [ ] If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it (§5.3)
+                // - [ ] Append any new entries not already in the log
+                // - [ ] If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
+
                 let mut slice = vec![0; IO_BUF_LEN];
                 let mut buf = EncoderBuffer::new(&mut slice);
                 let term = context.state.current_term;
