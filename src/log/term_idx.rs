@@ -1,4 +1,5 @@
 use crate::{
+    io::ServerIO,
     log::{idx::Idx, term::Term},
     peer::Peer,
     state::State,
@@ -30,7 +31,7 @@ impl TermIdx {
         *self == INITIAL_TERM_IDX
     }
 
-    pub fn prev_term_idx(peer: &Peer, state: &State) -> TermIdx {
+    pub fn prev_term_idx<T: ServerIO>(peer: &Peer<T>, state: &State) -> TermIdx {
         let next_log_idx = state.next_idx.get(&peer.id).unwrap();
         if *next_log_idx == Idx::from(1) {
             // peer's log is empty

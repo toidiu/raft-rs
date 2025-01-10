@@ -1,19 +1,16 @@
-use crate::{
-    io::{BufferIo, ServerIO, ServerIoImpl, ServerRx, ServerTx},
-    server::ServerId,
-};
+use crate::{io::ServerIO, server::ServerId};
 
 #[cfg(test)]
 mod testing;
 
 #[derive(Debug)]
-pub struct Peer<T: ServerIO> {
+pub struct Peer<IO: ServerIO> {
     pub id: ServerId,
-    pub io: T,
+    pub io: IO,
 }
 
-impl<T: ServerIO> Peer<T> {
-    pub fn new(id: ServerId, io: T) -> Self {
+impl<IO: ServerIO> Peer<IO> {
+    pub fn new(id: ServerId, io: IO) -> Self {
         Peer { id, io }
     }
 
@@ -26,22 +23,22 @@ impl<T: ServerIO> Peer<T> {
     }
 }
 
-impl<T: ServerIO> PartialOrd for Peer<T> {
+impl<IO: ServerIO> PartialOrd for Peer<IO> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.id.cmp(&other.id))
     }
 }
 
-impl<T: ServerIO> Ord for Peer<T> {
+impl<IO: ServerIO> Ord for Peer<IO> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.id.cmp(&other.id)
     }
 }
 
-impl<T: ServerIO> PartialEq for Peer<T> {
+impl<IO: ServerIO> PartialEq for Peer<IO> {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl<T: ServerIO> Eq for Peer<T> {}
+impl<IO: ServerIO> Eq for Peer<IO> {}

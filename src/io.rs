@@ -15,7 +15,7 @@ pub use server::{ServerIoImpl, ServerRx, ServerTx};
 
 pub trait ServerIO: ServerTx + ServerRx {}
 
-impl<T: ServerTx + ServerRx> ServerIO for T {}
+impl<IO: ServerTx + ServerRx> ServerIO for IO {}
 
 // FIXME this is allocated per recv/send. Instead allocate a common buffer that can be reused.
 // The default size of the buffer used to send/recv from the IO queues

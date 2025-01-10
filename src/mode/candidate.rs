@@ -1,7 +1,7 @@
 use crate::{
-    io::IO_BUF_LEN,
+    io::{ServerIO, IO_BUF_LEN},
     log::TermIdx,
-    mode::{Context, Mode, ModeTransition, ServerTx},
+    mode::{Context, Mode, ModeTransition},
     rpc::Rpc,
     server::ServerId,
 };
@@ -14,31 +14,31 @@ pub struct CandidateState {
 }
 
 impl CandidateState {
-    pub fn on_candidate<T: ServerTx>(
+    pub fn on_candidate<IO: ServerIO>(
         &mut self,
-        tx: &mut T,
-        context: &mut Context,
+        tx: &mut IO,
+        context: &mut Context<IO>,
     ) -> ModeTransition {
         //% Compliance:
         //% On conversion to candidate, start election:
         self.start_election(tx, context)
     }
 
-    pub fn on_timeout<T: crate::io::ServerTx>(
+    pub fn on_timeout<IO: ServerIO>(
         &mut self,
-        tx: &mut T,
-        context: &mut Context,
+        tx: &mut IO,
+        context: &mut Context<IO>,
     ) -> ModeTransition {
         //% Compliance:
         //% If election timeout elapses: start new election
         self.start_election(tx, context)
     }
 
-    pub fn on_recv<T: ServerTx>(
+    pub fn on_recv<IO: ServerIO>(
         &mut self,
-        tx: &mut T,
+        tx: &mut IO,
         rpc: crate::rpc::Rpc,
-        context: &mut Context,
+        context: &mut Context<IO>,
     ) -> (ModeTransition, Option<Rpc>) {
         match rpc {
             Rpc::RequestVote(_request_vote_state) => todo!(),
@@ -75,10 +75,10 @@ impl CandidateState {
         (ModeTransition::None, None)
     }
 
-    fn start_election<T: ServerTx>(
+    fn start_election<IO: ServerIO>(
         &mut self,
-        _tx: &mut T,
-        context: &mut Context,
+        _tx: &mut IO,
+        context: &mut Context<IO>,
     ) -> ModeTransition {
         //% Compliance:
         //% Increment currentTerm
@@ -114,7 +114,11 @@ impl CandidateState {
         ModeTransition::None
     }
 
-    fn cast_vote(&mut self, vote_for_server: ServerId, context: &mut Context) -> ElectionResult {
+    fn cast_vote<IO: ServerIO>(
+        &mut self,
+        vote_for_server: ServerId,
+        context: &mut Context<IO>,
+    ) -> ElectionResult {
         let self_id = context.server_id;
         if self_id == vote_for_server {
             // voting for self
@@ -130,7 +134,11 @@ impl CandidateState {
         }
     }
 
-    fn on_vote_received(&mut self, id: ServerId, context: &Context) -> ElectionResult {
+    fn on_vote_received<IO: ServerIO>(
+        &mut self,
+        id: ServerId,
+        context: &Context<IO>,
+    ) -> ElectionResult {
         debug_assert!(
             context.peer_map.contains_key(&id) || id == context.server_id,
             "voted for invalid server id"
@@ -153,17 +161,17 @@ pub enum ElectionResult {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use crate::{
-        io::testing::MockTx, peer::Peer, server::ServerId, state::State, timeout::Timeout,
+        io::testing::MockIO, peer::Peer, server::ServerId, state::State, timeout::Timeout,
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
+    use s2n_codec::DecoderBuffer;
 
     #[tokio::test]
     async fn test_start_election() {
-        let mut tx = MockTx::new();
+        let mut io = MockIO::new();
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
@@ -180,16 +188,16 @@ mod tests {
         };
         let mut candidate = CandidateState::default();
 
-        let transition = candidate.start_election(&mut tx, &mut context);
+        let transition = candidate.start_election(&mut io, &mut context);
         assert!(matches!(transition, ModeTransition::None));
 
         // construct RPC to compare
         let mut current_term = state.current_term;
         current_term.increment();
-        let _expected_rpc = Rpc::new_request_vote(current_term, server_id, TermIdx::initial());
+        let expected_rpc = Rpc::new_request_vote(current_term, server_id, TermIdx::initial());
 
         // FIXME revive test
-        // let rpc_bytes = tx.queue.pop().unwrap();
+        // let rpc_bytes = io.send_queue.pop().unwrap();
         // let buffer = DecoderBuffer::new(&rpc_bytes);
         // let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
         // assert_eq!(expected_rpc, sent_request_vote);
@@ -197,7 +205,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_start_election_with_no_peers() {
-        let mut tx = MockTx::new();
+        let mut io = MockIO::new();
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
         let server_id = ServerId::new([6; 16]);
@@ -213,11 +221,11 @@ mod tests {
         assert_eq!(Mode::quorum(&context), 1);
 
         // Elect self
-        let transition = candidate.start_election(&mut tx, &mut context);
+        let transition = candidate.start_election(&mut io, &mut context);
         assert!(matches!(transition, ModeTransition::ToLeader));
 
         // No RPC sent
-        assert!(tx.queue.is_empty());
+        assert!(io.send_queue.is_empty());
     }
 
     #[tokio::test]
