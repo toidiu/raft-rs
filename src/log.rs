@@ -40,7 +40,7 @@ impl Log {
         let TermIdx { term: _, idx } = entry_term_idx;
         if !self.entry_matches(entry_term_idx) {
             // remove entry at current idx and all trailing ones
-            self.entries.truncate(idx.into_log_idx());
+            self.entries.truncate(idx.log_idx_value());
             // insert the new entry
             self.entries.push(entry);
         }
@@ -50,7 +50,7 @@ impl Log {
     //% if two entries in different logs have the same index/term, they store the same command
     pub fn entry_matches(&self, term_idx: TermIdx) -> bool {
         // TermIdx::initial indicates that both logs are empty
-        if term_idx == TermIdx::initial() {
+        if term_idx.is_initial() {
             return self.entries.is_empty();
         }
 
@@ -65,7 +65,7 @@ impl Log {
         if idx == Idx::initial() {
             return None;
         }
-        self.entries.get(idx.into_log_idx())
+        self.entries.get(idx.log_idx_value())
     }
 }
 

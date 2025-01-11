@@ -13,7 +13,7 @@ impl Idx {
         INITIAL_IDX
     }
 
-    pub fn into_log_idx(self) -> usize {
+    pub fn log_idx_value(&self) -> usize {
         self.0 as usize - 1
     }
 }
