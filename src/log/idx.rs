@@ -35,8 +35,6 @@ impl AddAssign<u64> for Idx {
 
 impl From<u64> for Idx {
     fn from(value: u64) -> Self {
-        // index values should be greater than 0
-        debug_assert!(value > 0);
         Idx(value)
     }
 }
