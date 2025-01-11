@@ -24,9 +24,12 @@ impl Log {
         }
     }
 
+    pub fn last_idx(&self) -> Idx {
+        Idx::from(self.entries.len() as u64)
+    }
+
     pub fn next_idx(&self) -> Idx {
-        let next_idx = self.entries.len() + 1;
-        Idx::from(next_idx as u64)
+        self.last_idx() + 1
     }
 
     pub fn last_term(&self) -> Term {
@@ -34,19 +37,16 @@ impl Log {
     }
 
     // Attempt to match the leader's log.
-    //
-    // Compare the Entry with the current one in our log. If the Entry are not equal, then delete
-    // it and all trailing ones. Inserting the current Entry.
     pub fn match_leaders_log(&mut self, entry: Entry) {
-        //% Compliance:
-        //% If an existing entry conflicts with a new one (same index but different terms),
-        //% delete the existing entry and all that follow it (§5.3)
         let entry_idx = self.next_idx();
         let entry_term_idx = TermIdx::builder().with_term(entry.term).with_idx(entry_idx);
         if !self.prev_term_idx_matches(entry_term_idx) {
-            // remove entry at current idx and all trailing ones
+            //% Compliance:
+            //% If an existing entry conflicts with a new one (same index but different terms),
+            //% delete the existing entry and all that follow it (§5.3)
             self.entries.truncate(entry_idx.log_idx_value());
-            // insert the new entry
+            //% Compliance:
+            //% Append any new entries not already in the log
             self.entries.push(entry);
         }
     }
