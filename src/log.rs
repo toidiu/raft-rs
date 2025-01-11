@@ -33,14 +33,19 @@ impl Log {
         self.entries.last().map_or(Term::initial(), |e| e.term)
     }
 
-    //% Compliance:
-    //% If an existing entry conflicts with a new one (same index but different terms),
-    //% delete the existing entry and all that follow it (§5.3)
-    pub fn match_or_delete_trailing(&mut self, entry: Entry, entry_term_idx: TermIdx) {
-        let TermIdx { term: _, idx } = entry_term_idx;
-        if !self.entry_matches(entry_term_idx) {
+    // Attempt to match the leader's log.
+    //
+    // Compare the Entry with the current one in our log. If the Entry are not equal, then delete
+    // it and all trailing ones. Inserting the current Entry.
+    pub fn match_leaders_log(&mut self, entry: Entry) {
+        //% Compliance:
+        //% If an existing entry conflicts with a new one (same index but different terms),
+        //% delete the existing entry and all that follow it (§5.3)
+        let entry_idx = self.next_idx();
+        let entry_term_idx = TermIdx::builder().with_term(entry.term).with_idx(entry_idx);
+        if !self.prev_term_idx_matches(entry_term_idx) {
             // remove entry at current idx and all trailing ones
-            self.entries.truncate(idx.log_idx_value());
+            self.entries.truncate(entry_idx.log_idx_value());
             // insert the new entry
             self.entries.push(entry);
         }
@@ -48,7 +53,7 @@ impl Log {
 
     //% Compliance:
     //% if two entries in different logs have the same index/term, they store the same command
-    pub fn entry_matches(&self, term_idx: TermIdx) -> bool {
+    pub fn prev_term_idx_matches(&self, term_idx: TermIdx) -> bool {
         // TermIdx::initial indicates that both logs are empty
         if term_idx.is_initial() {
             return self.entries.is_empty();
@@ -100,21 +105,21 @@ mod tests {
         let entry = Entry { term, command: 8 };
 
         // Empty log
-        assert!(log.entry_matches(TermIdx::initial()));
+        assert!(log.prev_term_idx_matches(TermIdx::initial()));
 
         // Non-empty log
         log.push(vec![entry.clone()]);
-        assert!(!log.entry_matches(TermIdx::initial()));
+        assert!(!log.prev_term_idx_matches(TermIdx::initial()));
 
         // Log entry match
         let term_idx = TermIdx::builder().with_term(term).with_idx(Idx::from(1));
-        assert!(log.entry_matches(term_idx));
+        assert!(log.prev_term_idx_matches(term_idx));
 
         // Log entry mismatch
         let mis_match_term_idx = TermIdx {
             term: Term::from(2),
             idx: Idx::from(1),
         };
-        assert!(!log.entry_matches(mis_match_term_idx));
+        assert!(!log.prev_term_idx_matches(mis_match_term_idx));
     }
 }

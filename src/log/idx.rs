@@ -1,4 +1,5 @@
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
+use std::ops::{Add, AddAssign};
 
 //% Compliance:
 //% `commitIndex` index of highest log entry known to be committed (initialized to 0, increases
@@ -15,6 +16,20 @@ impl Idx {
 
     pub fn log_idx_value(&self) -> usize {
         self.0 as usize - 1
+    }
+}
+
+impl Add<u64> for Idx {
+    type Output = Self;
+
+    fn add(self, rhs: u64) -> Self::Output {
+        Idx(self.0 + rhs)
+    }
+}
+
+impl AddAssign<u64> for Idx {
+    fn add_assign(&mut self, rhs: u64) {
+        *self = Idx(self.0 + rhs);
     }
 }
 
