@@ -1,6 +1,5 @@
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
-    log::TermIdx,
     mode::{Context, Mode, ModeTransition},
     rpc::{AppendEntriesState, Rpc},
     server::ServerId,
@@ -100,7 +99,7 @@ impl CandidateState {
         //% Compliance:
         //% Send RequestVote RPCs to all other servers
         for (_id, peer) in context.peer_map.iter_mut() {
-            let prev_log_term_idx = TermIdx::prev_term_idx(peer, context.state);
+            let prev_log_term_idx = context.state.peers_prev_term_idx(peer);
             Rpc::new_request_vote(current_term, context.server_id, prev_log_term_idx)
                 .encode_mut(&mut buf);
             peer.send(buf.as_mut_slice().to_vec());
@@ -157,7 +156,12 @@ pub enum ElectionResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{log::Term, peer::Peer, state::State, timeout::Timeout};
+    use crate::{
+        log::{Entry, Term, TermIdx},
+        peer::Peer,
+        state::State,
+        timeout::Timeout,
+    };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
     use s2n_codec::DecoderBuffer;

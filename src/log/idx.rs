@@ -1,5 +1,5 @@
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
-use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign, Sub};
 
 //% Compliance:
 //% `commitIndex` index of highest log entry known to be committed (initialized to 0, increases
@@ -12,6 +12,10 @@ pub struct Idx(pub u64);
 impl Idx {
     pub const fn initial() -> Self {
         INITIAL_IDX
+    }
+
+    pub fn is_initial(&self) -> bool {
+        *self == INITIAL_IDX
     }
 
     // Index into the Log.entries vector ("log_idx").
@@ -27,6 +31,15 @@ impl Add<u64> for Idx {
 
     fn add(self, rhs: u64) -> Self::Output {
         Idx(self.0 + rhs)
+    }
+}
+
+impl Sub<u64> for Idx {
+    type Output = Self;
+
+    fn sub(self, rhs: u64) -> Self::Output {
+        assert!(self.0 > 0, "value overflowed on subtraction");
+        Idx(self.0 - rhs)
     }
 }
 

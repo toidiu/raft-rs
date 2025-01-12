@@ -1,6 +1,6 @@
 use crate::{
     io::ServerIO,
-    log::{Idx, Log, Term},
+    log::{Entry, Idx, Log, Term, TermIdx},
     peer::Peer,
     server::ServerId,
     timeout::Timeout,
@@ -82,6 +82,26 @@ impl State {
             next_idx: next_idx_map,
             match_idx: match_idx_map,
             election_timer,
+        }
+    }
+
+    // Calculate the prev TermIdx for the peer
+    pub fn peers_prev_term_idx<T: ServerIO>(&self, peer: &Peer<T>) -> TermIdx {
+        // next Idx should always be > 0
+        let peers_next_idx = self.next_idx.get(&peer.id).unwrap();
+        assert!(!peers_next_idx.is_initial());
+
+        if *peers_next_idx == Idx::from(1) {
+            // peer's log is empty so its prev_term_idx value is inital value
+            TermIdx::initial()
+        } else {
+            let prev_idx = *peers_next_idx - 1;
+            let term_at_prev_idx = self.log.term_at_idx(&prev_idx).expect(
+                "next_idx_map incorrectly indicates that an Entry exists at idx: {prev_idx}",
+            );
+            TermIdx::builder()
+                .with_term(term_at_prev_idx)
+                .with_idx(prev_idx)
         }
     }
 }

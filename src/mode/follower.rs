@@ -53,7 +53,7 @@ impl FollowerState {
                 //% If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of
                 //% last new entry)
                 if leader_commit_idx > context.state.commit_idx {
-                    context.state.commit_idx = min(leader_commit_idx, context.state.log.last_idx());
+                    context.state.commit_idx = min(leader_commit_idx, context.state.log.prev_idx());
                 }
 
                 let mut slice = vec![0; IO_BUF_LEN];

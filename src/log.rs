@@ -24,31 +24,36 @@ impl Log {
         }
     }
 
-    pub fn last_idx(&self) -> Idx {
+    pub fn prev_idx(&self) -> Idx {
         Idx::from(self.entries.len() as u64)
     }
 
     pub fn next_idx(&self) -> Idx {
-        self.last_idx() + 1
+        self.prev_idx() + 1
     }
 
     pub fn last_term(&self) -> Term {
         self.entries.last().map_or(Term::initial(), |e| e.term)
     }
 
+    pub fn term_at_idx(&self, idx: &Idx) -> Option<Term> {
+        assert!(!idx.is_initial(), "log is empty");
+        self.entries.get(idx.as_log_idx()).map(|entry| entry.term)
+    }
+
     // Attempt to match the leader's log.
     pub fn match_leaders_log(&mut self, entry: Entry) {
-        let entry_idx = self.next_idx();
-        let entry_term_idx = TermIdx::builder().with_term(entry.term).with_idx(entry_idx);
-        if !self.prev_term_idx_matches(entry_term_idx) {
-            //% Compliance:
-            //% If an existing entry conflicts with a new one (same index but different terms),
-            //% delete the existing entry and all that follow it (§5.3)
-            self.entries.truncate(entry_idx.as_log_idx());
-            //% Compliance:
-            //% Append any new entries not already in the log
-            self.entries.push(entry);
-        }
+        //let entry_idx = self.next_idx();
+        //let entry_term_idx = TermIdx::builder().with_term(entry.term).with_idx(entry_idx);
+        //if !self.prev_term_idx_matches(entry_term_idx) {
+        //    //% Compliance:
+        //    //% If an existing entry conflicts with a new one (same index but different terms),
+        //    //% delete the existing entry and all that follow it (§5.3)
+        //    self.entries.truncate(entry_idx.as_log_idx());
+        //    //% Compliance:
+        //    //% Append any new entries not already in the log
+        //    self.entries.push(entry);
+        //}
     }
 
     //% Compliance:
