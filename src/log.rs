@@ -43,6 +43,7 @@ impl Log {
 
     // Attempt to match the leader's log.
     pub fn match_leaders_log(&mut self, entry: Entry, entry_idx: Idx) -> MatchOutcome {
+        assert!(!entry_idx.is_initial());
         let entry_term_idx = TermIdx::builder().with_term(entry.term).with_idx(entry_idx);
 
         match self.entry_matches(entry_term_idx) {
@@ -190,78 +191,75 @@ mod tests {
     #[test]
     pub fn match_leaders_log_for_empty_logs() {
         let mut log = Log::new();
-        // log.push(vec![
-        //     // Idx 1
-        //     Entry {
-        //         term: Term::from(1),
-        //         command: 8,
-        //     },
-        //     // Idx 2
-        //     Entry {
-        //         term: Term::from(1),
-        //         command: 8,
-        //     },
-        //     // Idx 3
-        //     Entry {
-        //         term: Term::from(2),
-        //         command: 8,
-        //     },
-        // ]);
 
-        log.match_leaders_log(
+        let outcome = log.match_leaders_log(
+            Entry {
+                term: Term::from(1),
+                command: 8,
+            },
+            Idx::from(1),
+        );
+        assert!(matches!(outcome, MatchOutcome::DoesntExist));
+
+        let outcome = log.match_leaders_log(
             Entry {
                 term: Term::from(1),
                 command: 8,
             },
             Idx::from(3),
         );
+        assert!(matches!(outcome, MatchOutcome::DoesntExist));
     }
 
-    // #[test]
-    // pub fn match_leaders_log_for_equivalent_logs() {
-    //     let mut log = Log::new();
-    //     log.push(vec![
-    //         // Idx 1
-    //         Entry {
-    //             term: Term::from(1),
-    //             command: 8,
-    //         },
-    //         // Idx 2
-    //         Entry {
-    //             term: Term::from(1),
-    //             command: 8,
-    //         },
-    //         // Idx 3
-    //         Entry {
-    //             term: Term::from(2),
-    //             command: 8,
-    //         },
-    //     ]);
+    #[test]
+    pub fn test_match_leaders_log() {
+        let mut log = Log::new();
+        log.push(vec![
+            // Idx 1
+            Entry {
+                term: Term::from(2),
+                command: 8,
+            },
+            // Idx 2
+            Entry {
+                term: Term::from(2),
+                command: 8,
+            },
+            // Idx 3
+            Entry {
+                term: Term::from(4),
+                command: 8,
+            },
+        ]);
 
-    //     log.match_leaders_log();
-    // }
+        // matches
+        let match_outcome = log.match_leaders_log(
+            Entry {
+                term: Term::from(2),
+                command: 8,
+            },
+            Idx::from(1),
+        );
+        assert!(matches!(match_outcome, MatchOutcome::Match));
 
-    // #[test]
-    // pub fn match_leaders_log_for_different_logs() {
-    //     let mut log = Log::new();
-    //     log.push(vec![
-    //         // Idx 1
-    //         Entry {
-    //             term: Term::from(1),
-    //             command: 8,
-    //         },
-    //         // Idx 2
-    //         Entry {
-    //             term: Term::from(1),
-    //             command: 8,
-    //         },
-    //         // Idx 3
-    //         Entry {
-    //             term: Term::from(2),
-    //             command: 8,
-    //         },
-    //     ]);
+        // doesnt match
+        let no_match_outcome = log.match_leaders_log(
+            Entry {
+                term: Term::from(3),
+                command: 8,
+            },
+            Idx::from(3),
+        );
+        assert!(matches!(no_match_outcome, MatchOutcome::NoMatch));
 
-    //     log.match_leaders_log();
-    // }
+        // doesnt exist
+        let doesnt_exist_outcome = log.match_leaders_log(
+            Entry {
+                term: Term::from(4),
+                command: 8,
+            },
+            Idx::from(5),
+        );
+        assert!(matches!(doesnt_exist_outcome, MatchOutcome::DoesntExist));
+    }
 }
