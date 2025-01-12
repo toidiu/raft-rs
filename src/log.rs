@@ -18,13 +18,13 @@ impl Log {
         Log { entries: vec![] }
     }
 
-    fn push(&mut self, entries: Vec<Entry>) {
+    pub fn push(&mut self, entries: Vec<Entry>) {
         for entry in entries.into_iter() {
             self.entries.push(entry);
         }
     }
 
-    pub fn prev_idx(&self) -> Idx {
+    pub(super) fn prev_idx(&self) -> Idx {
         Idx::from(self.entries.len() as u64)
     }
 
@@ -42,8 +42,7 @@ impl Log {
     }
 
     // Attempt to match the leader's log.
-    pub fn match_leaders_log(&mut self, entry: Entry) {
-        let entry_idx = self.next_idx();
+    pub fn match_leaders_log(&mut self, entry: Entry, entry_idx: Idx) {
         let entry_term_idx = TermIdx::builder().with_term(entry.term).with_idx(entry_idx);
         if !self.entry_matches(entry_term_idx) {
             //% Compliance:

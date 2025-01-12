@@ -207,8 +207,8 @@ mod tests {
     async fn test_start_election_with_no_peers() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let server_id = ServerId::new([6; 16]);
 
+        let server_id = ServerId::new([6; 16]);
         let mut peer_map = Peer::mock_as_map(&[]);
         let mut state = State::new(timeout, &peer_map);
         let mut context = Context {

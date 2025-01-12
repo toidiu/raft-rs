@@ -45,8 +45,10 @@ impl FollowerState {
                 //
                 //% Compliance:
                 //% Append any new entries not already in the log
+                let mut entry_idx = prev_log_term_idx.idx + 1;
                 for entry in entries.into_iter() {
-                    context.state.log.match_leaders_log(entry);
+                    context.state.log.match_leaders_log(entry, entry_idx);
+                    entry_idx += 1;
                 }
 
                 //% Compliance:

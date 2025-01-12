@@ -18,10 +18,9 @@ impl Idx {
         *self == INITIAL_IDX
     }
 
-    // Index into the Log.entries vector ("log_idx").
-    //
-    // `Idx` value starts at 1 while the Log.entries vector starts at 0.
+    // Idx represented as an index into the Log.entries array.
     pub fn as_log_idx(&self) -> usize {
+        // Idx is 1 indexed while the Log.entries is 0 indexed.
         self.0 as usize - 1
     }
 }
