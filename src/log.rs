@@ -38,7 +38,7 @@ impl Log {
 
     pub fn term_at_idx(&self, idx: &Idx) -> Option<Term> {
         assert!(!idx.is_initial(), "log is empty");
-        self.entries.get(idx.as_log_idx()).map(|entry| entry.term)
+        self.find_entry_at(idx).map(|e| e.term)
     }
 
     // Attempt to match the leader's log.
@@ -63,15 +63,15 @@ impl Log {
             return self.entries.is_empty();
         }
 
-        let entry = self.find_entry_at(term_idx.idx);
+        let entry = self.find_entry_at(&term_idx.idx);
         entry.is_some_and(|entry| entry.term == term_idx.term)
     }
 
-    fn find_entry_at(&self, idx: Idx) -> Option<&Entry> {
+    fn find_entry_at(&self, idx: &Idx) -> Option<&Entry> {
         //% Compliance:
         //% `log[]` log entries; each entry contains command for state machine, and term when entry
         //% was received by leader (first index is 1)
-        if idx == Idx::initial() {
+        if *idx == Idx::initial() {
             return None;
         }
         self.entries.get(idx.as_log_idx())
@@ -91,15 +91,15 @@ mod tests {
         };
 
         // Empty log
-        assert!(log.find_entry_at(Idx::from(1)).is_none());
+        assert!(log.find_entry_at(&Idx::from(1)).is_none());
 
         log.push(vec![entry.clone()]);
 
         // Find Idx::initial
-        assert!(log.find_entry_at(Idx::initial()).is_none());
+        assert!(log.find_entry_at(&Idx::initial()).is_none());
 
         // Find existing entry
-        assert_eq!(*log.find_entry_at(Idx::from(1)).unwrap(), entry);
+        assert_eq!(*log.find_entry_at(&Idx::from(1)).unwrap(), entry);
     }
 
     #[test]
