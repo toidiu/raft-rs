@@ -63,11 +63,11 @@ impl Log {
             return self.entries.is_empty();
         }
 
-        let entry = self.find_entry_by(term_idx.idx);
+        let entry = self.find_entry_at(term_idx.idx);
         entry.is_some_and(|entry| entry.term == term_idx.term)
     }
 
-    fn find_entry_by(&self, idx: Idx) -> Option<&Entry> {
+    fn find_entry_at(&self, idx: Idx) -> Option<&Entry> {
         //% Compliance:
         //% `log[]` log entries; each entry contains command for state machine, and term when entry
         //% was received by leader (first index is 1)
@@ -91,19 +91,19 @@ mod tests {
         };
 
         // Empty log
-        assert!(log.find_entry_by(Idx::from(1)).is_none());
+        assert!(log.find_entry_at(Idx::from(1)).is_none());
 
         log.push(vec![entry.clone()]);
 
         // Find Idx::initial
-        assert!(log.find_entry_by(Idx::initial()).is_none());
+        assert!(log.find_entry_at(Idx::initial()).is_none());
 
         // Find existing entry
-        assert_eq!(*log.find_entry_by(Idx::from(1)).unwrap(), entry);
+        assert_eq!(*log.find_entry_at(Idx::from(1)).unwrap(), entry);
     }
 
     #[test]
-    fn test_log_matches_at_idx() {
+    fn test_entry_matches() {
         let mut log = Log::new();
         let term = Term::from(1);
         let entry = Entry { term, command: 8 };
