@@ -157,7 +157,7 @@ pub enum ElectionResult {
 mod tests {
     use super::*;
     use crate::{
-        log::{Entry, Term, TermIdx},
+        log::{Term, TermIdx},
         peer::Peer,
         state::State,
         timeout::Timeout,

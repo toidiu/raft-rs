@@ -1,6 +1,6 @@
 use crate::{
     io::ServerIO,
-    log::{Entry, Idx, Log, Term, TermIdx},
+    log::{Idx, Log, Term, TermIdx},
     peer::Peer,
     server::ServerId,
     timeout::Timeout,
