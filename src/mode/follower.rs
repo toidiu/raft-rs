@@ -1,5 +1,6 @@
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
+    log::MatchOutcome,
     mode::Context,
     rpc::{AppendEntriesState, Rpc},
 };
@@ -26,14 +27,19 @@ impl FollowerState {
                     entries,
                 } = append_entries_state;
                 let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
-                let response = if term < context.state.current_term {
-                    //% Compliance:
-                    //% Reply false if term < currentTerm (§5.1)
-                    false
-                } else if !context.state.log.entry_matches(prev_log_term_idx) {
-                    //% Compliance:
-                    //% Reply false if log doesn’t contain an entry at prevLogIndex whose term
-                    //% matches prevLogTerm (§5.3)
+
+                //% Compliance:
+                //% Reply false if term < currentTerm (§5.1)
+                let term_lt_current_term = term < context.state.current_term;
+                //% Compliance:
+                //% Reply false if log doesn’t contain an entry at prevLogIndex whose term
+                //% matches prevLogTerm (§5.3)
+                let log_contains_matching_prev_entry = matches!(
+                    context.state.log.entry_matches(prev_log_term_idx),
+                    MatchOutcome::Match
+                );
+                #[allow(clippy::needless_bool)]
+                let response = if term_lt_current_term || !log_contains_matching_prev_entry {
                     false
                 } else {
                     true
@@ -47,7 +53,10 @@ impl FollowerState {
                 //% Append any new entries not already in the log
                 let mut entry_idx = prev_log_term_idx.idx + 1;
                 for entry in entries.into_iter() {
-                    context.state.log.match_leaders_log(entry, entry_idx);
+                    match context.state.log.match_leaders_log(entry, entry_idx) {
+                        MatchOutcome::Match | MatchOutcome::NoMatch => (),
+                        MatchOutcome::DoesntExist => break,
+                    }
                     entry_idx += 1;
                 }
 
