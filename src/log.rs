@@ -93,6 +93,7 @@ impl Log {
     }
 }
 
+#[must_use]
 pub enum MatchOutcome {
     Match,
     NoMatch,
