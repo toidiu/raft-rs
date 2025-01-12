@@ -14,7 +14,10 @@ impl Idx {
         INITIAL_IDX
     }
 
-    pub fn log_idx_value(&self) -> usize {
+    // Index into the Log.entries vector ("log_idx").
+    //
+    // `Idx` value starts at 1 while the Log.entries vector starts at 0.
+    pub fn as_log_idx(&self) -> usize {
         self.0 as usize - 1
     }
 }

@@ -44,7 +44,7 @@ impl Log {
             //% Compliance:
             //% If an existing entry conflicts with a new one (same index but different terms),
             //% delete the existing entry and all that follow it (§5.3)
-            self.entries.truncate(entry_idx.log_idx_value());
+            self.entries.truncate(entry_idx.as_log_idx());
             //% Compliance:
             //% Append any new entries not already in the log
             self.entries.push(entry);
@@ -70,7 +70,7 @@ impl Log {
         if idx == Idx::initial() {
             return None;
         }
-        self.entries.get(idx.log_idx_value())
+        self.entries.get(idx.as_log_idx())
     }
 }
 

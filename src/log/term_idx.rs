@@ -37,7 +37,7 @@ impl TermIdx {
             // peer's log is empty
             TermIdx::initial()
         } else {
-            let prev_log_idx = Idx::from(next_log_idx.log_idx_value() as u64);
+            let prev_log_idx = Idx::from(next_log_idx.as_log_idx() as u64);
             let prev_log_term = state.log.last_term();
             TermIdx::builder()
                 .with_term(prev_log_term)
