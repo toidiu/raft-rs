@@ -30,7 +30,7 @@ impl FollowerState {
                     //% Compliance:
                     //% Reply false if term < currentTerm (§5.1)
                     false
-                } else if !context.state.log.prev_term_idx_matches(prev_log_term_idx) {
+                } else if !context.state.log.entry_matches(prev_log_term_idx) {
                     //% Compliance:
                     //% Reply false if log doesn’t contain an entry at prevLogIndex whose term
                     //% matches prevLogTerm (§5.3)

@@ -43,22 +43,22 @@ impl Log {
 
     // Attempt to match the leader's log.
     pub fn match_leaders_log(&mut self, entry: Entry) {
-        //let entry_idx = self.next_idx();
-        //let entry_term_idx = TermIdx::builder().with_term(entry.term).with_idx(entry_idx);
-        //if !self.prev_term_idx_matches(entry_term_idx) {
-        //    //% Compliance:
-        //    //% If an existing entry conflicts with a new one (same index but different terms),
-        //    //% delete the existing entry and all that follow it (§5.3)
-        //    self.entries.truncate(entry_idx.as_log_idx());
-        //    //% Compliance:
-        //    //% Append any new entries not already in the log
-        //    self.entries.push(entry);
-        //}
+        let entry_idx = self.next_idx();
+        let entry_term_idx = TermIdx::builder().with_term(entry.term).with_idx(entry_idx);
+        if !self.entry_matches(entry_term_idx) {
+            //% Compliance:
+            //% If an existing entry conflicts with a new one (same index but different terms),
+            //% delete the existing entry and all that follow it (§5.3)
+            self.entries.truncate(entry_idx.as_log_idx());
+            //% Compliance:
+            //% Append any new entries not already in the log
+            self.entries.push(entry);
+        }
     }
 
     //% Compliance:
     //% if two entries in different logs have the same index/term, they store the same command
-    pub fn prev_term_idx_matches(&self, term_idx: TermIdx) -> bool {
+    pub fn entry_matches(&self, term_idx: TermIdx) -> bool {
         // TermIdx::initial indicates that both logs are empty
         if term_idx.is_initial() {
             return self.entries.is_empty();
@@ -110,21 +110,21 @@ mod tests {
         let entry = Entry { term, command: 8 };
 
         // Empty log
-        assert!(log.prev_term_idx_matches(TermIdx::initial()));
+        assert!(log.entry_matches(TermIdx::initial()));
 
         // Non-empty log
         log.push(vec![entry.clone()]);
-        assert!(!log.prev_term_idx_matches(TermIdx::initial()));
+        assert!(!log.entry_matches(TermIdx::initial()));
 
         // Log entry match
         let term_idx = TermIdx::builder().with_term(term).with_idx(Idx::from(1));
-        assert!(log.prev_term_idx_matches(term_idx));
+        assert!(log.entry_matches(term_idx));
 
         // Log entry mismatch
         let mis_match_term_idx = TermIdx {
             term: Term::from(2),
             idx: Idx::from(1),
         };
-        assert!(!log.prev_term_idx_matches(mis_match_term_idx));
+        assert!(!log.entry_matches(mis_match_term_idx));
     }
 }
