@@ -2,24 +2,24 @@ use crate::{
     io::{ServerIO, IO_BUF_LEN},
     log::MatchOutcome,
     mode::Context,
-    rpc::{AppendEntriesState, Rpc},
+    rpc::{AppendEntries, Rpc},
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
 use std::cmp::min;
 
 #[derive(Debug, Default)]
-pub struct FollowerState;
+pub struct Follower;
 
-impl FollowerState {
+impl Follower {
     pub fn on_follower<IO: ServerIO>(&mut self, _context: &mut Context<IO>) {}
 
     pub fn on_recv<IO: ServerIO>(&mut self, rpc: crate::rpc::Rpc, context: &mut Context<IO>) {
         //% Compliance:
         //% Respond to RPCs from candidates and leaders
         match rpc {
-            Rpc::RequestVote(_request_vote_state) => todo!(),
-            Rpc::AppendEntries(append_entries_state) => {
-                let AppendEntriesState {
+            Rpc::RV(_request_vote_state) => todo!(),
+            Rpc::AE(append_entries_state) => {
+                let AppendEntries {
                     term,
                     leader_id,
                     prev_log_term_idx,
@@ -77,7 +77,7 @@ impl FollowerState {
                 Rpc::new_append_entry_resp(term, response).encode_mut(&mut buf);
                 leader_io.send(buf.as_mut_slice().to_vec());
             }
-            Rpc::RespRequestVote(_) | Rpc::RespAppendEntries(_) => (),
+            Rpc::RVR(_) | Rpc::AER(_) => (),
         }
     }
 }
@@ -109,7 +109,7 @@ mod tests {
         let current_term = Term::from(2);
         state.current_term = current_term;
 
-        let mut follower = FollowerState;
+        let mut follower = Follower;
         let leader_commit_idx = Idx::from(0);
         let prev_log_term_idx = TermIdx::initial();
 

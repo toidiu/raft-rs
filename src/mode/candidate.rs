@@ -1,18 +1,18 @@
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
     mode::{Context, Mode, ModeTransition},
-    rpc::{AppendEntriesState, Rpc},
+    rpc::{AppendEntries, Rpc},
     server::ServerId,
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
 use std::collections::HashSet;
 
 #[derive(Debug, Default)]
-pub struct CandidateState {
+pub struct Candidate {
     votes_received: HashSet<ServerId>,
 }
 
-impl CandidateState {
+impl Candidate {
     pub fn on_candidate<IO: ServerIO>(&mut self, context: &mut Context<IO>) -> ModeTransition {
         //% Compliance:
         //% On conversion to candidate, start election:
@@ -31,10 +31,10 @@ impl CandidateState {
         context: &mut Context<IO>,
     ) -> (ModeTransition, Option<Rpc>) {
         match rpc {
-            Rpc::RequestVote(_request_vote_state) => todo!(),
-            Rpc::RespRequestVote(_resp_request_vote_state) => todo!(),
-            Rpc::AppendEntries(ref append_entries_state) => {
-                let AppendEntriesState {
+            Rpc::RV(_request_vote_state) => todo!(),
+            Rpc::RVR(_resp_request_vote_state) => todo!(),
+            Rpc::AE(ref append_entries_state) => {
+                let AppendEntries {
                     term,
                     leader_id,
                     prev_log_term_idx: _,
@@ -67,7 +67,7 @@ impl CandidateState {
                     leader_io.send(buf.as_mut_slice().to_vec());
                 }
             }
-            Rpc::RespAppendEntries(_resp_append_entries_state) => (),
+            Rpc::AER(_resp_append_entries_state) => (),
         }
 
         (ModeTransition::None, None)
@@ -182,7 +182,7 @@ mod tests {
             state: &mut state,
             peer_map: &mut peer_map,
         };
-        let mut candidate = CandidateState::default();
+        let mut candidate = Candidate::default();
 
         // Trigger election
         let transition = candidate.start_election(&mut context);
@@ -216,7 +216,7 @@ mod tests {
             state: &mut state,
             peer_map: &mut peer_map,
         };
-        let mut candidate = CandidateState::default();
+        let mut candidate = Candidate::default();
         assert_eq!(Mode::quorum(&context), 1);
 
         // Elect self
@@ -243,7 +243,7 @@ mod tests {
             state: &mut state,
             peer_map: &mut peer_map,
         };
-        let mut candidate = CandidateState::default();
+        let mut candidate = Candidate::default();
         assert_eq!(Mode::quorum(&context), 2);
         assert!(Mode::quorum(&context) > candidate.votes_received.len());
 
