@@ -1,6 +1,5 @@
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
-    log::TermIdx,
     mode::{Context, Mode, ModeTransition},
     rpc::{AppendEntriesState, Rpc},
     server::ServerId,
@@ -43,25 +42,24 @@ impl CandidateState {
                     entries: _,
                 } = append_entries_state;
                 let leader_io = &mut context.peer_map.get_mut(leader_id).unwrap().io;
-
                 //% Compliance:
-                //% If AppendEntries RPC received from new leader: convert to follower
-
-                //% Compliance:
-                //% a candidate receives AppendEntries from another server claiming to be a leader
+                //% another server establishes itself as a leader
+                //% - a candidate receives AppendEntries from another server claiming to be a leader
                 if *term >= context.state.current_term {
                     //% Compliance:
                     //% if that leader's current term is >= the candidate's
+                    //% - recognize the server as the new leader
+                    //% - then the candidate reverts to a follower
                     //
                     //% Compliance:
-                    //% then the candidate reverts to a follower
+                    //% If AppendEntries RPC received from new leader: convert to follower
+
+                    // Convert to Follower and process/respond to the RPC
                     return (ModeTransition::ToFollower, Some(rpc));
                 } else {
                     //% Compliance:
                     //% if the leader's current term is < the candidate's
-                    //
-                    //% Compliance:
-                    //% reject the RPC and continue in the candidate state
+                    //% - reject the RPC and continue in the candidate state
                     let mut slice = vec![0; IO_BUF_LEN];
                     let mut buf = EncoderBuffer::new(&mut slice);
                     let term = context.state.current_term;
@@ -101,7 +99,7 @@ impl CandidateState {
         //% Compliance:
         //% Send RequestVote RPCs to all other servers
         for (_id, peer) in context.peer_map.iter_mut() {
-            let prev_log_term_idx = TermIdx::prev_term_idx(peer, context.state);
+            let prev_log_term_idx = context.state.peers_prev_term_idx(peer);
             Rpc::new_request_vote(current_term, context.server_id, prev_log_term_idx)
                 .encode_mut(&mut buf);
             peer.send(buf.as_mut_slice().to_vec());
@@ -158,7 +156,12 @@ pub enum ElectionResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{log::Term, peer::Peer, state::State, timeout::Timeout};
+    use crate::{
+        log::{Term, TermIdx},
+        peer::Peer,
+        state::State,
+        timeout::Timeout,
+    };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
     use s2n_codec::DecoderBuffer;
@@ -204,8 +207,8 @@ mod tests {
     async fn test_start_election_with_no_peers() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
-        let server_id = ServerId::new([6; 16]);
 
+        let server_id = ServerId::new([6; 16]);
         let mut peer_map = Peer::mock_as_map(&[]);
         let mut state = State::new(timeout, &peer_map);
         let mut context = Context {

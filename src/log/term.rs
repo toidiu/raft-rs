@@ -1,4 +1,5 @@
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
+use std::ops::{Add, Sub};
 
 //% Compliance:
 //% `currentTerm` latest term server has seen (initialized to 0 on first boot, increases
@@ -19,6 +20,23 @@ impl Term {
 
     pub fn is_initial(&self) -> bool {
         *self == INITIAL_TERM
+    }
+}
+
+impl Add<u64> for Term {
+    type Output = Self;
+
+    fn add(self, rhs: u64) -> Self::Output {
+        Term(self.0 + rhs)
+    }
+}
+
+impl Sub<u64> for Term {
+    type Output = Self;
+
+    fn sub(self, rhs: u64) -> Self::Output {
+        assert!(self.0 > 0, "value overflowed on subtraction");
+        Term(self.0 - rhs)
     }
 }
 

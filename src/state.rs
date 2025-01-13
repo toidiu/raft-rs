@@ -1,6 +1,6 @@
 use crate::{
     io::ServerIO,
-    log::{Idx, Log, Term},
+    log::{Idx, Log, Term, TermIdx},
     peer::Peer,
     server::ServerId,
     timeout::Timeout,
@@ -83,5 +83,85 @@ impl State {
             match_idx: match_idx_map,
             election_timer,
         }
+    }
+
+    // Calculate the prev TermIdx for the peer
+    pub fn peers_prev_term_idx<T: ServerIO>(&self, peer: &Peer<T>) -> TermIdx {
+        // next Idx should always be > 0
+        let peers_next_idx = self.next_idx.get(&peer.id).unwrap();
+        assert!(!peers_next_idx.is_initial());
+
+        if *peers_next_idx == Idx::from(1) {
+            // peer's log is empty so its prev_term_idx value is inital value
+            TermIdx::initial()
+        } else {
+            let prev_idx = *peers_next_idx - 1;
+            let term_at_prev_idx = self.log.term_at_idx(&prev_idx).expect(
+                "next_idx_map incorrectly indicates that an Entry exists at idx: {prev_idx}",
+            );
+            TermIdx::builder()
+                .with_term(term_at_prev_idx)
+                .with_idx(prev_idx)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        log::Entry,
+        state::{Idx, Peer, ServerId, State, Term, TermIdx},
+        timeout::Timeout,
+    };
+    use rand::SeedableRng;
+    use rand_pcg::Pcg32;
+
+    #[tokio::test]
+    async fn peers_prev_term_idx_for_empty_log() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let peer2_fill = 2;
+        let peer2_id = ServerId::new([peer2_fill; 16]);
+        let peer_map = Peer::mock_as_map(&[peer2_fill, 3]);
+        let state = State::new(timeout, &peer_map);
+
+        // retrieve the prev_term_idx for peer (expect initial since log is empty)
+        let peer2 = peer_map.get(&peer2_id).unwrap();
+        let term_idx = state.peers_prev_term_idx(peer2);
+        assert!(term_idx.is_initial());
+    }
+
+    #[tokio::test]
+    async fn peers_prev_term_idx_for_non_empty_log() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let peer2_fill = 2;
+        let peer2_id = ServerId::new([peer2_fill; 16]);
+        let peer_map = Peer::mock_as_map(&[peer2_fill, 3]);
+        let mut state = State::new(timeout, &peer_map);
+
+        // insert a log entry
+        let next_idx = Idx::from(2);
+        let expected_term = Term::from(4);
+        let entry = Entry {
+            term: expected_term,
+            command: 8,
+        };
+
+        // update state so it contains some log entries
+        state.log.push(vec![entry]);
+        state.next_idx.insert(peer2_id, next_idx);
+
+        // retrieve the prev_term_idx for peer
+        let peer2 = peer_map.get(&peer2_id).unwrap();
+        let term_idx = state.peers_prev_term_idx(peer2);
+        assert_eq!(
+            term_idx,
+            TermIdx::builder()
+                .with_term(expected_term)
+                .with_idx(next_idx - 1)
+        );
     }
 }

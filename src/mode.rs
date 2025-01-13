@@ -86,13 +86,6 @@ impl Mode {
             Mode::Candidate(candidate) => {
                 let (transition, rpc) = candidate.on_recv(rpc, context);
                 self.handle_mode_transition(transition, context);
-
-                //% Compliance:
-                //% another server establishes itself as a leader
-                //
-                //% Compliance:
-                //% recognize the server as the new leader
-                // If converted
                 rpc
             }
             Mode::Leader(leader) => {
@@ -170,6 +163,7 @@ pub enum ModeTransition {
 mod tests {
     use super::*;
     use crate::{
+        io::testing::helper_inspect_sent_rpc,
         log::{Idx, Term, TermIdx},
         peer::Peer,
         server::ServerId,
@@ -178,7 +172,6 @@ mod tests {
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
-    use s2n_codec::DecoderBuffer;
 
     #[tokio::test]
     async fn test_quorum() {
@@ -210,7 +203,6 @@ mod tests {
 
     #[tokio::test]
     async fn candidate_recv_append_entries_with_gt_eq_term() {
-        let current_term = Term::from(2);
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
@@ -218,6 +210,7 @@ mod tests {
         let leader_id = ServerId::new([leader_id_fill; 16]);
         let mut peer_map = Peer::mock_as_map(&[leader_id_fill]);
         let mut state = State::new(timeout, &peer_map);
+        let current_term = Term::from(2);
         state.current_term = current_term;
 
         let mut context = Context {
@@ -240,15 +233,14 @@ mod tests {
         // expect Mode::Follower
         assert!(matches!(mode, Mode::Follower(_)));
 
+        // decode the sent RPC
+        let leader_io = &mut peer_map.get_mut(&leader_id).unwrap().io;
+        let sent_request_vote = helper_inspect_sent_rpc(leader_io);
+        assert!(leader_io.send_queue.is_empty());
+
         // expect Follower to send RespAppendEntries acknowledging the leader
         // construct RPC to compare
         let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
-
-        let leader_io = &mut peer_map.get_mut(&leader_id).unwrap().io;
-        let rpc_bytes = leader_io.send_queue.pop().unwrap();
-        assert!(leader_io.send_queue.is_empty());
-        let buffer = DecoderBuffer::new(&rpc_bytes);
-        let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
         assert_eq!(expected_rpc, sent_request_vote);
     }
 
@@ -285,14 +277,13 @@ mod tests {
         // expect Mode::Follower
         assert!(matches!(mode, Mode::Candidate(_)));
 
-        // expect Follower to send RespAppendEntries acknowledging the leader
-        // construct RPC to compare
+        // decode the sent RPC
         let peer_io = &mut peer_map.get_mut(&peer_id).unwrap().io;
+        assert!(peer_io.send_queue.len() == 1);
+        let sent_request_vote = helper_inspect_sent_rpc(peer_io);
+
+        // expect Follower to send RespAppendEntries acknowledging the leader
         let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
-        let rpc_bytes = peer_io.send_queue.pop().unwrap();
-        assert!(peer_io.send_queue.is_empty());
-        let buffer = DecoderBuffer::new(&rpc_bytes);
-        let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
         assert_eq!(expected_rpc, sent_request_vote);
     }
 }
