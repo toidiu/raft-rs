@@ -219,7 +219,7 @@ mod tests {
                 term: Term::from(1),
                 command: 8,
             },
-            Idx::from(3),
+            Idx::from(2),
         );
         assert!(matches!(outcome, MatchOutcome::DoesntExist));
     }
@@ -271,7 +271,7 @@ mod tests {
                 term: Term::from(4),
                 command: 8,
             },
-            Idx::from(5),
+            Idx::from(4),
         );
         assert!(matches!(doesnt_exist_outcome, MatchOutcome::DoesntExist));
     }

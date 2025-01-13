@@ -279,7 +279,7 @@ mod tests {
 
         // decode the sent RPC
         let peer_io = &mut peer_map.get_mut(&peer_id).unwrap().io;
-        assert!(peer_io.send_queue.is_empty());
+        assert!(peer_io.send_queue.len() == 1);
         let sent_request_vote = helper_inspect_sent_rpc(peer_io);
 
         // expect Follower to send RespAppendEntries acknowledging the leader
