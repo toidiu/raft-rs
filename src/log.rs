@@ -10,7 +10,7 @@ pub use term_idx::TermIdx;
 
 #[derive(Debug)]
 pub struct Log {
-    entries: Vec<Entry>,
+    pub entries: Vec<Entry>,
 }
 
 impl Log {
@@ -58,7 +58,19 @@ impl Log {
 
                 outcome
             }
-            outcome @ MatchOutcome::Match | outcome @ MatchOutcome::DoesntExist => outcome,
+            outcome @ MatchOutcome::DoesntExist => {
+                // Confirm that atleast entry_idx - 1 are present.
+                //
+                // To maintain the monotonically increasing property for Idx, confirm that
+                // either the log is empty or entries[entry_idx - 1] exists.
+                let fn_entry_min_1_exists =
+                    || self.entries.get((entry_idx - 1).as_log_idx()).is_some();
+                assert!(self.entries.is_empty() || fn_entry_min_1_exists());
+
+                self.entries.push(entry);
+                outcome
+            }
+            outcome @ MatchOutcome::Match => outcome,
         }
     }
 

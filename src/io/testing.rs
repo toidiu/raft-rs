@@ -1,4 +1,8 @@
-use crate::io::{ServerRx, ServerTx};
+use crate::{
+    io::{ServerRx, ServerTx},
+    rpc::Rpc,
+};
+use s2n_codec::DecoderBuffer;
 use std::task::Poll;
 
 #[derive(Debug)]
@@ -34,4 +38,12 @@ impl ServerRx for MockIO {
             Poll::Ready(())
         }
     }
+}
+
+pub fn helper_inspect_sent_rpc(peer_io: &mut MockIO) -> Rpc {
+    let rpc_bytes = peer_io.send_queue.pop().unwrap();
+    assert!(peer_io.send_queue.is_empty());
+    let buffer = DecoderBuffer::new(&rpc_bytes);
+    let (sent_rpc, _) = buffer.decode::<Rpc>().unwrap();
+    sent_rpc
 }

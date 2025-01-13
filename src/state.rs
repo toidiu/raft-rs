@@ -161,7 +161,7 @@ mod tests {
             term_idx,
             TermIdx::builder()
                 .with_term(expected_term)
-                .with_idx(next_idx - 1 )
+                .with_idx(next_idx - 1)
         );
     }
 }
