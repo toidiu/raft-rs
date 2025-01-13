@@ -54,9 +54,7 @@ impl FollowerState {
                     //% Append any new entries not already in the log
                     let mut entry_idx = prev_log_term_idx.idx + 1;
                     for entry in entries.into_iter() {
-                        println!("========= response {response}");
                         let _match_outcome = context.state.log.match_leaders_log(entry, entry_idx);
-                        println!("========= response {response}");
                         entry_idx += 1;
                     }
 
