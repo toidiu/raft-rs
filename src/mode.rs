@@ -33,7 +33,7 @@
 use crate::{
     io::ServerIO,
     macros::cast_unsafe,
-    mode::{candidate::CandidateState, follower::FollowerState, leader::LeaderState},
+    mode::{candidate::Candidate, follower::Follower, leader::Leader},
     rpc::Rpc,
     server::Context,
 };
@@ -43,26 +43,26 @@ mod follower;
 mod leader;
 
 pub enum Mode {
-    Follower(FollowerState),
-    Candidate(CandidateState),
-    Leader(LeaderState),
+    F(Follower),
+    C(Candidate),
+    L(Leader),
 }
 
 impl Mode {
     fn on_timeout<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
         match self {
-            Mode::Follower(_follower) => {
+            Mode::F(_follower) => {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
                 //% leader or granting vote to candidate: convert to candidate
                 self.on_candidate(context);
             }
-            Mode::Candidate(candidate) => {
+            Mode::C(candidate) => {
                 let transition = candidate.on_timeout(context);
                 self.handle_mode_transition(transition, context);
             }
 
-            Mode::Leader(leader) => leader.on_timeout(context),
+            Mode::L(leader) => leader.on_timeout(context),
         }
     }
 
@@ -76,19 +76,19 @@ impl Mode {
         }
 
         let rpc = match self {
-            Mode::Follower(follower) => {
+            Mode::F(follower) => {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
                 //% leader or granting vote to candidate: convert to candidate
                 follower.on_recv(rpc, context);
                 None
             }
-            Mode::Candidate(candidate) => {
+            Mode::C(candidate) => {
                 let (transition, rpc) = candidate.on_recv(rpc, context);
                 self.handle_mode_transition(transition, context);
                 rpc
             }
-            Mode::Leader(leader) => {
+            Mode::L(leader) => {
                 leader.on_recv(rpc, context);
                 None
             }
@@ -117,14 +117,14 @@ impl Mode {
     }
 
     fn on_follower<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
-        *self = Mode::Follower(FollowerState);
-        let follower = cast_unsafe!(self, Mode::Follower);
+        *self = Mode::F(Follower);
+        let follower = cast_unsafe!(self, Mode::F);
         follower.on_follower(context);
     }
 
     fn on_candidate<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
-        *self = Mode::Candidate(CandidateState::default());
-        let candidate = cast_unsafe!(self, Mode::Candidate);
+        *self = Mode::C(Candidate::default());
+        let candidate = cast_unsafe!(self, Mode::C);
 
         match candidate.on_candidate(context) {
             ModeTransition::None => (),
@@ -139,8 +139,8 @@ impl Mode {
     }
 
     fn on_leader<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
-        *self = Mode::Leader(LeaderState);
-        let leader = cast_unsafe!(self, Mode::Leader);
+        *self = Mode::L(Leader);
+        let leader = cast_unsafe!(self, Mode::L);
         leader.on_leader(context);
     }
 
@@ -218,7 +218,7 @@ mod tests {
             state: &mut state,
             peer_map: &mut peer_map,
         };
-        let mut mode = Mode::Candidate(CandidateState::default());
+        let mut mode = Mode::C(Candidate::default());
 
         // Mock send AppendEntries to Candidate with `term => current_term`
         let append_entries = Rpc::new_append_entry(
@@ -231,7 +231,7 @@ mod tests {
         mode.on_recv(append_entries, &mut context);
 
         // expect Mode::Follower
-        assert!(matches!(mode, Mode::Follower(_)));
+        assert!(matches!(mode, Mode::F(_)));
 
         // decode the sent RPC
         let leader_io = &mut peer_map.get_mut(&leader_id).unwrap().io;
@@ -262,7 +262,7 @@ mod tests {
             state: &mut state,
             peer_map: &mut peer_map,
         };
-        let mut mode = Mode::Candidate(CandidateState::default());
+        let mut mode = Mode::C(Candidate::default());
 
         // Mock send AppendEntries to Candidate with `term => current_term`
         let append_entries = Rpc::new_append_entry(
@@ -275,7 +275,7 @@ mod tests {
         mode.on_recv(append_entries, &mut context);
 
         // expect Mode::Follower
-        assert!(matches!(mode, Mode::Candidate(_)));
+        assert!(matches!(mode, Mode::C(_)));
 
         // decode the sent RPC
         let peer_io = &mut peer_map.get_mut(&peer_id).unwrap().io;

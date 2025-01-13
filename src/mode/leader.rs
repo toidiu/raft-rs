@@ -1,9 +1,9 @@
 use crate::{io::ServerIO, mode::Context};
 
 #[derive(Debug, Default)]
-pub struct LeaderState;
+pub struct Leader;
 
-impl LeaderState {
+impl Leader {
     pub fn on_leader<IO: ServerIO>(&mut self, _context: &mut Context<IO>) {
         todo!()
     }
