@@ -11,6 +11,7 @@ pub use append_entries::{AppendEntries, AppendEntriesResp};
 pub use request_vote::{RequestVote, RequestVoteResp};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum Rpc {
     RV(RequestVote),
     RVR(RequestVoteResp),
