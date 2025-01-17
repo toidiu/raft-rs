@@ -32,8 +32,10 @@ impl Log {
         self.prev_idx() + 1
     }
 
-    pub fn last_term(&self) -> Term {
-        self.entries.last().map_or(Term::initial(), |e| e.term)
+    pub fn last_term_idx(&self) -> TermIdx {
+        let last_term = self.entries.last().map_or(Term::initial(), |e| e.term);
+        let last_idx = self.prev_idx();
+        TermIdx::builder().with_term(last_term).with_idx(last_idx)
     }
 
     pub fn term_at_idx(&self, idx: &Idx) -> Option<Term> {

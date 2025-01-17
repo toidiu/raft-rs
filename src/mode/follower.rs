@@ -5,7 +5,7 @@ use crate::{
     rpc::{AppendEntries, RequestVote, Rpc},
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
-use std::cmp::min;
+use std::cmp::{min, Ordering};
 
 #[derive(Debug, Default)]
 pub struct Follower;
@@ -39,15 +39,7 @@ impl Follower {
 
         //% Compliance:
         //% If candidate’s log is at least as up-to-date as receiver’s log
-        let log_criteria = {
-            let TermIdx {
-                term: rpc_term,
-                idx: rpc_idx,
-            } = request_vote.last_log_term_idx;
-            let idx_up_to_date = rpc_idx >= context.state.log.prev_idx();
-            let term_up_to_date = rpc_term >= context.state.log.last_term();
-            idx_up_to_date && term_up_to_date
-        };
+        let log_up_to_date_criteria = self.log_up_to_date(&request_vote, context);
 
         let voted_for_criteria = if let Some(voted_for) = context.state.voted_for {
             //% Compliance:
@@ -59,7 +51,7 @@ impl Follower {
             true
         };
 
-        let grant_vote = term_criteria && log_criteria && voted_for_criteria;
+        let grant_vote = term_criteria && log_up_to_date_criteria && voted_for_criteria;
         if grant_vote {
             // set local state to capture granting the vote
             context.state.voted_for = Some(request_vote.candidate_id);
@@ -74,6 +66,31 @@ impl Follower {
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_request_vote_resp(current_term, grant_vote);
         candidate_io.send(buf.as_mut_slice().to_vec());
+    }
+
+    fn log_up_to_date<IO: ServerIO>(
+        &mut self,
+        request_vote: &RequestVote,
+        context: &mut Context<IO>,
+    ) -> bool {
+        //% Compliance:
+        //% `up-to-date`: a log is considered more up-to-date than another log if:
+        //%	- compare the index and term of the last entry of A's and B's log
+        let rpc_term_idx = request_vote.last_log_term_idx;
+        let log_term_idx = context.state.log.last_term_idx();
+        let term_cmp = rpc_term_idx.term.cmp(&log_term_idx.term);
+        let idx_cmp = rpc_term_idx.idx.cmp(&log_term_idx.idx);
+        match (term_cmp, idx_cmp) {
+            //% Compliance:
+            //%	- if the entries have different term: the higher term is more up-to-date
+            (Ordering::Greater, _) => true,
+            (Ordering::Less, _) => false,
+            //% Compliance:
+            //%	- if the term is the same: the longer log (higher index) is more up-to-date
+            (Ordering::Equal, Ordering::Less) => false,
+            (Ordering::Equal, Ordering::Equal) => true,
+            (Ordering::Equal, Ordering::Greater) => true,
+        }
     }
 
     fn on_recv_append_entries<IO: ServerIO>(
