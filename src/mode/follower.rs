@@ -1,6 +1,6 @@
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
-    log::MatchOutcome,
+    log::{MatchOutcome, TermIdx},
     mode::Context,
     rpc::{AppendEntries, RequestVote, Rpc},
 };
@@ -28,24 +28,28 @@ impl Follower {
         request_vote: RequestVote,
         context: &mut Context<IO>,
     ) {
-        let candidate_io = &mut context
-            .peer_map
-            .get_mut(&request_vote.candidate_id)
-            .unwrap()
-            .io;
         let current_term = context.state.current_term;
 
         //% Compliance:
         //% Reply false if term < currentTerm (§5.1)
-        let term_lt_current_term = request_vote.term < current_term;
-        let term_up_to_date = !term_lt_current_term;
+        let term_criteria = {
+            let rpc_term_lt_current_term = request_vote.term < current_term;
+            !rpc_term_lt_current_term
+        };
 
         //% Compliance:
         //% If candidate’s log is at least as up-to-date as receiver’s log
-        //FIXME
-        let log_up_to_date = false;
+        let log_criteria = {
+            let TermIdx {
+                term: rpc_term,
+                idx: rpc_idx,
+            } = request_vote.last_log_term_idx;
+            let idx_up_to_date = rpc_idx >= context.state.log.prev_idx();
+            let term_up_to_date = rpc_term >= context.state.log.last_term();
+            idx_up_to_date && term_up_to_date
+        };
 
-        let set_voted_for_state = if let Some(voted_for) = context.state.voted_for {
+        let voted_for_criteria = if let Some(voted_for) = context.state.voted_for {
             //% Compliance:
             //% and votedFor is candidateId, grant vote (§5.2, §5.4)
             voted_for == request_vote.candidate_id
@@ -55,13 +59,17 @@ impl Follower {
             true
         };
 
-        let grant_vote = term_up_to_date && log_up_to_date && set_voted_for_state;
-
+        let grant_vote = term_criteria && log_criteria && voted_for_criteria;
         if grant_vote {
             // set local state to capture granting the vote
             context.state.voted_for = Some(request_vote.candidate_id);
         }
 
+        let candidate_io = &mut context
+            .peer_map
+            .get_mut(&request_vote.candidate_id)
+            .unwrap()
+            .io;
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_request_vote_resp(current_term, grant_vote);
@@ -73,16 +81,11 @@ impl Follower {
         append_entries: AppendEntries,
         context: &mut Context<IO>,
     ) {
-        let leader_io = &mut context
-            .peer_map
-            .get_mut(&append_entries.leader_id)
-            .unwrap()
-            .io;
         let current_term = context.state.current_term;
 
         //% Compliance:
         //% Reply false if term < currentTerm (§5.1)
-        let term_lt_current_term = append_entries.term < current_term;
+        let rpc_term_lt_current_term = append_entries.term < current_term;
         //% Compliance:
         //% Reply false if log doesn’t contain an entry at prevLogIndex whose term
         //% matches prevLogTerm (§5.3)
@@ -94,7 +97,7 @@ impl Follower {
             MatchOutcome::Match
         );
         #[allow(clippy::needless_bool)]
-        let response = if term_lt_current_term || !log_contains_matching_prev_entry {
+        let response = if rpc_term_lt_current_term || !log_contains_matching_prev_entry {
             false
         } else {
             true
@@ -128,6 +131,11 @@ impl Follower {
             }
         }
 
+        let leader_io = &mut context
+            .peer_map
+            .get_mut(&append_entries.leader_id)
+            .unwrap()
+            .io;
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_append_entry_resp(current_term, response).encode_mut(&mut buf);
