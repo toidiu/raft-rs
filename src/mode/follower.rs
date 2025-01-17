@@ -2,7 +2,7 @@ use crate::{
     io::{ServerIO, IO_BUF_LEN},
     log::MatchOutcome,
     mode::Context,
-    rpc::{AppendEntries, Rpc},
+    rpc::{AppendEntries, RequestVote, Rpc},
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
 use std::cmp::min;
@@ -17,68 +17,121 @@ impl Follower {
         //% Compliance:
         //% Respond to RPCs from candidates and leaders
         match rpc {
-            Rpc::RV(_request_vote_state) => todo!(),
-            Rpc::AE(append_entries_state) => {
-                let AppendEntries {
-                    term,
-                    leader_id,
-                    prev_log_term_idx,
-                    leader_commit_idx,
-                    entries,
-                } = append_entries_state;
-                let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
-
-                //% Compliance:
-                //% Reply false if term < currentTerm (§5.1)
-                let term_lt_current_term = term < context.state.current_term;
-                //% Compliance:
-                //% Reply false if log doesn’t contain an entry at prevLogIndex whose term
-                //% matches prevLogTerm (§5.3)
-                let log_contains_matching_prev_entry = matches!(
-                    context.state.log.entry_matches(prev_log_term_idx),
-                    MatchOutcome::Match
-                );
-                #[allow(clippy::needless_bool)]
-                let response = if term_lt_current_term || !log_contains_matching_prev_entry {
-                    false
-                } else {
-                    true
-                };
-
-                if response {
-                    //% Compliance:
-                    //% If an existing entry conflicts with a new one (same index but different terms),
-                    //% delete the existing entry and all that follow it (§5.3)
-                    //
-                    //% Compliance:
-                    //% Append any new entries not already in the log
-                    let mut entry_idx = prev_log_term_idx.idx + 1;
-                    for entry in entries.into_iter() {
-                        let _match_outcome = context.state.log.match_leaders_log(entry, entry_idx);
-                        entry_idx += 1;
-                    }
-
-                    //% Compliance:
-                    //% If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of
-                    //% last new entry)
-                    assert!(
-                        leader_commit_idx <= context.state.log.prev_idx(),
-                        "leader_commit_idx should not be greater than the number of enties in the log"
-                    );
-                    if leader_commit_idx > context.state.commit_idx {
-                        context.state.commit_idx =
-                            min(leader_commit_idx, context.state.log.prev_idx());
-                    }
-                }
-
-                let mut slice = vec![0; IO_BUF_LEN];
-                let mut buf = EncoderBuffer::new(&mut slice);
-                let term = context.state.current_term;
-                Rpc::new_append_entry_resp(term, response).encode_mut(&mut buf);
-                leader_io.send(buf.as_mut_slice().to_vec());
-            }
+            Rpc::RV(request_vote) => self.on_recv_request_vote(request_vote, context),
+            Rpc::AE(append_entries) => self.on_recv_append_entries(append_entries, context),
             Rpc::RVR(_) | Rpc::AER(_) => (),
         }
+    }
+
+    fn on_recv_request_vote<IO: ServerIO>(
+        &mut self,
+        request_vote: RequestVote,
+        context: &mut Context<IO>,
+    ) {
+        let candidate_io = &mut context
+            .peer_map
+            .get_mut(&request_vote.candidate_id)
+            .unwrap()
+            .io;
+        let current_term = context.state.current_term;
+
+        //% Compliance:
+        //% Reply false if term < currentTerm (§5.1)
+        let term_lt_current_term = request_vote.term < current_term;
+        let term_up_to_date = !term_lt_current_term;
+
+        //% Compliance:
+        //% If candidate’s log is at least as up-to-date as receiver’s log
+        //FIXME
+        let log_up_to_date = false;
+
+        let set_voted_for_state = if let Some(voted_for) = context.state.voted_for {
+            //% Compliance:
+            //% and votedFor is candidateId, grant vote (§5.2, §5.4)
+            voted_for == request_vote.candidate_id
+        } else {
+            //% Compliance:
+            //% and votedFor is null, grant vote (§5.2, §5.4)
+            true
+        };
+
+        let grant_vote = term_up_to_date && log_up_to_date && set_voted_for_state;
+
+        if grant_vote {
+            // set local state to capture granting the vote
+            context.state.voted_for = Some(request_vote.candidate_id);
+        }
+
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        Rpc::new_request_vote_resp(current_term, grant_vote);
+        candidate_io.send(buf.as_mut_slice().to_vec());
+    }
+
+    fn on_recv_append_entries<IO: ServerIO>(
+        &mut self,
+        append_entries: AppendEntries,
+        context: &mut Context<IO>,
+    ) {
+        let leader_io = &mut context
+            .peer_map
+            .get_mut(&append_entries.leader_id)
+            .unwrap()
+            .io;
+        let current_term = context.state.current_term;
+
+        //% Compliance:
+        //% Reply false if term < currentTerm (§5.1)
+        let term_lt_current_term = append_entries.term < current_term;
+        //% Compliance:
+        //% Reply false if log doesn’t contain an entry at prevLogIndex whose term
+        //% matches prevLogTerm (§5.3)
+        let log_contains_matching_prev_entry = matches!(
+            context
+                .state
+                .log
+                .entry_matches(append_entries.prev_log_term_idx),
+            MatchOutcome::Match
+        );
+        #[allow(clippy::needless_bool)]
+        let response = if term_lt_current_term || !log_contains_matching_prev_entry {
+            false
+        } else {
+            true
+        };
+
+        if response {
+            //% Compliance:
+            //% If an existing entry conflicts with a new one (same index but different terms),
+            //% delete the existing entry and all that follow it (§5.3)
+            //
+            //% Compliance:
+            //% Append any new entries not already in the log
+            let mut entry_idx = append_entries.prev_log_term_idx.idx + 1;
+            for entry in append_entries.entries.into_iter() {
+                let _match_outcome = context.state.log.match_leaders_log(entry, entry_idx);
+                entry_idx += 1;
+            }
+
+            //% Compliance:
+            //% If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of
+            //% last new entry)
+            assert!(
+                append_entries.leader_commit_idx <= context.state.log.prev_idx(),
+                "leader_commit_idx should not be greater than the number of enties in the log"
+            );
+            if append_entries.leader_commit_idx > context.state.commit_idx {
+                context.state.commit_idx = min(
+                    append_entries.leader_commit_idx,
+                    context.state.log.prev_idx(),
+                );
+            }
+        }
+
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        Rpc::new_append_entry_resp(current_term, response).encode_mut(&mut buf);
+        leader_io.send(buf.as_mut_slice().to_vec());
     }
 }
 
