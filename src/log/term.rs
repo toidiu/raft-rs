@@ -1,4 +1,4 @@
-use s2n_codec::{DecoderBufferResult, DecoderError, DecoderValue, EncoderValue};
+use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 use std::ops::{Add, Sub};
 
 //% Compliance:
