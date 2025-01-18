@@ -39,6 +39,11 @@ impl Follower {
 
         //% Compliance:
         //% If candidate’s log is at least as up-to-date as receiver’s log
+        //
+        //% Compliance:
+        //% The RequestVote RPC helps ensure the leader's log is `up-to-date`
+        //% -	RequestVote includes info about candidate's log
+        //% -	voter denies vote if its own log is more `up-to-date`
         let log_up_to_date_criteria = context
             .state
             .log

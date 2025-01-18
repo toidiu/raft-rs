@@ -203,8 +203,8 @@
 		- [x] if the entries have different term: the higher term is more up-to-date
 		- [x] if the term is the same: the longer log (higher index) is more up-to-date
 	- The RequestVote RPC helps ensure the leader's log is `up-to-date`
-		- [ ] RequestVote includes info about candidate's log
-		- [ ] voter denies vote if its own log is more `up-to-date`
+		- [x] RequestVote includes info about candidate's log
+		- [x] voter denies vote if its own log is more `up-to-date`
 
 #### 5.4.2 Committing entries from previous terms
 - [ ] a leader knows an entry from its **current term** (not true for previous terms) is committed, once its stored (replicated) on a majority of servers
