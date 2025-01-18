@@ -12,6 +12,7 @@ pub use request_vote::{RequestVote, RequestVoteResp};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::upper_case_acronyms)]
+#[must_use]
 pub enum Rpc {
     RV(RequestVote),
     RVR(RequestVoteResp),

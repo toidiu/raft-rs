@@ -72,10 +72,10 @@
 - [x] term: currentTerm, for candidate to update itself
 - [x] voteGranted: true means candidate received vote
 #### Receiver implementation
-- [ ] Reply false if term < currentTerm (§5.1)
-- [ ] If candidate’s log is at least as up-to-date as receiver’s log
-    - [ ] and votedFor is null, grant vote (§5.2, §5.4)
-    - [ ] and votedFor is candidateId, grant vote (§5.2, §5.4)
+- [x] Reply false if term < currentTerm (§5.1)
+- [x] If candidate’s log is at least as up-to-date as receiver’s log
+    - [x] and votedFor is null, grant vote (§5.2, §5.4)
+    - [x] and votedFor is candidateId, grant vote (§5.2, §5.4)
 
 ## 5: The Raft consensus algo
 - [ ] first elect a leader
@@ -199,12 +199,12 @@
 - [ ] a candidate cant win an election unless its log contains all committed entries.
 	- [ ] a candidate must get a vote from a majority of servers
 	- `up-to-date`: a log is considered more up-to-date than another log if:
-		- [ ] compare the index and term of the last entry of A's and B's log
-		- [ ] if the entries have different term: the higher term is more up-to-date
-		- [ ] if the term is the same: the longer log (higher index) is more up-to-date
+		- [x] compare the index and term of the last entry of A's and B's log
+		- [x] if the entries have different term: the higher term is more up-to-date
+		- [x] if the term is the same: the longer log (higher index) is more up-to-date
 	- The RequestVote RPC helps ensure the leader's log is `up-to-date`
-		- [ ] RequestVote includes info about candidate's log
-		- [ ] voter denies vote if its own log is more `up-to-date`
+		- [x] RequestVote includes info about candidate's log
+		- [x] voter denies vote if its own log is more `up-to-date`
 
 #### 5.4.2 Committing entries from previous terms
 - [ ] a leader knows an entry from its **current term** (not true for previous terms) is committed, once its stored (replicated) on a majority of servers

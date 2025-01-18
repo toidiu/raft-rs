@@ -234,7 +234,7 @@ mod tests {
         assert!(matches!(mode, Mode::F(_)));
 
         // decode the sent RPC
-        let leader_io = &mut peer_map.get_mut(&leader_id).unwrap().io;
+        let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
         let sent_request_vote = helper_inspect_sent_rpc(leader_io);
         assert!(leader_io.send_queue.is_empty());
 
@@ -274,11 +274,11 @@ mod tests {
         );
         mode.on_recv(append_entries, &mut context);
 
-        // expect Mode::Follower
+        // expect Mode::Candidate
         assert!(matches!(mode, Mode::C(_)));
 
         // decode the sent RPC
-        let peer_io = &mut peer_map.get_mut(&peer_id).unwrap().io;
+        let peer_io = &mut context.peer_map.get_mut(&peer_id).unwrap().io;
         assert!(peer_io.send_queue.len() == 1);
         let sent_request_vote = helper_inspect_sent_rpc(peer_io);
 

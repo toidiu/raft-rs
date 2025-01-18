@@ -1,12 +1,13 @@
+pub use entry::Entry;
+pub use idx::Idx;
+use std::cmp::Ordering;
+pub use term::Term;
+pub use term_idx::TermIdx;
+
 mod entry;
 mod idx;
 mod term;
 mod term_idx;
-
-pub use entry::Entry;
-pub use idx::Idx;
-pub use term::Term;
-pub use term_idx::TermIdx;
 
 #[derive(Debug)]
 pub struct Log {
@@ -25,15 +26,21 @@ impl Log {
     }
 
     pub(super) fn prev_idx(&self) -> Idx {
-        Idx::from(self.entries.len() as u64)
+        if self.entries.is_empty() {
+            Idx::initial()
+        } else {
+            Idx::from(self.entries.len() as u64)
+        }
     }
 
     pub fn next_idx(&self) -> Idx {
         self.prev_idx() + 1
     }
 
-    pub fn last_term(&self) -> Term {
-        self.entries.last().map_or(Term::initial(), |e| e.term)
+    pub fn last_term_idx(&self) -> TermIdx {
+        let last_term = self.entries.last().map_or(Term::initial(), |e| e.term);
+        let last_idx = self.prev_idx();
+        TermIdx::builder().with_term(last_term).with_idx(last_idx)
     }
 
     pub fn term_at_idx(&self, idx: &Idx) -> Option<Term> {
@@ -102,6 +109,26 @@ impl Log {
             return None;
         }
         self.entries.get(idx.as_log_idx())
+    }
+
+    pub fn is_candidate_log_up_to_date(&mut self, rpc_term_idx: &TermIdx) -> bool {
+        //% Compliance:
+        //% `up-to-date`: a log is considered more up-to-date than another log if:
+        //%	- compare the index and term of the last entry of A's and B's log
+        let log_term_idx = self.last_term_idx();
+        let term_cmp = rpc_term_idx.term.cmp(&log_term_idx.term);
+        let idx_cmp = rpc_term_idx.idx.cmp(&log_term_idx.idx);
+        match (term_cmp, idx_cmp) {
+            //% Compliance:
+            //%	- if the entries have different term: the higher term is more up-to-date
+            (Ordering::Greater, _) => true,
+            (Ordering::Less, _) => false,
+            //% Compliance:
+            //%	- if the term is the same: the longer log (higher index) is more up-to-date
+            (Ordering::Equal, Ordering::Less) => false,
+            (Ordering::Equal, Ordering::Equal) => true,
+            (Ordering::Equal, Ordering::Greater) => true,
+        }
     }
 }
 
@@ -274,5 +301,50 @@ mod tests {
             Idx::from(4),
         );
         assert!(matches!(doesnt_exist_outcome, MatchOutcome::DoesntExist));
+    }
+
+    #[test]
+    fn test_log_up_to_date() {
+        let mut log = Log::new();
+
+        let t1 = Term::from(1);
+        let t2 = Term::from(2);
+        let t3 = Term::from(3);
+        let i1 = Idx::from(1);
+        let i2 = Idx::from(2);
+        let i3 = Idx::from(3);
+        let ti_initial = TermIdx::initial();
+
+        // Initial IS up-to-date
+        // log: []
+        assert!(log.is_candidate_log_up_to_date(&ti_initial));
+
+        // log: [ [t:1] [t:2] ]
+        log.push(vec![Entry::new(t1, 8)]);
+        log.push(vec![Entry::new(t2, 8)]);
+        assert_eq!(log.entries.len(), 2);
+
+        // Initial NOT up-to-date
+        assert!(!log.is_candidate_log_up_to_date(&ti_initial));
+
+        // == Equal TermIdx ==
+        let term_idx_eq = TermIdx::builder().with_term(t2).with_idx(i2);
+        assert!(log.is_candidate_log_up_to_date(&term_idx_eq));
+
+        // == Different Term ==
+        // term <
+        let term_lt = TermIdx::builder().with_term(t1).with_idx(i2);
+        assert!(!log.is_candidate_log_up_to_date(&term_lt));
+        // term >
+        let term_gt = TermIdx::builder().with_term(t3).with_idx(i2);
+        assert!(log.is_candidate_log_up_to_date(&term_gt));
+
+        // == Same Term ==
+        // idx <
+        let idx_lt = TermIdx::builder().with_term(t2).with_idx(i1);
+        assert!(!log.is_candidate_log_up_to_date(&idx_lt));
+        // idx >
+        let idx_gt = TermIdx::builder().with_term(t2).with_idx(i3);
+        assert!(log.is_candidate_log_up_to_date(&idx_gt));
     }
 }

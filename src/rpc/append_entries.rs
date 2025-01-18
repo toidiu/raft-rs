@@ -7,7 +7,7 @@ use s2n_codec::{DecoderValue, EncoderValue};
 // Type used to encode the number of entries sent over an AppendEntries RPC.
 type EntriesLenTypeEncoding = u16;
 
-// Add entries
+#[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppendEntries {
     //% Compliance:
@@ -39,6 +39,7 @@ impl AppendEntries {
     }
 }
 
+#[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppendEntriesResp {
     //% Compliance:
