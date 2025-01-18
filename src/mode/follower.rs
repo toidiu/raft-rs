@@ -166,7 +166,7 @@ mod tests {
         state.current_term = current_term;
 
         let mut follower = Follower;
-        let leader_commit_idx = Idx::from(0);
+        let leader_commit_idx = Idx::initial();
         let prev_log_term_idx = TermIdx::initial();
 
         // Expect response true

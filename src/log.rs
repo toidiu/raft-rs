@@ -26,7 +26,11 @@ impl Log {
     }
 
     pub(super) fn prev_idx(&self) -> Idx {
-        Idx::from(self.entries.len() as u64)
+        if self.entries.is_empty() {
+            Idx::initial()
+        } else {
+            Idx::from(self.entries.len() as u64)
+        }
     }
 
     pub fn next_idx(&self) -> Idx {
@@ -297,5 +301,31 @@ mod tests {
             Idx::from(4),
         );
         assert!(matches!(doesnt_exist_outcome, MatchOutcome::DoesntExist));
+    }
+
+    // - comparing log entry
+    #[test]
+    fn test_log_up_to_date() {
+        let mut log = Log::new();
+
+        // initial term_idx
+        let t1 = TermIdx::initial();
+        assert!(log.is_candidate_log_up_to_date(&t1));
+
+        let entry = Entry {
+            term: Term::from(1),
+            command: 8,
+        };
+        log.push(vec![entry]);
+
+        // equal
+
+        // term eq
+        // term lt
+        // term gt
+        //
+        // idx eq
+        // idx lt
+        // idx gt
     }
 }
