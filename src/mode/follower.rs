@@ -292,7 +292,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_recv_request_vote_empty_log() {
+    async fn test_recv_request_vote_up_to_date_criteria_with_empty_log() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
@@ -348,7 +348,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_recv_request_vote() {
+    async fn test_recv_request_vote_up_to_date_criteria() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
@@ -486,5 +486,15 @@ mod tests {
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
+    }
+
+    // TODO
+    #[tokio::test]
+    async fn test_recv_request_vote_vote_granted_criteria() {
+    }
+
+    // TODO
+    #[tokio::test]
+    async fn test_recv_request_vote_term_criteria() {
     }
 }
