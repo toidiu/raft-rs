@@ -303,29 +303,48 @@ mod tests {
         assert!(matches!(doesnt_exist_outcome, MatchOutcome::DoesntExist));
     }
 
-    // - comparing log entry
     #[test]
     fn test_log_up_to_date() {
         let mut log = Log::new();
 
-        // initial term_idx
-        let t1 = TermIdx::initial();
-        assert!(log.is_candidate_log_up_to_date(&t1));
+        let t1 = Term::from(1);
+        let t2 = Term::from(2);
+        let t3 = Term::from(3);
+        let i1 = Idx::from(1);
+        let i2 = Idx::from(2);
+        let i3 = Idx::from(3);
+        let ti_initial = TermIdx::initial();
 
-        let entry = Entry {
-            term: Term::from(1),
-            command: 8,
-        };
-        log.push(vec![entry]);
+        // Initial IS up-to-date
+        // log: []
+        assert!(log.is_candidate_log_up_to_date(&ti_initial));
 
-        // equal
+        // log: [ [t:1] [t:2] ]
+        log.push(vec![Entry::new(t1, 8)]);
+        log.push(vec![Entry::new(t2, 8)]);
+        assert_eq!(log.entries.len(), 2);
 
-        // term eq
-        // term lt
-        // term gt
-        //
-        // idx eq
-        // idx lt
-        // idx gt
+        // Initial NOT up-to-date
+        assert!(!log.is_candidate_log_up_to_date(&ti_initial));
+
+        // == Equal TermIdx ==
+        let term_idx_eq = TermIdx::builder().with_term(t2).with_idx(i2);
+        assert!(log.is_candidate_log_up_to_date(&term_idx_eq));
+
+        // == Different Term ==
+        // term <
+        let term_lt = TermIdx::builder().with_term(t1).with_idx(i2);
+        assert!(!log.is_candidate_log_up_to_date(&term_lt));
+        // term >
+        let term_gt = TermIdx::builder().with_term(t3).with_idx(i2);
+        assert!(log.is_candidate_log_up_to_date(&term_gt));
+
+        // == Same Term ==
+        // idx <
+        let idx_lt = TermIdx::builder().with_term(t2).with_idx(i1);
+        assert!(!log.is_candidate_log_up_to_date(&idx_lt));
+        // idx >
+        let idx_gt = TermIdx::builder().with_term(t2).with_idx(i3);
+        assert!(log.is_candidate_log_up_to_date(&idx_gt));
     }
 }
