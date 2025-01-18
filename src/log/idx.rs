@@ -1,4 +1,4 @@
-use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
+use s2n_codec::{DecoderBufferResult, DecoderError, DecoderValue, EncoderValue};
 use std::ops::{Add, AddAssign, Sub};
 
 //% Compliance:
@@ -50,7 +50,7 @@ impl AddAssign<u64> for Idx {
 
 impl From<u64> for Idx {
     fn from(value: u64) -> Self {
-        // term values should be greater than 0
+        // Idx values should be greater than 0
         debug_assert!(value > 0);
         Idx(value)
     }

@@ -177,7 +177,7 @@ mod tests {
                 state: &mut state,
                 peer_map: &mut peer_map,
             };
-            // constust RPC to recv
+            // construct RPC to recv
             let recv_rpc = Rpc::new_append_entry(
                 current_term,
                 leader_id,
@@ -287,7 +287,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_recv_request_vote() {
+    async fn test_recv_request_vote_empty_log() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
@@ -298,122 +298,99 @@ mod tests {
         let mut state = State::new(timeout, &peer_map);
         let current_term = Term::initial();
         state.current_term = current_term;
+        assert!(state.log.entries.is_empty());
 
         let mut follower = Follower;
-        let rpc_last_log_term_idx = TermIdx::initial();
+        let rpc_term_idx_initial = TermIdx::initial();
 
-        // Expect response true
-        // - but no entries are sent
+        // Expect grant_vote: empty Log, TermIdx initial
         {
             let mut context = Context {
                 server_id,
                 state: &mut state,
                 peer_map: &mut peer_map,
             };
-            // constust RPC to recv
-            let recv_rpc = Rpc::new_request_vote(
-                current_term,
-                candidate_id,
-                rpc_last_log_term_idx,
-            );
+            // construct RPC to recv
+            let recv_rpc = Rpc::new_request_vote(current_term, candidate_id, rpc_term_idx_initial);
             follower.on_recv(recv_rpc, &mut context);
 
             let candidate_io = &mut peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);
             let expected_rpc = Rpc::new_request_vote_resp(current_term, true);
             assert_eq!(expected_rpc, rpc);
-            assert!(state.log.entries.is_empty());
         }
 
-        // // Expect response false
-        // // - term < current_term
-        // {
-        //     let mut context = Context {
-        //         server_id,
-        //         state: &mut state,
-        //         peer_map: &mut peer_map,
-        //     };
-        //     let prev_log_term_idx = TermIdx::initial();
-        //     let recv_rpc = Rpc::new_append_entry(
-        //         current_term - 1,
-        //         candidate_id,
-        //         prev_log_term_idx,
-        //         leader_commit_idx,
-        //         vec![Entry::new(current_term, 3), Entry::new(current_term, 6)],
-        //     );
-        //     // on_recv AppendEntries
-        //     follower.on_recv(recv_rpc, &mut context);
+        // Expect grant_vote: empty Log, TermIdx > initial
+        {
+            let mut context = Context {
+                server_id,
+                state: &mut state,
+                peer_map: &mut peer_map,
+            };
+            // construct RPC to recv
+            let rpc_log_term_idx = TermIdx::builder()
+                .with_term(Term::from(1))
+                .with_idx(Idx::from(1));
+            let rpc_term = Term::from(1);
+            let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_log_term_idx);
+            follower.on_recv(recv_rpc, &mut context);
 
-        //     let leader_io = &mut peer_map.get_mut(&candidate_id).unwrap().io;
-        //     let rpc = helper_inspect_sent_rpc(leader_io);
-        //     let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
-        //     assert_eq!(expected_rpc, rpc);
-        //     assert!(state.log.entries.is_empty());
-        // }
+            let candidate_io = &mut peer_map.get_mut(&candidate_id).unwrap().io;
+            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let expected_rpc = Rpc::new_request_vote_resp(current_term, true);
+            assert_eq!(expected_rpc, rpc);
+        }
+    }
 
-        // // Expect response false
-        // // - log doesnt contain prev entry
-        // {
-        //     let mut context = Context {
-        //         server_id,
-        //         state: &mut state,
-        //         peer_map: &mut peer_map,
-        //     };
-        //     let prev_log_term_idx = TermIdx::builder()
-        //         .with_term(Term::from(1))
-        //         .with_idx(Idx::from(1));
-        //     let recv_rpc = Rpc::new_append_entry(
-        //         current_term,
-        //         candidate_id,
-        //         prev_log_term_idx,
-        //         leader_commit_idx,
-        //         vec![Entry::new(current_term, 3), Entry::new(current_term, 6)],
-        //     );
-        //     // on_recv AppendEntries
-        //     follower.on_recv(recv_rpc, &mut context);
+    #[tokio::test]
+    async fn test_recv_request_vote() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
 
-        //     let leader_io = &mut peer_map.get_mut(&candidate_id).unwrap().io;
-        //     let rpc = helper_inspect_sent_rpc(leader_io);
-        //     let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
-        //     assert_eq!(expected_rpc, rpc);
-        //     assert!(state.log.entries.is_empty());
-        // }
+        let server_id = ServerId::new([1; 16]);
+        let candidate_id_fill = 2;
+        let candidate_id = ServerId::new([candidate_id_fill; 16]);
+        let mut peer_map = Peer::mock_as_map(&[candidate_id_fill]);
+        let mut state = State::new(timeout, &peer_map);
+        let term_1 = Term::from(1);
+        let term_2 = Term::from(2);
+        state.current_term = term_2;
 
-        // // Expect response true
-        // //  - process entries
-        // //  - update commit_idx
-        // let leader_commit_idx = Idx::from(1);
-        // {
-        //     assert!(state.log.entries.is_empty());
-        //     assert_eq!(state.commit_idx, Idx::initial());
+        state
+            .log
+            .push(vec![Entry::new(term_1, 3), Entry::new(term_2, 6)]);
 
-        //     let mut context = Context {
-        //         server_id,
-        //         state: &mut state,
-        //         peer_map: &mut peer_map,
-        //     };
-        //     // construct RPC to recv
-        //     let recv_rpc = Rpc::new_append_entry(
-        //         current_term,
-        //         candidate_id,
-        //         rpc_last_log_term_idx,
-        //         leader_commit_idx,
-        //         vec![Entry::new(current_term, 3), Entry::new(current_term, 6)],
-        //     );
-        //     follower.on_recv(recv_rpc, &mut context);
+        let mut follower = Follower;
 
-        //     let leader_io = &mut peer_map.get_mut(&candidate_id).unwrap().io;
-        //     let rpc = helper_inspect_sent_rpc(leader_io);
-        //     let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
-        //     assert_eq!(expected_rpc, rpc);
+        // TODO
+        // == Equal TermIdx ==
+        // == Different Term ==
+        // term <
+        // term >
+        // == Same Term ==
+        // idx <
+        // idx >
 
-        //     // expect received entries to be in the log
-        //     assert!(state.log.entries.len() == 2);
-        //     assert_eq!(state.log.entries[0], Entry::new(current_term, 3));
-        //     assert_eq!(state.log.entries[1], Entry::new(current_term, 6));
+        // Expect NOT to grant_vote:
+        // local Log: [ [term: 1] [term: 2] ]
+        {
+            let mut context = Context {
+                server_id,
+                state: &mut state,
+                peer_map: &mut peer_map,
+            };
+            // construct RPC to recv
+            let rpc_log_term_idx = TermIdx::builder()
+                .with_term(Term::from(1))
+                .with_idx(Idx::from(1));
+            let rpc_term = Term::from(1);
+            let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_log_term_idx);
+            follower.on_recv(recv_rpc, &mut context);
 
-        //     // commit_idx should be updated
-        //     assert_eq!(state.commit_idx, leader_commit_idx);
-        // }
+            let candidate_io = &mut peer_map.get_mut(&candidate_id).unwrap().io;
+            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let expected_rpc = Rpc::new_request_vote_resp(term_2, false);
+            assert_eq!(expected_rpc, rpc);
+        }
     }
 }

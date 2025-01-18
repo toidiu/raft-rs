@@ -274,7 +274,7 @@ mod tests {
         );
         mode.on_recv(append_entries, &mut context);
 
-        // expect Mode::Follower
+        // expect Mode::Candidate
         assert!(matches!(mode, Mode::C(_)));
 
         // decode the sent RPC
