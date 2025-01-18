@@ -380,9 +380,7 @@ mod tests {
                 peer_map: &mut peer_map,
             };
             // construct RPC to recv
-            let rpc_last_log_term_idx = TermIdx::builder()
-                .with_term(rpc_term)
-                .with_idx(rpc_idx);
+            let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             follower.on_recv(recv_rpc, &mut context);
 
@@ -405,9 +403,7 @@ mod tests {
                 peer_map: &mut peer_map,
             };
             // construct RPC to recv
-            let rpc_last_log_term_idx = TermIdx::builder()
-                .with_term(rpc_term)
-                .with_idx(rpc_idx);
+            let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             follower.on_recv(recv_rpc, &mut context);
 
@@ -430,9 +426,7 @@ mod tests {
                 peer_map: &mut peer_map,
             };
             // construct RPC to recv
-            let rpc_last_log_term_idx = TermIdx::builder()
-                .with_term(rpc_term)
-                .with_idx(rpc_idx);
+            let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             follower.on_recv(recv_rpc, &mut context);
 
@@ -455,9 +449,7 @@ mod tests {
                 peer_map: &mut peer_map,
             };
             // construct RPC to recv
-            let rpc_last_log_term_idx = TermIdx::builder()
-                .with_term(rpc_term)
-                .with_idx(rpc_idx);
+            let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             follower.on_recv(recv_rpc, &mut context);
 
@@ -480,9 +472,7 @@ mod tests {
                 peer_map: &mut peer_map,
             };
             // construct RPC to recv
-            let rpc_last_log_term_idx = TermIdx::builder()
-                .with_term(rpc_term)
-                .with_idx(rpc_idx);
+            let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             follower.on_recv(recv_rpc, &mut context);
 
@@ -492,5 +482,4 @@ mod tests {
             assert_eq!(expected_rpc, rpc);
         }
     }
-
 }
