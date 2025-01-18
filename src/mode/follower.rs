@@ -450,9 +450,146 @@ mod tests {
 
     // TODO
     #[tokio::test]
-    async fn test_recv_request_vote_vote_granted_criteria() {}
+    async fn test_recv_request_vote_vote_granted_criteria() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let candidate_id_fill = 2;
+        let candidate_id = ServerId::new([candidate_id_fill; 16]);
+        let peer2_id_fill = 3;
+        let peer2_id = ServerId::new([peer2_id_fill; 16]);
+
+        let mut peer_map = Peer::mock_as_map(&[candidate_id_fill, peer2_id_fill]);
+        let mut state = State::new(timeout, &peer_map);
+
+        let term_current = Term::from(2);
+        state.current_term = term_current;
+
+        let mut follower = Follower;
+        let mut context = Context {
+            server_id,
+            state: &mut state,
+            peer_map: &mut peer_map,
+        };
+
+        let rpc_term = term_current;
+        let rpc_last_log_term_idx = TermIdx::initial();
+        // == vote_granted None ==
+        // Expect: grant vote
+        {
+            context.state.voted_for = None;
+
+            // construct RPC to recv
+            let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
+            follower.on_recv(recv_rpc, &mut context);
+
+            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
+            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
+            assert_eq!(expected_rpc, rpc);
+        }
+
+        // == vote_granted Some(candidate_id) ==
+        // Expect: grant vote
+        {
+            context.state.voted_for = Some(candidate_id);
+
+            // construct RPC to recv
+            let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
+            follower.on_recv(recv_rpc, &mut context);
+
+            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
+            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
+            assert_eq!(expected_rpc, rpc);
+        }
+
+        // == vote_granted Some(!candidate_id) ==
+        // Expect: NO grant vote
+        {
+            context.state.voted_for = Some(peer2_id);
+
+            // construct RPC to recv
+            let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
+            follower.on_recv(recv_rpc, &mut context);
+
+            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
+            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
+            assert_eq!(expected_rpc, rpc);
+        }
+    }
 
     // TODO
     #[tokio::test]
-    async fn test_recv_request_vote_term_criteria() {}
+    async fn test_recv_request_vote_term_criteria() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let candidate_id_fill = 2;
+        let candidate_id = ServerId::new([candidate_id_fill; 16]);
+        let mut peer_map = Peer::mock_as_map(&[candidate_id_fill]);
+        let mut state = State::new(timeout, &peer_map);
+
+        let term_prev = Term::from(1);
+        let term_current = Term::from(2);
+        let term_ahead = Term::from(3);
+        state.current_term = term_current;
+
+        let mut follower = Follower;
+        let mut context = Context {
+            server_id,
+            state: &mut state,
+            peer_map: &mut peer_map,
+        };
+
+        let rpc_last_log_term_idx = TermIdx::initial();
+
+        // == rpc_term = current_term ==
+        // Expect: grant vote
+        {
+            let rpc_term = term_current;
+
+            // construct RPC to recv
+            let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
+            follower.on_recv(recv_rpc, &mut context);
+
+            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
+            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
+            assert_eq!(expected_rpc, rpc);
+        }
+
+        // == rpc_term > current_term ==
+        // Expect: grant vote
+        {
+            let rpc_term = term_ahead;
+
+            // construct RPC to recv
+            let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
+            follower.on_recv(recv_rpc, &mut context);
+
+            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
+            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
+            assert_eq!(expected_rpc, rpc);
+        }
+
+        // == rpc_term < current_term ==
+        // Expect: NO grant vote
+        {
+            let rpc_term = term_prev;
+
+            // construct RPC to recv
+            let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
+            follower.on_recv(recv_rpc, &mut context);
+
+            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
+            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
+            assert_eq!(expected_rpc, rpc);
+        }
+    }
 }
