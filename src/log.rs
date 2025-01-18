@@ -1,12 +1,13 @@
+pub use entry::Entry;
+pub use idx::Idx;
+use std::cmp::Ordering;
+pub use term::Term;
+pub use term_idx::TermIdx;
+
 mod entry;
 mod idx;
 mod term;
 mod term_idx;
-
-pub use entry::Entry;
-pub use idx::Idx;
-pub use term::Term;
-pub use term_idx::TermIdx;
 
 #[derive(Debug)]
 pub struct Log {
@@ -104,6 +105,26 @@ impl Log {
             return None;
         }
         self.entries.get(idx.as_log_idx())
+    }
+
+    pub fn is_candidate_log_up_to_date(&mut self, rpc_term_idx: &TermIdx) -> bool {
+        //% Compliance:
+        //% `up-to-date`: a log is considered more up-to-date than another log if:
+        //%	- compare the index and term of the last entry of A's and B's log
+        let log_term_idx = self.last_term_idx();
+        let term_cmp = rpc_term_idx.term.cmp(&log_term_idx.term);
+        let idx_cmp = rpc_term_idx.idx.cmp(&log_term_idx.idx);
+        match (term_cmp, idx_cmp) {
+            //% Compliance:
+            //%	- if the entries have different term: the higher term is more up-to-date
+            (Ordering::Greater, _) => true,
+            (Ordering::Less, _) => false,
+            //% Compliance:
+            //%	- if the term is the same: the longer log (higher index) is more up-to-date
+            (Ordering::Equal, Ordering::Less) => false,
+            (Ordering::Equal, Ordering::Equal) => true,
+            (Ordering::Equal, Ordering::Greater) => true,
+        }
     }
 }
 
