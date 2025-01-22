@@ -169,6 +169,7 @@ impl Candidate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mode::cast_unsafe;
     use crate::{
         log::{Term, TermIdx},
         peer::Peer,
@@ -241,7 +242,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cast_vote() {
+    async fn test_vote_received() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
@@ -280,5 +281,108 @@ mod tests {
             ElectionResult::Elected
         ));
         assert_eq!(Mode::quorum(&context), 2);
+    }
+
+    #[tokio::test]
+    async fn test_recv_request_vote_resp_term() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer_id2_fill = 2;
+        let peer_id2 = ServerId::new([peer_id2_fill; 16]);
+        let mut peer_map = Peer::mock_as_map(&[peer_id2_fill]);
+        let mut state = State::new(timeout, &peer_map);
+
+        let term_current = Term::from(2);
+        let term_election = term_current + 1;
+        state.current_term = term_current;
+
+        let mut context = Context {
+            server_id,
+            state: &mut state,
+            peer_map: &mut peer_map,
+        };
+        assert_eq!(Mode::quorum(&context), 2);
+
+        // Initialize Candidate (votes for self)
+        let mut candidate = Candidate::default();
+        assert_eq!(candidate.votes_received.len(), 0);
+        let transition = candidate.start_election(&mut context);
+        assert!(matches!(transition, ModeTransition::None));
+        assert_eq!(candidate.votes_received.len(), 1);
+
+        // grant and no_grant vote RPC
+
+        // peer 2 DOES grant vote but has older Term
+        let prev_term_rpc = cast_unsafe!(Rpc::new_request_vote_resp(term_current, true), Rpc::RVR);
+        let transition = candidate.on_recv_request_vote_resp(peer_id2, prev_term_rpc, &mut context);
+        assert!(matches!(transition, ModeTransition::None));
+        assert_eq!(candidate.votes_received.len(), 1);
+
+        // peer 2 DOES grant vote but has election Term
+        let election_term_rpc =
+            cast_unsafe!(Rpc::new_request_vote_resp(term_election, true), Rpc::RVR);
+        let transition =
+            candidate.on_recv_request_vote_resp(peer_id2, election_term_rpc, &mut context);
+        assert!(matches!(transition, ModeTransition::ToLeader));
+        assert_eq!(candidate.votes_received.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_recv_request_vote_resp_grant_vote() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer_id2_fill = 2;
+        let peer_id2 = ServerId::new([peer_id2_fill; 16]);
+        let peer_id3_fill = 3;
+        let peer_id3 = ServerId::new([peer_id3_fill; 16]);
+        let peer_id4_fill = 4;
+        let mut peer_map = Peer::mock_as_map(&[peer_id2_fill, peer_id3_fill, peer_id4_fill]);
+        let mut state = State::new(timeout, &peer_map);
+
+        let term_current = Term::from(2);
+        let term_election = term_current + 1;
+        state.current_term = term_current;
+
+        let mut context = Context {
+            server_id,
+            state: &mut state,
+            peer_map: &mut peer_map,
+        };
+        assert_eq!(Mode::quorum(&context), 3);
+
+        // Initialize Candidate (votes for self)
+        let mut candidate = Candidate::default();
+        assert_eq!(candidate.votes_received.len(), 0);
+        let transition = candidate.start_election(&mut context);
+        assert!(matches!(transition, ModeTransition::None));
+        assert_eq!(candidate.votes_received.len(), 1);
+
+        // grant and no_grant vote RPC
+        let grant_vote_rpc =
+            cast_unsafe!(Rpc::new_request_vote_resp(term_election, true), Rpc::RVR);
+        let no_grant_vote_rpc =
+            cast_unsafe!(Rpc::new_request_vote_resp(term_election, false), Rpc::RVR);
+
+        // peer 2 DOES grant vote
+        let transition =
+            candidate.on_recv_request_vote_resp(peer_id2, grant_vote_rpc.clone(), &mut context);
+        assert!(matches!(transition, ModeTransition::None));
+        assert_eq!(candidate.votes_received.len(), 2);
+
+        // peer 3 does NOT grant vote
+        let transition =
+            candidate.on_recv_request_vote_resp(peer_id3, no_grant_vote_rpc, &mut context);
+        assert!(matches!(transition, ModeTransition::None));
+        assert_eq!(candidate.votes_received.len(), 2);
+
+        // peer 3 DOES grant vote
+        let transition =
+            candidate.on_recv_request_vote_resp(peer_id3, grant_vote_rpc, &mut context);
+        assert!(matches!(transition, ModeTransition::ToLeader));
+        assert_eq!(candidate.votes_received.len(), 3);
     }
 }
