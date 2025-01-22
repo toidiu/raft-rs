@@ -40,7 +40,7 @@ impl Candidate {
             }
             Rpc::RVR(request_vote_resp) => {
                 let transition =
-                    self.on_recv_resp_request_vote(peer_id, request_vote_resp, context);
+                    self.on_recv_request_vote_resp(peer_id, request_vote_resp, context);
                 (transition, None)
             }
             Rpc::AE(append_entries) => self.on_recv_append_entries(append_entries, context),
@@ -91,7 +91,7 @@ impl Candidate {
         }
     }
 
-    fn on_recv_resp_request_vote<IO: ServerIO>(
+    fn on_recv_request_vote_resp<IO: ServerIO>(
         &mut self,
         peer_id: ServerId,
         request_vote_resp: RequestVoteResp,
