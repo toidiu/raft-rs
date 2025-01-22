@@ -1,3 +1,5 @@
+use crate::mode::ElectionResult;
+use crate::rpc::RequestVoteResp;
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
     mode::{Context, Mode, ModeTransition},
@@ -27,50 +29,87 @@ impl Candidate {
 
     pub fn on_recv<IO: ServerIO>(
         &mut self,
+        peer_id: ServerId,
         rpc: crate::rpc::Rpc,
         context: &mut Context<IO>,
     ) -> (ModeTransition, Option<Rpc>) {
         match rpc {
-            Rpc::RV(_request_vote_state) => todo!(),
-            Rpc::RVR(_resp_request_vote_state) => todo!(),
-            Rpc::AE(ref append_entries_state) => {
-                let AppendEntries {
-                    term,
-                    leader_id,
-                    prev_log_term_idx: _,
-                    leader_commit_idx: _,
-                    entries: _,
-                } = append_entries_state;
-                let leader_io = &mut context.peer_map.get_mut(leader_id).unwrap().io;
-                //% Compliance:
-                //% another server establishes itself as a leader
-                //% - a candidate receives AppendEntries from another server claiming to be a leader
-                if *term >= context.state.current_term {
-                    //% Compliance:
-                    //% if that leader's current term is >= the candidate's
-                    //% - recognize the server as the new leader
-                    //% - then the candidate reverts to a follower
-                    //
-                    //% Compliance:
-                    //% If AppendEntries RPC received from new leader: convert to follower
-
-                    // Convert to Follower and process/respond to the RPC
-                    return (ModeTransition::ToFollower, Some(rpc));
-                } else {
-                    //% Compliance:
-                    //% if the leader's current term is < the candidate's
-                    //% - reject the RPC and continue in the candidate state
-                    let mut slice = vec![0; IO_BUF_LEN];
-                    let mut buf = EncoderBuffer::new(&mut slice);
-                    let term = context.state.current_term;
-                    Rpc::new_append_entry_resp(term, false).encode_mut(&mut buf);
-                    leader_io.send(buf.as_mut_slice().to_vec());
-                }
+            Rpc::RV(request_vote) => {
+                request_vote.on_recv(context);
+                (ModeTransition::None, None)
             }
-            Rpc::AER(_resp_append_entries_state) => (),
+            Rpc::RVR(request_vote_resp) => {
+                let transition =
+                    self.on_recv_request_vote_resp(peer_id, request_vote_resp, context);
+                (transition, None)
+            }
+            Rpc::AE(append_entries) => self.on_recv_append_entries(append_entries, context),
+            Rpc::AER(_) => {
+                todo!("it might be possible to get a response from a previous term")
+            }
+        }
+    }
+
+    fn on_recv_append_entries<IO: ServerIO>(
+        &mut self,
+        append_entries: AppendEntries,
+        context: &mut Context<IO>,
+    ) -> (ModeTransition, Option<Rpc>) {
+        let AppendEntries {
+            term,
+            leader_id,
+            prev_log_term_idx: _,
+            leader_commit_idx: _,
+            entries: _,
+        } = append_entries;
+        let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
+        //% Compliance:
+        //% another server establishes itself as a leader
+        //% - a candidate receives AppendEntries from another server claiming to be a leader
+        if term >= context.state.current_term {
+            //% Compliance:
+            //% if that leader's current term is >= the candidate's
+            //% - recognize the server as the new leader
+            //% - then the candidate reverts to a follower
+            //
+            //% Compliance:
+            //% If AppendEntries RPC received from new leader: convert to follower
+
+            // Convert to Follower and process/respond to the RPC
+            let rpc = Rpc::AE(append_entries);
+            (ModeTransition::ToFollower, Some(rpc))
+        } else {
+            //% Compliance:
+            //% if the leader's current term is < the candidate's
+            //% - reject the RPC and continue in the candidate state
+            let mut slice = vec![0; IO_BUF_LEN];
+            let mut buf = EncoderBuffer::new(&mut slice);
+            let term = context.state.current_term;
+            Rpc::new_append_entry_resp(term, false).encode_mut(&mut buf);
+            leader_io.send(buf.as_mut_slice().to_vec());
+            (ModeTransition::None, None)
+        }
+    }
+
+    fn on_recv_request_vote_resp<IO: ServerIO>(
+        &mut self,
+        peer_id: ServerId,
+        request_vote_resp: RequestVoteResp,
+        context: &mut Context<IO>,
+    ) -> ModeTransition {
+        let RequestVoteResp { term, vote_granted } = request_vote_resp;
+        let term_matches = context.state.current_term == term;
+
+        if term_matches && vote_granted {
+            let granted_vote = self.on_vote_received(peer_id, context);
+            if matches!(granted_vote, ElectionResult::Elected) {
+                //% Compliance:
+                //% If votes received from majority of servers: become leader
+                return ModeTransition::ToLeader;
+            }
         }
 
-        (ModeTransition::None, None)
+        ModeTransition::None
     }
 
     fn start_election<IO: ServerIO>(&mut self, context: &mut Context<IO>) -> ModeTransition {
@@ -81,7 +120,7 @@ impl Candidate {
         //% Compliance:
         //% Vote for self
         if matches!(
-            self.cast_vote(context.server_id, context),
+            self.on_vote_received(context.server_id, context),
             ElectionResult::Elected
         ) {
             //% Compliance:
@@ -108,36 +147,16 @@ impl Candidate {
         ModeTransition::None
     }
 
-    fn cast_vote<IO: ServerIO>(
-        &mut self,
-        vote_for_server: ServerId,
-        context: &mut Context<IO>,
-    ) -> ElectionResult {
-        let self_id = context.server_id;
-        if self_id == vote_for_server {
-            // voting for self
-            context.state.voted_for = Some(self_id);
-            self.on_vote_received(self_id, context)
-        } else {
-            debug_assert!(
-                context.peer_map.contains_key(&vote_for_server),
-                "voted for invalid server id"
-            );
-            context.state.voted_for = Some(vote_for_server);
-            ElectionResult::Pending
-        }
-    }
-
     fn on_vote_received<IO: ServerIO>(
         &mut self,
-        id: ServerId,
+        voter_id: ServerId,
         context: &Context<IO>,
     ) -> ElectionResult {
         debug_assert!(
-            context.peer_map.contains_key(&id) || id == context.server_id,
-            "voted for invalid server id"
+            context.peer_map.contains_key(&voter_id) || voter_id == context.server_id,
+            "voter id not a raft peer"
         );
-        self.votes_received.insert(id);
+        self.votes_received.insert(voter_id);
 
         if self.votes_received.len() >= Mode::quorum(context) {
             ElectionResult::Elected
@@ -147,15 +166,10 @@ impl Candidate {
     }
 }
 
-#[must_use]
-pub enum ElectionResult {
-    Elected,
-    Pending,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mode::cast_unsafe;
     use crate::{
         log::{Term, TermIdx},
         peer::Peer,
@@ -228,7 +242,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cast_vote() {
+    async fn test_vote_received() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
@@ -267,5 +281,108 @@ mod tests {
             ElectionResult::Elected
         ));
         assert_eq!(Mode::quorum(&context), 2);
+    }
+
+    #[tokio::test]
+    async fn test_recv_request_vote_resp_term() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer_id2_fill = 2;
+        let peer_id2 = ServerId::new([peer_id2_fill; 16]);
+        let mut peer_map = Peer::mock_as_map(&[peer_id2_fill]);
+        let mut state = State::new(timeout, &peer_map);
+
+        let term_current = Term::from(2);
+        let term_election = term_current + 1;
+        state.current_term = term_current;
+
+        let mut context = Context {
+            server_id,
+            state: &mut state,
+            peer_map: &mut peer_map,
+        };
+        assert_eq!(Mode::quorum(&context), 2);
+
+        // Initialize Candidate (votes for self)
+        let mut candidate = Candidate::default();
+        assert_eq!(candidate.votes_received.len(), 0);
+        let transition = candidate.start_election(&mut context);
+        assert!(matches!(transition, ModeTransition::None));
+        assert_eq!(candidate.votes_received.len(), 1);
+
+        // grant and no_grant vote RPC
+
+        // peer 2 DOES grant vote but has older Term
+        let prev_term_rpc = cast_unsafe!(Rpc::new_request_vote_resp(term_current, true), Rpc::RVR);
+        let transition = candidate.on_recv_request_vote_resp(peer_id2, prev_term_rpc, &mut context);
+        assert!(matches!(transition, ModeTransition::None));
+        assert_eq!(candidate.votes_received.len(), 1);
+
+        // peer 2 DOES grant vote but has election Term
+        let election_term_rpc =
+            cast_unsafe!(Rpc::new_request_vote_resp(term_election, true), Rpc::RVR);
+        let transition =
+            candidate.on_recv_request_vote_resp(peer_id2, election_term_rpc, &mut context);
+        assert!(matches!(transition, ModeTransition::ToLeader));
+        assert_eq!(candidate.votes_received.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_recv_request_vote_resp_grant_vote() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer_id2_fill = 2;
+        let peer_id2 = ServerId::new([peer_id2_fill; 16]);
+        let peer_id3_fill = 3;
+        let peer_id3 = ServerId::new([peer_id3_fill; 16]);
+        let peer_id4_fill = 4;
+        let mut peer_map = Peer::mock_as_map(&[peer_id2_fill, peer_id3_fill, peer_id4_fill]);
+        let mut state = State::new(timeout, &peer_map);
+
+        let term_current = Term::from(2);
+        let term_election = term_current + 1;
+        state.current_term = term_current;
+
+        let mut context = Context {
+            server_id,
+            state: &mut state,
+            peer_map: &mut peer_map,
+        };
+        assert_eq!(Mode::quorum(&context), 3);
+
+        // Initialize Candidate (votes for self)
+        let mut candidate = Candidate::default();
+        assert_eq!(candidate.votes_received.len(), 0);
+        let transition = candidate.start_election(&mut context);
+        assert!(matches!(transition, ModeTransition::None));
+        assert_eq!(candidate.votes_received.len(), 1);
+
+        // grant and no_grant vote RPC
+        let grant_vote_rpc =
+            cast_unsafe!(Rpc::new_request_vote_resp(term_election, true), Rpc::RVR);
+        let no_grant_vote_rpc =
+            cast_unsafe!(Rpc::new_request_vote_resp(term_election, false), Rpc::RVR);
+
+        // peer 2 DOES grant vote
+        let transition =
+            candidate.on_recv_request_vote_resp(peer_id2, grant_vote_rpc.clone(), &mut context);
+        assert!(matches!(transition, ModeTransition::None));
+        assert_eq!(candidate.votes_received.len(), 2);
+
+        // peer 3 does NOT grant vote
+        let transition =
+            candidate.on_recv_request_vote_resp(peer_id3, no_grant_vote_rpc, &mut context);
+        assert!(matches!(transition, ModeTransition::None));
+        assert_eq!(candidate.votes_received.len(), 2);
+
+        // peer 3 DOES grant vote
+        let transition =
+            candidate.on_recv_request_vote_resp(peer_id3, grant_vote_rpc, &mut context);
+        assert!(matches!(transition, ModeTransition::ToLeader));
+        assert_eq!(candidate.votes_received.len(), 3);
     }
 }

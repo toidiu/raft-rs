@@ -30,6 +30,7 @@
 //! ```
 //! https://textik.com/#8dbf6540e0dd1676
 
+use crate::server::ServerId;
 use crate::{
     io::ServerIO,
     macros::cast_unsafe,
@@ -66,7 +67,7 @@ impl Mode {
         }
     }
 
-    fn on_recv<IO: ServerIO>(&mut self, rpc: Rpc, context: &mut Context<IO>) {
+    fn on_recv<IO: ServerIO>(&mut self, peer_id: ServerId, rpc: Rpc, context: &mut Context<IO>) {
         //% Compliance:
         //% If RPC request or response contains term T > currentTerm: set currentTerm = T, convert
         //% to follower (§5.1)
@@ -75,7 +76,7 @@ impl Mode {
             self.on_follower(context);
         }
 
-        let rpc = match self {
+        let process_rpc_again = match self {
             Mode::F(follower) => {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
@@ -84,7 +85,7 @@ impl Mode {
                 None
             }
             Mode::C(candidate) => {
-                let (transition, rpc) = candidate.on_recv(rpc, context);
+                let (transition, rpc) = candidate.on_recv(peer_id, rpc, context);
                 self.handle_mode_transition(transition, context);
                 rpc
             }
@@ -98,8 +99,8 @@ impl Mode {
         //
         // An RPC might only be partially processed if it results in a ModeTransition and should be
         // processed again by the new Mode.
-        if let Some(rpc) = rpc {
-            self.on_recv(rpc, context)
+        if let Some(rpc) = process_rpc_again {
+            self.on_recv(peer_id, rpc, context)
         }
     }
 
@@ -159,6 +160,12 @@ pub enum ModeTransition {
     ToLeader,
 }
 
+#[must_use]
+pub enum ElectionResult {
+    Elected,
+    Pending,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,7 +209,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn candidate_recv_append_entries_with_gt_eq_term() {
+    // recv append_entries with gt or eq term
+    async fn candidate_stays_candidate_on_recv_append_entries() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
@@ -228,7 +236,7 @@ mod tests {
             Idx::initial(),
             vec![],
         );
-        mode.on_recv(append_entries, &mut context);
+        mode.on_recv(leader_id, append_entries, &mut context);
 
         // expect Mode::Follower
         assert!(matches!(mode, Mode::F(_)));
@@ -245,7 +253,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn candidate_recv_append_entries_with_smaller_term() {
+    // recv append_entries with smaller term
+    async fn candidate_switches_to_follower_on_recv_append_entries() {
         let current_term = Term::from(2);
 
         let prng = Pcg32::from_seed([0; 16]);
@@ -272,7 +281,7 @@ mod tests {
             Idx::initial(),
             vec![],
         );
-        mode.on_recv(append_entries, &mut context);
+        mode.on_recv(peer_id, append_entries, &mut context);
 
         // expect Mode::Candidate
         assert!(matches!(mode, Mode::C(_)));
