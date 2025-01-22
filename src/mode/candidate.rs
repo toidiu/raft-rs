@@ -108,7 +108,8 @@ impl Candidate {
                 return ModeTransition::ToLeader;
             }
         }
-        todo!()
+
+        ModeTransition::None
     }
 
     fn start_election<IO: ServerIO>(&mut self, context: &mut Context<IO>) -> ModeTransition {
@@ -153,7 +154,7 @@ impl Candidate {
     ) -> ElectionResult {
         debug_assert!(
             context.peer_map.contains_key(&voter_id) || voter_id == context.server_id,
-            "voted for invalid server id"
+            "voter id not a raft peer"
         );
         self.votes_received.insert(voter_id);
 

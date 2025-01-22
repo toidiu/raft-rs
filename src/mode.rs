@@ -76,7 +76,7 @@ impl Mode {
             self.on_follower(context);
         }
 
-        let rpc = match self {
+        let process_rpc_again = match self {
             Mode::F(follower) => {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
@@ -99,7 +99,7 @@ impl Mode {
         //
         // An RPC might only be partially processed if it results in a ModeTransition and should be
         // processed again by the new Mode.
-        if let Some(rpc) = rpc {
+        if let Some(rpc) = process_rpc_again {
             self.on_recv(peer_id, rpc, context)
         }
     }
