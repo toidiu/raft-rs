@@ -209,7 +209,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn candidate_recv_append_entries_with_gt_eq_term() {
+    // recv append_entries with gt or eq term
+    async fn candidate_stays_candidate_on_recv_append_entries() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
@@ -252,7 +253,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn candidate_recv_append_entries_with_smaller_term() {
+    // recv append_entries with smaller term
+    async fn candidate_switches_to_follower_on_recv_append_entries() {
         let current_term = Term::from(2);
 
         let prng = Pcg32::from_seed([0; 16]);
