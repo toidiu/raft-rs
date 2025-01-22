@@ -1,3 +1,5 @@
+use crate::mode::ElectionResult;
+use crate::rpc::RequestVoteResp;
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
     mode::{Context, Mode, ModeTransition},
@@ -27,14 +29,24 @@ impl Candidate {
 
     pub fn on_recv<IO: ServerIO>(
         &mut self,
+        peer_id: ServerId,
         rpc: crate::rpc::Rpc,
         context: &mut Context<IO>,
     ) -> (ModeTransition, Option<Rpc>) {
         match rpc {
-            Rpc::RV(_request_vote) => todo!(),
-            Rpc::RVR(_resp_request_vote) => todo!(),
+            Rpc::RV(request_vote) => {
+                request_vote.on_recv(context);
+                (ModeTransition::None, None)
+            }
+            Rpc::RVR(request_vote_resp) => {
+                let transition =
+                    self.on_recv_resp_request_vote(peer_id, request_vote_resp, context);
+                (transition, None)
+            }
             Rpc::AE(append_entries) => self.on_recv_append_entries(append_entries, context),
-            Rpc::AER(_resp_append_entries) => todo!(),
+            Rpc::AER(_) => {
+                todo!("it might be possible to get a response from a previous term")
+            }
         }
     }
 
@@ -79,6 +91,26 @@ impl Candidate {
         }
     }
 
+    fn on_recv_resp_request_vote<IO: ServerIO>(
+        &mut self,
+        peer_id: ServerId,
+        request_vote_resp: RequestVoteResp,
+        context: &mut Context<IO>,
+    ) -> ModeTransition {
+        let RequestVoteResp { term, vote_granted } = request_vote_resp;
+        let term_matches = context.state.current_term == term;
+
+        if term_matches && vote_granted {
+            let granted_vote = self.on_vote_received(peer_id, context);
+            if matches!(granted_vote, ElectionResult::Elected) {
+                //% Compliance:
+                //% If votes received from majority of servers: become leader
+                return ModeTransition::ToLeader;
+            }
+        }
+        todo!()
+    }
+
     fn start_election<IO: ServerIO>(&mut self, context: &mut Context<IO>) -> ModeTransition {
         //% Compliance:
         //% Increment currentTerm
@@ -87,7 +119,7 @@ impl Candidate {
         //% Compliance:
         //% Vote for self
         if matches!(
-            self.cast_vote(context.server_id, context),
+            self.on_vote_received(context.server_id, context),
             ElectionResult::Elected
         ) {
             //% Compliance:
@@ -114,36 +146,16 @@ impl Candidate {
         ModeTransition::None
     }
 
-    fn cast_vote<IO: ServerIO>(
-        &mut self,
-        vote_for_server: ServerId,
-        context: &mut Context<IO>,
-    ) -> ElectionResult {
-        let self_id = context.server_id;
-        if self_id == vote_for_server {
-            // voting for self
-            context.state.voted_for = Some(self_id);
-            self.on_vote_received(self_id, context)
-        } else {
-            debug_assert!(
-                context.peer_map.contains_key(&vote_for_server),
-                "voted for invalid server id"
-            );
-            context.state.voted_for = Some(vote_for_server);
-            ElectionResult::Pending
-        }
-    }
-
     fn on_vote_received<IO: ServerIO>(
         &mut self,
-        id: ServerId,
+        voter_id: ServerId,
         context: &Context<IO>,
     ) -> ElectionResult {
         debug_assert!(
-            context.peer_map.contains_key(&id) || id == context.server_id,
+            context.peer_map.contains_key(&voter_id) || voter_id == context.server_id,
             "voted for invalid server id"
         );
-        self.votes_received.insert(id);
+        self.votes_received.insert(voter_id);
 
         if self.votes_received.len() >= Mode::quorum(context) {
             ElectionResult::Elected
@@ -151,12 +163,6 @@ impl Candidate {
             ElectionResult::Pending
         }
     }
-}
-
-#[must_use]
-pub enum ElectionResult {
-    Elected,
-    Pending,
 }
 
 #[cfg(test)]

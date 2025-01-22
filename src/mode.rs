@@ -84,7 +84,8 @@ impl Mode {
                 None
             }
             Mode::C(candidate) => {
-                let (transition, rpc) = candidate.on_recv(rpc, context);
+                let peer_id = todo!();
+                let (transition, rpc) = candidate.on_recv(peer_id, rpc, context);
                 self.handle_mode_transition(transition, context);
                 rpc
             }
@@ -157,6 +158,12 @@ pub enum ModeTransition {
     ToFollower,
     ToCandidate,
     ToLeader,
+}
+
+#[must_use]
+pub enum ElectionResult {
+    Elected,
+    Pending,
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@ use crate::{
     io::{ServerIO, IO_BUF_LEN},
     log::MatchOutcome,
     mode::Context,
-    rpc::{AppendEntries, RequestVote, Rpc},
+    rpc::{AppendEntries, Rpc},
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
 use std::cmp::min;
@@ -17,63 +17,12 @@ impl Follower {
         //% Compliance:
         //% Respond to RPCs from candidates and leaders
         match rpc {
-            Rpc::RV(request_vote) => self.on_recv_request_vote(request_vote, context),
+            Rpc::RV(request_vote) => request_vote.on_recv(context),
             Rpc::AE(append_entries) => self.on_recv_append_entries(append_entries, context),
-            Rpc::RVR(_) | Rpc::AER(_) => (),
+            Rpc::RVR(_) | Rpc::AER(_) => {
+                todo!("it might be possible to get a response from a previous term")
+            }
         }
-    }
-
-    fn on_recv_request_vote<IO: ServerIO>(
-        &mut self,
-        request_vote: RequestVote,
-        context: &mut Context<IO>,
-    ) {
-        let current_term = context.state.current_term;
-
-        //% Compliance:
-        //% Reply false if term < currentTerm (§5.1)
-        let term_criteria = {
-            let rpc_term_lt_current_term = request_vote.term < current_term;
-            !rpc_term_lt_current_term
-        };
-
-        //% Compliance:
-        //% If candidate’s log is at least as up-to-date as receiver’s log
-        //
-        //% Compliance:
-        //% The RequestVote RPC helps ensure the leader's log is `up-to-date`
-        //% -	RequestVote includes info about candidate's log
-        //% -	voter denies vote if its own log is more `up-to-date`
-        let log_up_to_date_criteria = context
-            .state
-            .log
-            .is_candidate_log_up_to_date(&request_vote.last_log_term_idx);
-
-        let voted_for_criteria = if let Some(voted_for) = context.state.voted_for {
-            //% Compliance:
-            //% and votedFor is candidateId, grant vote (§5.2, §5.4)
-            voted_for == request_vote.candidate_id
-        } else {
-            //% Compliance:
-            //% and votedFor is null, grant vote (§5.2, §5.4)
-            true
-        };
-
-        let grant_vote = term_criteria && log_up_to_date_criteria && voted_for_criteria;
-        if grant_vote {
-            // set local state to capture granting the vote
-            context.state.voted_for = Some(request_vote.candidate_id);
-        }
-
-        let candidate_io = &mut context
-            .peer_map
-            .get_mut(&request_vote.candidate_id)
-            .unwrap()
-            .io;
-        let mut slice = vec![0; IO_BUF_LEN];
-        let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_request_vote_resp(current_term, grant_vote).encode_mut(&mut buf);
-        candidate_io.send(buf.as_mut_slice().to_vec());
     }
 
     fn on_recv_append_entries<IO: ServerIO>(

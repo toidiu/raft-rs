@@ -1,7 +1,13 @@
+use crate::io::ServerIO;
+use crate::io::IO_BUF_LEN;
+use crate::mode::ElectionResult;
+use crate::rpc::Rpc;
+use crate::server::Context;
 use crate::{
     log::{Term, TermIdx},
     server::ServerId,
 };
+use s2n_codec::EncoderBuffer;
 use s2n_codec::{DecoderValue, EncoderValue};
 
 #[must_use]
@@ -23,6 +29,51 @@ pub struct RequestVote {
 
 impl RequestVote {
     pub const TAG: u8 = 1;
+
+    pub fn on_recv<IO: ServerIO>(self, context: &mut Context<IO>) {
+        let current_term = context.state.current_term;
+
+        //% Compliance:
+        //% Reply false if term < currentTerm (§5.1)
+        let term_criteria = {
+            let rpc_term_lt_current_term = self.term < current_term;
+            !rpc_term_lt_current_term
+        };
+
+        //% Compliance:
+        //% If candidate’s log is at least as up-to-date as receiver’s log
+        //
+        //% Compliance:
+        //% The RequestVote RPC helps ensure the leader's log is `up-to-date`
+        //% -	RequestVote includes info about candidate's log
+        //% -	voter denies vote if its own log is more `up-to-date`
+        let log_up_to_date_criteria = context
+            .state
+            .log
+            .is_candidate_log_up_to_date(&self.last_log_term_idx);
+
+        let voted_for_criteria = if let Some(voted_for) = context.state.voted_for {
+            //% Compliance:
+            //% and votedFor is candidateId, grant vote (§5.2, §5.4)
+            voted_for == self.candidate_id
+        } else {
+            //% Compliance:
+            //% and votedFor is null, grant vote (§5.2, §5.4)
+            true
+        };
+
+        let grant_vote = term_criteria && log_up_to_date_criteria && voted_for_criteria;
+        if grant_vote {
+            // set local state to capture granting the vote
+            context.state.voted_for = Some(self.candidate_id);
+        }
+
+        let candidate_io = &mut context.peer_map.get_mut(&self.candidate_id).unwrap().io;
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        Rpc::new_request_vote_resp(current_term, grant_vote).encode_mut(&mut buf);
+        candidate_io.send(buf.as_mut_slice().to_vec());
+    }
 }
 
 #[must_use]
