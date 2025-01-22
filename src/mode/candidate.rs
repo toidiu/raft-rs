@@ -33,16 +33,14 @@ impl Candidate {
         match rpc {
             Rpc::RV(_request_vote) => todo!(),
             Rpc::RVR(_resp_request_vote) => todo!(),
-            Rpc::AE(append_entries) => self.on_recv_append_entries(&append_entries, context),
-            Rpc::AER(_resp_append_entries) => (),
+            Rpc::AE(append_entries) => self.on_recv_append_entries(append_entries, context),
+            Rpc::AER(_resp_append_entries) => todo!(),
         }
-
-        (ModeTransition::None, None)
     }
 
     fn on_recv_append_entries<IO: ServerIO>(
         &mut self,
-        append_entries: &AppendEntries,
+        append_entries: AppendEntries,
         context: &mut Context<IO>,
     ) -> (ModeTransition, Option<Rpc>) {
         let AppendEntries {
@@ -52,11 +50,11 @@ impl Candidate {
             leader_commit_idx: _,
             entries: _,
         } = append_entries;
-        let leader_io = &mut context.peer_map.get_mut(leader_id).unwrap().io;
+        let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
         //% Compliance:
         //% another server establishes itself as a leader
         //% - a candidate receives AppendEntries from another server claiming to be a leader
-        if *term >= context.state.current_term {
+        if term >= context.state.current_term {
             //% Compliance:
             //% if that leader's current term is >= the candidate's
             //% - recognize the server as the new leader
@@ -66,7 +64,8 @@ impl Candidate {
             //% If AppendEntries RPC received from new leader: convert to follower
 
             // Convert to Follower and process/respond to the RPC
-            return (ModeTransition::ToFollower, Some(rpc));
+            let rpc = Rpc::AE(append_entries);
+            (ModeTransition::ToFollower, Some(rpc))
         } else {
             //% Compliance:
             //% if the leader's current term is < the candidate's
@@ -76,6 +75,7 @@ impl Candidate {
             let term = context.state.current_term;
             Rpc::new_append_entry_resp(term, false).encode_mut(&mut buf);
             leader_io.send(buf.as_mut_slice().to_vec());
+            (ModeTransition::None, None)
         }
     }
 
