@@ -1,6 +1,5 @@
 use crate::io::ServerIO;
 use crate::io::IO_BUF_LEN;
-use crate::mode::ElectionResult;
 use crate::rpc::Rpc;
 use crate::server::Context;
 use crate::{

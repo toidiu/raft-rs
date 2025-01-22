@@ -239,17 +239,17 @@ mod tests {
         mode.on_recv(leader_id, append_entries, &mut context);
 
         // expect Mode::Follower
-        // assert!(matches!(mode, Mode::F(_)));
+        assert!(matches!(mode, Mode::F(_)));
 
-        // // decode the sent RPC
-        // let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
-        // let sent_request_vote = helper_inspect_sent_rpc(leader_io);
-        // assert!(leader_io.send_queue.is_empty());
+        // decode the sent RPC
+        let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
+        let sent_request_vote = helper_inspect_sent_rpc(leader_io);
+        assert!(leader_io.send_queue.is_empty());
 
-        // // expect Follower to send RespAppendEntries acknowledging the leader
-        // // construct RPC to compare
-        // let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
-        // assert_eq!(expected_rpc, sent_request_vote);
+        // expect Follower to send RespAppendEntries acknowledging the leader
+        // construct RPC to compare
+        let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
+        assert_eq!(expected_rpc, sent_request_vote);
     }
 
     #[tokio::test]
