@@ -86,7 +86,7 @@ impl State {
     }
 
     // Calculate the prev TermIdx for the peer
-    pub fn peers_prev_term_idx<T: ServerIO>(&self, peer: &Peer<T>) -> TermIdx {
+    fn peers_prev_term_idx<T: ServerIO>(&self, peer: &Peer<T>) -> TermIdx {
         // next Idx should always be > 0
         let peers_next_idx = self.next_idx.get(&peer.id).unwrap();
         assert!(!peers_next_idx.is_initial());

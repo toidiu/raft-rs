@@ -150,8 +150,11 @@ impl Candidate {
         //% Compliance:
         //% Send RequestVote RPCs to all other servers
         for (_id, peer) in context.peer_map.iter_mut() {
-            let prev_log_term_idx = context.state.peers_prev_term_idx(peer);
-            Rpc::new_request_vote(current_term, context.server_id, prev_log_term_idx)
+            //% Compliance:
+            //% lastLogIndex: index of candidate’s last log entry (§5.4)
+            //% lastLogTerm: term of candidate’s last log entry (§5.4)
+            let last_log_term_idx = context.state.log.last_term_idx();
+            Rpc::new_request_vote(current_term, context.server_id, last_log_term_idx)
                 .encode_mut(&mut buf);
             peer.send(buf.as_mut_slice().to_vec());
         }
