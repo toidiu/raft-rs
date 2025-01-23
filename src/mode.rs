@@ -52,11 +52,9 @@ pub enum Mode {
 impl Mode {
     fn on_timeout<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
         match self {
-            Mode::F(_follower) => {
-                //% Compliance:
-                //% If election timeout elapses without receiving AppendEntries RPC from current
-                //% leader or granting vote to candidate: convert to candidate
-                self.on_candidate(context);
+            Mode::F(follower) => {
+                let transition = follower.on_timeout();
+                self.handle_mode_transition(transition, context);
             }
             Mode::C(candidate) => {
                 let transition = candidate.on_timeout(context);

@@ -23,6 +23,12 @@ impl Candidate {
 
     pub fn on_timeout<IO: ServerIO>(&mut self, context: &mut Context<IO>) -> ModeTransition {
         //% Compliance:
+        //% A timeout occurs and there is no winner (can happen if too many servers become
+        //% candidates at the same time)
+        //% - increment its term
+        //% - start a new election by initiating another round of RequestVote
+        //
+        //% Compliance:
         //% If election timeout elapses: start new election
         self.start_election(context)
     }
@@ -101,6 +107,12 @@ impl Candidate {
         let term_matches = context.state.current_term == term;
 
         if term_matches && vote_granted {
+            //% Compliance:
+            //% wins election
+            //%	- receives majority of votes in cluster (ensures a single winner)
+            //%	- a server can only vote once for a given term (first-come basis)
+            //%	- a candidate becomes `leader` if it wins the election
+            //%	- sends a heartbeat to establish itself as a leader and prevent a new election
             let granted_vote = self.on_vote_received(peer_id, context);
             if matches!(granted_vote, ElectionResult::Elected) {
                 //% Compliance:
