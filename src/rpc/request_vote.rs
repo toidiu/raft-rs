@@ -134,7 +134,7 @@ mod tests {
         log::{Entry, Idx, Term, TermIdx},
         macros::cast_unsafe,
         raft_state::RaftState,
-        server::{PeerInfo, ServerId},
+        server::ServerId,
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -184,8 +184,7 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let candidate_id = ServerId::new([2; 16]);
-        let peer_list = PeerInfo::mock_list(&[candidate_id]);
-        let mut state = RaftState::new(timeout, &peer_list);
+        let mut state = RaftState::new(timeout);
         let current_term = Term::initial();
         state.current_term = current_term;
         assert!(state.log.entries.is_empty());
@@ -226,8 +225,7 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let candidate_id = ServerId::new([2; 16]);
-        let peer_list = PeerInfo::mock_list(&[candidate_id]);
-        let mut state = RaftState::new(timeout, &peer_list);
+        let mut state = RaftState::new(timeout);
 
         let idx_lt = Idx::from(1);
         let idx_eq = Idx::from(2);
@@ -336,8 +334,7 @@ mod tests {
 
         let candidate_id = ServerId::new([2; 16]);
         let peer2_id = ServerId::new([3; 16]);
-        let peer_list = PeerInfo::mock_list(&[candidate_id, peer2_id]);
-        let mut state = RaftState::new(timeout, &peer_list);
+        let mut state = RaftState::new(timeout);
 
         let term_current = Term::from(2);
         state.current_term = term_current;
@@ -395,8 +392,7 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let candidate_id = ServerId::new([2; 16]);
-        let peer_list = PeerInfo::mock_list(&[candidate_id]);
-        let mut state = RaftState::new(timeout, &peer_list);
+        let mut state = RaftState::new(timeout);
 
         let term_prev = Term::from(1);
         let term_current = Term::from(2);

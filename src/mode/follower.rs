@@ -93,12 +93,12 @@ impl Follower {
             //% If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of
             //% last new entry)
             assert!(
-                append_entries.leader_commit_idx <= raft_state.log.prev_idx(),
+                append_entries.leader_commit_idx <= raft_state.log.last_idx(),
                 "leader_commit_idx should not be greater than the number of enties in the log"
             );
             if append_entries.leader_commit_idx > raft_state.commit_idx {
                 raft_state.commit_idx =
-                    min(append_entries.leader_commit_idx, raft_state.log.prev_idx());
+                    min(append_entries.leader_commit_idx, raft_state.log.last_idx());
             }
         }
 
@@ -115,7 +115,7 @@ mod tests {
         io::testing::{helper_inspect_sent_rpc, MockIo},
         log::{Entry, Idx, Term, TermIdx},
         raft_state::RaftState,
-        server::{PeerInfo, ServerId},
+        server::ServerId,
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -127,8 +127,7 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let leader_id = ServerId::new([2; 16]);
-        let peer_list = PeerInfo::mock_list(&[leader_id]);
-        let mut state = RaftState::new(timeout, &peer_list);
+        let mut state = RaftState::new(timeout);
         let current_term = Term::from(2);
         state.current_term = current_term;
 

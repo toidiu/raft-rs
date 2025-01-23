@@ -54,7 +54,7 @@ impl Candidate {
         match rpc {
             Rpc::RequestVote(request_vote) => {
                 request_vote.on_recv(raft_state, io_egress);
-                (ModeTransition::None, None)
+                (ModeTransition::Noop, None)
             }
             Rpc::RequestVoteResp(request_vote_resp) => {
                 let transition = self.on_recv_request_vote_resp(
@@ -110,7 +110,7 @@ impl Candidate {
             let rpc = Rpc::new_append_entry_resp(term, false);
             let leader_io = io_egress;
             leader_io.send_rpc(rpc);
-            (ModeTransition::None, None)
+            (ModeTransition::Noop, None)
         }
     }
 
@@ -139,7 +139,7 @@ impl Candidate {
             }
         }
 
-        ModeTransition::None
+        ModeTransition::Noop
     }
 
     fn start_election<E: ServerEgress>(
@@ -149,9 +149,12 @@ impl Candidate {
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) -> ModeTransition {
+        // Retrieve the last log term index before incrementing the currentTerm
+        let last_log_term_idx = raft_state.on_start_election();
+
         //% Compliance:
-        //% Increment currentTerm
-        raft_state.current_term.increment();
+        //% Reset election timer
+        raft_state.election_timer.reset();
 
         //% Compliance:
         //% Vote for self
@@ -165,19 +168,13 @@ impl Candidate {
         }
 
         //% Compliance:
-        //% Reset election timer
-        raft_state.election_timer.reset();
-
-        let current_term = raft_state.current_term;
-        //% Compliance:
         //% Send RequestVote RPCs to all other servers
         for peer in peer_list.iter() {
-            let prev_log_term_idx = raft_state.peers_prev_term_idx(peer);
-            let rpc = Rpc::new_request_vote(current_term, *server_id, prev_log_term_idx);
-            peer.send_rpc(io_egress, rpc);
+            let rpc = Rpc::new_request_vote(raft_state.current_term, *server_id, last_log_term_idx);
+            peer.send_rpc(rpc, io_egress);
         }
 
-        ModeTransition::None
+        ModeTransition::Noop
     }
 
     fn on_vote_for_self(&mut self, server_id: &ServerId, peer_list: &[PeerInfo]) -> ElectionResult {
@@ -231,7 +228,7 @@ mod tests {
         let peer_id = ServerId::new([11; 16]);
         let peer_id_2 = ServerId::new([12; 16]);
         let mut peer_list = PeerInfo::mock_list(&[peer_id, peer_id_2]);
-        let mut state = RaftState::new(timeout, &peer_list);
+        let mut state = RaftState::new(timeout);
         assert!(state.current_term.is_initial());
 
         let mut io = MockIo::new();
@@ -241,7 +238,7 @@ mod tests {
         let transition = candidate.start_election(&server_id, &peer_list, &mut state, &mut io);
 
         // Expect no transitions since quorum is >1
-        assert!(matches!(transition, ModeTransition::None));
+        assert!(matches!(transition, ModeTransition::Noop));
         // Expect current_term to be incremented
         assert_eq!(state.current_term, Term::from(1));
 
@@ -249,7 +246,7 @@ mod tests {
         let expected_rpc = Rpc::new_request_vote(state.current_term, server_id, TermIdx::initial());
         for peer in peer_list.iter_mut() {
             let PeerInfo { id: _ } = peer;
-            let rpc_bytes = io.send_queue.pop().unwrap();
+            let rpc_bytes = io.send_queue.pop_front().unwrap();
             let buffer = DecoderBuffer::new(&rpc_bytes);
             let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
             assert_eq!(expected_rpc, sent_request_vote);
@@ -263,7 +260,7 @@ mod tests {
 
         let server_id = ServerId::new([6; 16]);
         let peer_list = PeerInfo::mock_list(&[]);
-        let mut state = RaftState::new(timeout, &peer_list);
+        let mut state = RaftState::new(timeout);
 
         let mut io = MockIo::new();
         let mut candidate = Candidate::default();
@@ -318,7 +315,7 @@ mod tests {
         let server_id = ServerId::new([1; 16]);
         let peer2_id = ServerId::new([2; 16]);
         let peer_list = PeerInfo::mock_list(&[peer2_id]);
-        let mut state = RaftState::new(timeout, &peer_list);
+        let mut state = RaftState::new(timeout);
 
         let term_current = Term::from(2);
         let term_election = term_current + 1;
@@ -331,7 +328,7 @@ mod tests {
         let mut candidate = Candidate::default();
         assert_eq!(candidate.votes_received.len(), 0);
         let transition = candidate.start_election(&server_id, &peer_list, &mut state, &mut io);
-        assert!(matches!(transition, ModeTransition::None));
+        assert!(matches!(transition, ModeTransition::Noop));
         assert_eq!(candidate.votes_received.len(), 1);
 
         // grant and no_grant vote RPC
@@ -343,7 +340,7 @@ mod tests {
         );
         let transition =
             candidate.on_recv_request_vote_resp(peer2_id, prev_term_rpc, &peer_list, &mut state);
-        assert!(matches!(transition, ModeTransition::None));
+        assert!(matches!(transition, ModeTransition::Noop));
         assert_eq!(candidate.votes_received.len(), 1);
 
         // peer 2 DOES grant vote but has election Term
@@ -371,7 +368,7 @@ mod tests {
         let peer3_id = ServerId::new([3; 16]);
         let peer4_id = ServerId::new([4; 16]);
         let peer_list = PeerInfo::mock_list(&[peer2_id, peer3_id, peer4_id]);
-        let mut state = RaftState::new(timeout, &peer_list);
+        let mut state = RaftState::new(timeout);
 
         let term_current = Term::from(2);
         let term_election = term_current + 1;
@@ -384,7 +381,7 @@ mod tests {
         let mut candidate = Candidate::default();
         assert_eq!(candidate.votes_received.len(), 0);
         let transition = candidate.start_election(&server_id, &peer_list, &mut state, &mut io);
-        assert!(matches!(transition, ModeTransition::None));
+        assert!(matches!(transition, ModeTransition::Noop));
         assert_eq!(candidate.votes_received.len(), 1);
 
         // grant and no_grant vote RPC
@@ -404,7 +401,7 @@ mod tests {
             &peer_list,
             &mut state,
         );
-        assert!(matches!(transition, ModeTransition::None));
+        assert!(matches!(transition, ModeTransition::Noop));
         assert_eq!(candidate.votes_received.len(), 2);
 
         // peer 3 does NOT grant vote
@@ -414,7 +411,7 @@ mod tests {
             &peer_list,
             &mut state,
         );
-        assert!(matches!(transition, ModeTransition::None));
+        assert!(matches!(transition, ModeTransition::Noop));
         assert_eq!(candidate.votes_received.len(), 2);
 
         // peer 3 DOES grant vote

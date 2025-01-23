@@ -36,9 +36,9 @@
 - [x] If AppendEntries RPC received from new leader: convert to follower
 - [x] If election timeout elapses: start new election
 #### Leaders
-- [ ] Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat during idle periods to prevent election timeouts (§5.2)
+- [x] Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat during idle periods to prevent election timeouts (§5.2)
 - [ ] If command received from client: append entry to local log, respond after entry applied to state machine (§5.3)
-- [ ] If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log entries starting at nextIndex
+- [x] If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log entries starting at nextIndex
   - [ ] If successful: update nextIndex and matchIndex for follower (§5.3)
   - [ ] If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
 - [ ] If there exists an N such that N > commitIndex, a majority of matchIndex[i] ≥ N, and log[N].term == currentTerm: set commitIndex = N (§5.3, §5.4).
@@ -53,8 +53,7 @@
 - [x] leaderCommit: leader’s commitIndex
 #### Results
 - [x] term: currentTerm, for leader to update itself
-- [x] success: true if follower contained entry matching prevLogIndex and
-  prevLogTerm
+- [x] success: true if follower contained entry matching prevLogIndex and prevLogTerm
 #### Receiver implementation
 - [x] Reply false if term < currentTerm (§5.1)
 - [x] Reply false if log doesn’t contain an entry at prevLogIndex whose term  matches prevLogTerm (§5.3)
@@ -81,8 +80,8 @@
 - [ ] first elect a leader
 - [ ] leader then responsible for managing the replicated log
 - [ ] leader accepts log entries from clients
-	- [ ] replicates them on other servers
-	- [ ] tells other servers when its safe to apply log entries to state machine
+    - [ ] replicates them on other servers
+    - [ ] tells other servers when its safe to apply log entries to state machine
 **Raft sub-problem:**
 - **Leader election:** choose a new leader when the existing one fails
 - **Log replication:** leader accepts log entries from client and replicate them across cluster, forcing other logs to agree with its own
@@ -90,132 +89,132 @@
 
 ### 5.1 Raft basics
 - [ ] server can be in one of 3 modes: leader, follower candidate
-	- [ ] normal operation: 1 leader and other are followers
-	- [ ] followers are passive and only respond to requests
-	- [ ] leader handles all client requests
-	- [ ] candidate state is used to elect a new leader
+    - [ ] normal operation: 1 leader and other are followers
+    - [ ] followers are passive and only respond to requests
+    - [ ] leader handles all client requests
+    - [ ] candidate state is used to elect a new leader
 - [ ] the unit of time is `terms`: logical clock
-	- [ ] which are consecutive integers
-	- [ ] begins with a new election
-	- [ ] there is at most one leader per term
-	- [ ] if an election ends with a split vote then the term ends with no leader
+    - [ ] which are consecutive integers
+    - [ ] begins with a new election
+    - [ ] there is at most one leader per term
+    - [ ] if an election ends with a split vote then the term ends with no leader
 - [ ] each server stores the `current term`
-	- [ ] increases monotonically
-	- [ ] if a server sees a larger term, it updates its `current term`
-	- [ ] if a candidate or leader sees a larger term, it reverts to follower state
-	- [ ] a request with a stale term is rejected
+    - [ ] increases monotonically
+    - [ ] if a server sees a larger term, it updates its `current term`
+    - [ ] if a candidate or leader sees a larger term, it reverts to follower state
+    - [ ] a request with a stale term is rejected
 - [ ] RPCs
-	- [ ] issued in parallel for best performance
-	- [ ] servers retry RPCs if they do not receive a response in a timely manner
-	- [ ] RequestVote
-		- [ ] initiated by a candidate during election
-	- [ ] AppendEntries
-		- [ ] initiated by a leader
-		- [ ] used to replicate log entries
-		- [ ] also a heartbeat mechanism
-	- [ ] InstallSnapshot (optional)
+    - [ ] issued in parallel for best performance
+    - [ ] servers retry RPCs if they do not receive a response in a timely manner
+    - [ ] RequestVote
+        - [ ] initiated by a candidate during election
+    - [ ] AppendEntries
+        - [ ] initiated by a leader
+        - [ ] used to replicate log entries
+        - [ ] also a heartbeat mechanism
+    - [ ] InstallSnapshot (optional)
 
 ### 5.2 Leader Election
 - [ ] heartbeat are used to trigger election
 - [ ] servers begin as followers
-	- [ ]  a server remains a follower as long as it receives a valid RPC from a leader or candidate
+    - [ ]  a server remains a follower as long as it receives a valid RPC from a leader or candidate
 - [ ] leaders send periodic heartbeat
 - [ ] heartbeat is a AppendEntries RPC with no log entries
 - [x] a follower that receives no communication (election timeout) assumes there is no viable leader
-	- [x] increments its current term
-	- [x] transitions to `candidate`
-	- [x] votes for itself
-	- [x] issues a RequestVote in parallel to other servers
+    - [x] increments its current term
+    - [x] transitions to `candidate`
+    - [x] votes for itself
+    - [x] issues a RequestVote in parallel to other servers
 - [ ] The `candidate` continues in the above state until one of:
-	- [x] wins election
-		- [x] receives majority of votes in cluster (ensures a single winner)
-		- [x] a server can only vote once for a given term (first-come basis)
-		- [x] a candidate becomes `leader` if it wins the election
-		- [x] sends a heartbeat to establish itself as a leader and prevent a new election
-	- [x] another server establishes itself as a leader
-		- [x] a candidate receives AppendEntries from another server claiming to be a leader
-		- [x] if that leader's current term is >= the candidate's
-			- [x] recognize the server as the new leader
-			- [x] then the candidate reverts to a follower
-		- [x] if the leader's current term is < the candidate's
-			- [x] reject the RPC and continue in the candidate state
-	- [x] A timeout occurs and there is no winner (can happen if too many servers become candidates at the same time)
-		- [x] increment its term
-		- [x] start a new election by initiating another round of RequestVote
+    - [x] wins election
+        - [x] receives majority of votes in cluster (ensures a single winner)
+        - [x] a server can only vote once for a given term (first-come basis)
+        - [x] a candidate becomes `leader` if it wins the election
+        - [x] sends a heartbeat to establish itself as a leader and prevent a new election
+    - [x] another server establishes itself as a leader
+        - [x] a candidate receives AppendEntries from another server claiming to be a leader
+        - [x] if that leader's current term is >= the candidate's
+            - [x] recognize the server as the new leader
+            - [x] then the candidate reverts to a follower
+        - [x] if the leader's current term is < the candidate's
+            - [x] reject the RPC and continue in the candidate state
+    - [x] A timeout occurs and there is no winner (can happen if too many servers become candidates at the same time)
+        - [x] increment its term
+        - [x] start a new election by initiating another round of RequestVote
 - [x] Election timeout is chosen randomly between 150-300ms
 
 ### 5.3 Log replication
 - [ ] a leader services client requests
-	- each request contains a command to be executed by the state machine
-	- [ ] the leader appends the command to its log as a new entry
-	- [ ] issues AppendEntries in parallel to replicate the entry
-	- after the entry has been safely replicated
-		- [ ] the leader applies the entry to its state machine
-	- [ ] leader indefinitely reties AppendEntries in the face of packet loss/network issues
+    - each request contains a command to be executed by the state machine
+    - [ ] the leader appends the command to its log as a new entry
+    - [ ] issues AppendEntries in parallel to replicate the entry
+    - after the entry has been safely replicated
+        - [ ] the leader applies the entry to its state machine
+    - [ ] leader indefinitely reties AppendEntries in the face of packet loss/network issues
 - [x] each log entry stores
-	- [x] a state machine command
-	- [x] term number
-	- [x] log index: integer
+    - [x] a state machine command
+    - [x] term number
+    - [x] log index: integer
 - [ ] leader decides when to `commit` an entry
-	- `commit`: when its safe to apply an entry to the state machine
-	- `apply` entry to state machine: actually write an entry to the state machine
-	- [ ] An entry is `committed` when the leader that created the entry, replicates it on majority of servers
-		- this also commits all preceding entries in the leader's log
-	- [ ] leader tracks the highest index it knows to be committed
-		- [ ] includes that number in future AppendEntries
-		- [ ] once a follower learns an entry is committed (`leaderCommit` in AppendEntries), it applies the entry to its state machine
+    - `commit`: when its safe to apply an entry to the state machine
+    - `apply` entry to state machine: actually write an entry to the state machine
+    - [ ] An entry is `committed` when the leader that created the entry, replicates it on majority of servers
+        - this also commits all preceding entries in the leader's log
+    - [ ] leader tracks the highest index it knows to be committed
+        - [ ] includes that number in future AppendEntries
+        - [ ] once a follower learns an entry is committed (`leaderCommit` in AppendEntries), it applies the entry to its state machine
 - **Log Matching Property**
-	- [x] if two entries in different logs have the same index/term, they store the same command
-	- if two entries in different logs have the same index/term, all preceding entries are identical
+    - [x] if two entries in different logs have the same index/term, they store the same command
+    - if two entries in different logs have the same index/term, all preceding entries are identical
 - AppendEntries helps perform a consistency check
-	- [ ] the leader includes the index and term of the entry immediately preceding the new entries
-		- [ ] if the follower doesn't find an entry with the same index and term, it refuses the new entries
+    - [ ] the leader includes the index and term of the entry immediately preceding the new entries
+        - [ ] if the follower doesn't find an entry with the same index and term, it refuses the new entries
 - leader handles inconsistent logs by forcing follower to duplicate its own logs. conflicting follower logs are overwritten with the leader's logs
-	- to make the leader/follower logs consistent:
-		- [ ] the leader finds the last log entry that are the same
-		- [ ] follower deletes any entries after that point
-		- [ ] leader sends the follower all its entries after the common point
-	- [ ] leader maintains a `nextIndex` for each follower: index of the next log entry the leader will send to that follower
-	- [ ] when a server first becomes a leader
-		- [ ] initializes `nextIndex` to +1 of the last entry in its log
-	- [ ] if a follower's log is inconsistent with the leader's, AppendEntries RPC will fail
-		- [ ] after a failed AppendEntries, the leader will decrement `nextIndex` and retry AppendEntries
-			- [ ] Eventually `nextIndex` will match the follower's and leader's logs
-			- [ ] after logs match
-				- [ ] AppendEntries will succeed
-				- [ ] follower removes conflicting entries from its logs
-				- [ ] follower appends entries from the leader
-			- [ ] (optional) its possible to optimize finding the matching `nextIndex` between leader and follower
+    - to make the leader/follower logs consistent:
+        - [ ] the leader finds the last log entry that are the same
+        - [ ] follower deletes any entries after that point
+        - [ ] leader sends the follower all its entries after the common point
+    - [ ] leader maintains a `nextIndex` for each follower: index of the next log entry the leader will send to that follower
+    - [ ] when a server first becomes a leader
+        - [ ] initializes `nextIndex` to +1 of the last entry in its log
+    - [ ] if a follower's log is inconsistent with the leader's, AppendEntries RPC will fail
+        - [ ] after a failed AppendEntries, the leader will decrement `nextIndex` and retry AppendEntries
+            - [ ] Eventually `nextIndex` will match the follower's and leader's logs
+            - [ ] after logs match
+                - [ ] AppendEntries will succeed
+                - [ ] follower removes conflicting entries from its logs
+                - [ ] follower appends entries from the leader
+            - [ ] (optional) its possible to optimize finding the matching `nextIndex` between leader and follower
 - [ ] A leader never deletes of overwrites its own logs
 
 ### 5.4 Safety
 - restrict which servers can be elected leaders
-	- [ ] leader for any term must contain all entries committed in previous terms
+    - [ ] leader for any term must contain all entries committed in previous terms
 
 #### 5.4.1 Election restriction
 - All committed entries from previous terms are present on each new leader when its elected.
-	- [ ] log entries only flow from leader to follower.
-	- [ ] leader never overwrites existing entries in its log.
+    - [ ] log entries only flow from leader to follower.
+    - [ ] leader never overwrites existing entries in its log.
 - [ ] a candidate cant win an election unless its log contains all committed entries.
-	- [ ] a candidate must get a vote from a majority of servers
-	- `up-to-date`: a log is considered more up-to-date than another log if:
-		- [x] compare the index and term of the last entry of A's and B's log
-		- [x] if the entries have different term: the higher term is more up-to-date
-		- [x] if the term is the same: the longer log (higher index) is more up-to-date
-	- The RequestVote RPC helps ensure the leader's log is `up-to-date`
-		- [x] RequestVote includes info about candidate's log
-		- [x] voter denies vote if its own log is more `up-to-date`
+    - [ ] a candidate must get a vote from a majority of servers
+    - `up-to-date`: a log is considered more up-to-date than another log if:
+        - [x] compare the index and term of the last entry of A's and B's log
+        - [x] if the entries have different term: the higher term is more up-to-date
+        - [x] if the term is the same: the longer log (higher index) is more up-to-date
+    - The RequestVote RPC helps ensure the leader's log is `up-to-date`
+        - [x] RequestVote includes info about candidate's log
+        - [x] voter denies vote if its own log is more `up-to-date`
 
 #### 5.4.2 Committing entries from previous terms
 - [ ] a leader knows an entry from its **current term** (not true for previous terms) is committed, once its stored (replicated) on a majority of servers
-	- [ ] an entry is replicated if the server responds with success to AppendEntries
+    - [ ] an entry is replicated if the server responds with success to AppendEntries
 - [ ] a leader can NOT conclude an entry from a previous term is committed once it is stored on a majority of servers (a previous entry could be overwritten)
-	- log entries retain their original term number even when a leader entries previous terms. This makes logs easier to reason about
-	- [ ] never commit entries from previous terms by counting replicas
-	- [ ] only entries from the leader's current term are committed by counting replicas
-	- [ ] once an entry from the current term is committed, previous entries will indirectly be committed
+    - log entries retain their original term number even when a leader entries previous terms. This makes logs easier to reason about
+    - [ ] never commit entries from previous terms by counting replicas
+    - [ ] only entries from the leader's current term are committed by counting replicas
+    - [ ] once an entry from the current term is committed, previous entries will indirectly be committed
 
 #### 5.4.3 Safety argument
 - [ ] entries are applied/committed in log index order
-	- this (combined with State Machine Safety Property) ensures that all servers apply the same set of log entries to state machine, in the same order
+    - this (combined with State Machine Safety Property) ensures that all servers apply the same set of log entries to state machine, in the same order
 

@@ -1,9 +1,8 @@
 use crate::{
     log::{Idx, Log, Term, TermIdx},
-    server::{PeerInfo, ServerId},
+    server::ServerId,
     timeout::Timeout,
 };
-use std::collections::BTreeMap;
 
 pub struct RaftState {
     //  ==== Persistent state on all servers ====
@@ -32,131 +31,68 @@ pub struct RaftState {
     //% increases monotonically)
     pub last_applied: Idx,
 
-    // ==== Volatile state on leaders ====
-    //% Compliance:
-    //% `nextIndex[]` for each server, index of the next log entry to send to that server
-    //% (initialized to leader last log index + 1)
-    pub next_idx: BTreeMap<ServerId, Idx>,
-
-    //% Compliance:
-    //% `matchIndex[]` for each server, index of highest log entry known to be replicated on server
-    //% (initialized to 0, increases monotonically)
-    pub match_idx: BTreeMap<ServerId, Idx>,
-
     pub election_timer: Timeout,
 }
 
 impl RaftState {
-    pub fn new(election_timer: Timeout, peer_list: &[PeerInfo]) -> Self {
+    pub fn new(election_timer: Timeout) -> Self {
         let log = Log::new();
-        let mut next_idx_map = BTreeMap::new();
-        let mut match_idx_map = BTreeMap::new();
 
-        //% Compliance:
-        //% `nextIndex[]` for each server, index of the next log entry to send to that server
-        //% (initialized to leader last log index + 1)
-        let next_log_idx = log.next_idx();
-
-        //% Compliance:
-        //% `matchIndex[]` for each server, index of highest log entry known to be replicated on server
-        //% (initialized to 0, increases monotonically)
-        let match_idx = Idx::initial();
-
-        for peer in peer_list.iter() {
-            let PeerInfo { id } = peer;
-
-            next_idx_map.insert(*id, next_log_idx);
-            match_idx_map.insert(*id, match_idx);
-        }
         RaftState {
             current_term: Term::initial(),
             voted_for: None,
             log,
             commit_idx: Idx::initial(),
             last_applied: Idx::initial(),
-            next_idx: next_idx_map,
-            match_idx: match_idx_map,
             election_timer,
         }
     }
 
-    // Calculate the prev TermIdx for the peer
-    pub fn peers_prev_term_idx(&self, peer: &PeerInfo) -> TermIdx {
-        // next Idx should always be > 0
-        let peers_next_idx = self.next_idx.get(&peer.id).unwrap();
-        assert!(!peers_next_idx.is_initial());
+    // Retrieve the last TermIdx applied on self and increment the currentTerm
+    pub fn on_start_election(&mut self) -> TermIdx {
+        let last_log_term_idx = TermIdx::builder()
+            .with_term(self.current_term)
+            .with_idx(self.last_applied);
 
-        if *peers_next_idx == Idx::from(1) {
-            // peer's log is empty so its prev_term_idx value is inital value
-            TermIdx::initial()
-        } else {
-            let prev_idx = *peers_next_idx - 1;
-            let term_at_prev_idx = self.log.term_at_idx(&prev_idx).expect(
-                "next_idx_map incorrectly indicates that an Entry exists at idx: {prev_idx}",
-            );
-            TermIdx::builder()
-                .with_term(term_at_prev_idx)
-                .with_idx(prev_idx)
-        }
+        //% Compliance:
+        //% Increment currentTerm
+        self.current_term.increment();
+
+        last_log_term_idx
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        log::Entry,
-        raft_state::{Idx, PeerInfo, RaftState, ServerId, Term, TermIdx},
+        raft_state::{Idx, RaftState, Term, TermIdx},
         timeout::Timeout,
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
 
     #[tokio::test]
-    async fn peers_prev_term_idx_for_empty_log() {
+    async fn on_start_election() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
-        let peer2_id = ServerId::new([2; 16]);
-        let peer3_id = ServerId::new([3; 16]);
-        let peer_list = PeerInfo::mock_list(&[peer2_id, peer3_id]);
-        let state = RaftState::new(timeout, &peer_list);
+        let mut state = RaftState::new(timeout);
 
-        // retrieve the prev_term_idx for peer (expect initial since log is empty)
-        let peer2_info = peer_list.iter().find(|&x| x.id == peer2_id).unwrap();
-        let term_idx = state.peers_prev_term_idx(peer2_info);
-        assert!(term_idx.is_initial());
-    }
+        // set current term and idx
+        let apply_term = Term::from(4);
+        let apply_idx = Idx::from(2);
+        state.current_term = apply_term;
+        state.last_applied = apply_idx;
+        assert_eq!(state.current_term, apply_term);
+        assert_eq!(state.last_applied, apply_idx);
 
-    #[tokio::test]
-    async fn peers_prev_term_idx_for_non_empty_log() {
-        let prng = Pcg32::from_seed([0; 16]);
-        let timeout = Timeout::new(prng.clone());
+        // on_start_election should increment the currentTerm and return the previous TermIdx
+        let prev_term_idx = state.on_start_election();
 
-        let peer2_id = ServerId::new([2; 16]);
-        let peer3_id = ServerId::new([3; 16]);
-        let peer_list = PeerInfo::mock_list(&[peer2_id, peer3_id]);
-        let mut state = RaftState::new(timeout, &peer_list);
-
-        // insert a log entry
-        let next_idx = Idx::from(2);
-        let expected_term = Term::from(4);
-        let entry = Entry {
-            term: expected_term,
-            command: 8,
-        };
-
-        // update state so it contains some log entries
-        state.log.push(vec![entry]);
-        state.next_idx.insert(peer2_id, next_idx);
-
-        // retrieve the prev_term_idx for peer
-        let peer2_info = peer_list.iter().find(|&x| x.id == peer2_id).unwrap();
-        let term_idx = state.peers_prev_term_idx(peer2_info);
         assert_eq!(
-            term_idx,
-            TermIdx::builder()
-                .with_term(expected_term)
-                .with_idx(next_idx - 1)
+            prev_term_idx,
+            TermIdx::builder().with_term(apply_term).with_idx(apply_idx)
         );
+        assert_eq!(state.current_term, Term::from(5));
     }
 }
