@@ -76,8 +76,11 @@ impl Leader {
         }
     }
 
-    pub fn on_timeout<IO: ServerIO>(&mut self, _context: &mut Context<IO>) {
-        todo!()
+    pub fn on_timeout<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
+        //% Compliance:
+        //% Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat
+        //% during idle periods to prevent election timeouts (§5.2)
+        self.send_heartbeat(context);
     }
 
     pub fn on_recv<IO: ServerIO>(&mut self, _rpc: crate::rpc::Rpc, _context: &mut Context<IO>) {
