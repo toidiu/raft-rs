@@ -1,13 +1,10 @@
-use crate::io::ServerIO;
-use crate::io::IO_BUF_LEN;
-use crate::rpc::Rpc;
-use crate::server::Context;
 use crate::{
+    io::{ServerIO, IO_BUF_LEN},
     log::{Term, TermIdx},
-    server::ServerId,
+    rpc::Rpc,
+    server::{Context, ServerId},
 };
-use s2n_codec::EncoderBuffer;
-use s2n_codec::{DecoderValue, EncoderValue};
+use s2n_codec::{DecoderValue, EncoderBuffer, EncoderValue};
 
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,10 +132,10 @@ impl EncoderValue for RequestVoteResp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::macros::cast_unsafe;
     use crate::{
         io::testing::helper_inspect_sent_rpc,
         log::{Entry, Idx, Term, TermIdx},
+        macros::cast_unsafe,
         peer::Peer,
         server::ServerId,
         state::State,

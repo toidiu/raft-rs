@@ -1,9 +1,7 @@
-use crate::mode::ElectionResult;
-use crate::rpc::RequestVoteResp;
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
-    mode::{Context, Mode, ModeTransition},
-    rpc::{AppendEntries, Rpc},
+    mode::{Context, ElectionResult, Mode, ModeTransition},
+    rpc::{AppendEntries, RequestVoteResp, Rpc},
     server::ServerId,
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
@@ -184,9 +182,9 @@ impl Candidate {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mode::cast_unsafe;
     use crate::{
         log::{Term, TermIdx},
+        mode::cast_unsafe,
         peer::Peer,
         state::State,
         timeout::Timeout,

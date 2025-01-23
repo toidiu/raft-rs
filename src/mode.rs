@@ -30,13 +30,12 @@
 //! ```
 //! https://textik.com/#8dbf6540e0dd1676
 
-use crate::server::ServerId;
 use crate::{
     io::ServerIO,
     macros::cast_unsafe,
     mode::{candidate::Candidate, follower::Follower, leader::Leader},
     rpc::Rpc,
-    server::Context,
+    server::{Context, ServerId},
 };
 
 mod candidate;
@@ -138,7 +137,7 @@ impl Mode {
     }
 
     fn on_leader<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
-        *self = Mode::L(Leader);
+        *self = Mode::L(Leader::new(context));
         let leader = cast_unsafe!(self, Mode::L);
         leader.on_leader(context);
     }
