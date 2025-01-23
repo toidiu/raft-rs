@@ -24,7 +24,7 @@
 - [ ] If commitIndex > lastApplied: apply log[lastApplied] to state machine (§5.3)
 - [x] If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
 #### Followers (§5.2)
-- [ ] Respond to RPCs from candidates and leaders
+- [x] Respond to RPCs from candidates and leaders
 - [x] If election timeout elapses without receiving AppendEntries RPC from current leader or granting vote to candidate: convert to candidate
 #### Candidates (§5.2)
 - [x] On conversion to candidate, start election:
@@ -106,7 +106,7 @@
 	- [ ] a request with a stale term is rejected
 - [ ] RPCs
 	- [ ] issued in parallel for best performance
-	- [ ] retried if no response is received
+	- [ ] servers retry RPCs if they do not receive a response in a timely manner
 	- [ ] RequestVote
 		- [ ] initiated by a candidate during election
 	- [ ] AppendEntries
@@ -121,17 +121,17 @@
 	- [ ]  a server remains a follower as long as it receives a valid RPC from a leader or candidate
 - [ ] leaders send periodic heartbeat
 - [ ] heartbeat is a AppendEntries RPC with no log entries
-- [ ] a follower that receives no communication (election timeout) assumes there is no viable leader
-	- [ ] increments its current term
-	- [ ] transitions to `candidate`
-	- [ ] votes for itself
-	- [ ] issues a RequestVote in parallel to other servers
+- [x] a follower that receives no communication (election timeout) assumes there is no viable leader
+	- [x] increments its current term
+	- [x] transitions to `candidate`
+	- [x] votes for itself
+	- [x] issues a RequestVote in parallel to other servers
 - [ ] The `candidate` continues in the above state until one of:
-	- [ ] wins election
-		- [ ] receives majority of votes in cluster (ensures a single winner)
-		- [ ] a server can only vote once for a given term (first-come basis)
-		- [ ] a candidate becomes `leader` if it wins the election
-		- [ ] sends a heartbeat to establish itself as a leader and prevent a new election
+	- [x] wins election
+		- [x] receives majority of votes in cluster (ensures a single winner)
+		- [x] a server can only vote once for a given term (first-come basis)
+		- [x] a candidate becomes `leader` if it wins the election
+		- [x] sends a heartbeat to establish itself as a leader and prevent a new election
 	- [x] another server establishes itself as a leader
 		- [x] a candidate receives AppendEntries from another server claiming to be a leader
 		- [x] if that leader's current term is >= the candidate's
@@ -139,9 +139,9 @@
 			- [x] then the candidate reverts to a follower
 		- [x] if the leader's current term is < the candidate's
 			- [x] reject the RPC and continue in the candidate state
-	- [ ] a timeout occurs and there is no winner (can happen if too many servers become candidates at the same time)
-		- [ ] increment its term
-		- [ ] start a new election by initiating another round of RequestVote
+	- [x] A timeout occurs and there is no winner (can happen if too many servers become candidates at the same time)
+		- [x] increment its term
+		- [x] start a new election by initiating another round of RequestVote
 - [x] Election timeout is chosen randomly between 150-300ms
 
 ### 5.3 Log replication

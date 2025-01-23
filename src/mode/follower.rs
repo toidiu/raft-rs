@@ -1,3 +1,4 @@
+use crate::mode::ModeTransition;
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
     log::MatchOutcome,
@@ -12,6 +13,23 @@ pub struct Follower;
 
 impl Follower {
     pub fn on_follower<IO: ServerIO>(&mut self, _context: &mut Context<IO>) {}
+
+    pub fn on_timeout(&mut self) -> ModeTransition {
+        //% Compliance:
+        //% If election timeout elapses without receiving AppendEntries RPC from current
+        //% leader or granting vote to candidate: convert to candidate
+        //
+        //% Compliance:
+        //% a follower that receives no communication (election timeout) assumes there is no viable
+        //% leader
+        //%	- increments its current term
+        //%	- transitions to `candidate`
+        //%	- votes for itself
+        //%	- issues a RequestVote in parallel to other servers
+        //
+        // A new election is started once the server transitions to Candidate
+        ModeTransition::ToCandidate
+    }
 
     pub fn on_recv<IO: ServerIO>(&mut self, rpc: crate::rpc::Rpc, context: &mut Context<IO>) {
         //% Compliance:
