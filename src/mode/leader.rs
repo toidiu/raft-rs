@@ -25,8 +25,8 @@ pub struct Leader {
 
 impl Leader {
     pub fn new<IO: ServerIO>(context: &mut Context<IO>) -> Self {
-        let mut next_idx_map = BTreeMap::new();
-        let mut match_idx_map = BTreeMap::new();
+        let mut next_idx = BTreeMap::new();
+        let mut match_idx = BTreeMap::new();
 
         //% Compliance:
         //% `nextIndex[]` for each server, index of the next log entry to send to that server
@@ -36,18 +36,18 @@ impl Leader {
         //% Compliance:
         //% `matchIndex[]` for each server, index of highest log entry known to be replicated on server
         //% (initialized to 0, increases monotonically)
-        let match_idx = Idx::initial();
+        let initial_idx = Idx::initial();
 
         for (id, peer) in context.peer_map.iter() {
             let Peer { id: _, io: _ } = peer;
 
-            next_idx_map.insert(*id, next_log_idx);
-            match_idx_map.insert(*id, match_idx);
+            next_idx.insert(*id, next_log_idx);
+            match_idx.insert(*id, initial_idx);
         }
 
         Leader {
-            next_idx: next_idx_map,
-            match_idx: match_idx_map,
+            next_idx,
+            match_idx,
         }
     }
 
