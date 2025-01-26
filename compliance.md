@@ -36,7 +36,7 @@
 - [x] If AppendEntries RPC received from new leader: convert to follower
 - [x] If election timeout elapses: start new election
 #### Leaders
-- [ ] Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat during idle periods to prevent election timeouts (§5.2)
+- [x] Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat during idle periods to prevent election timeouts (§5.2)
 - [ ] If command received from client: append entry to local log, respond after entry applied to state machine (§5.3)
 - [ ] If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log entries starting at nextIndex
   - [ ] If successful: update nextIndex and matchIndex for follower (§5.3)

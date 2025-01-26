@@ -1,8 +1,7 @@
-use crate::mode::ModeTransition;
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
     log::MatchOutcome,
-    mode::Context,
+    mode::{Context, ModeTransition},
     rpc::{AppendEntries, Rpc},
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};

@@ -1,9 +1,7 @@
-use crate::mode::ElectionResult;
-use crate::rpc::RequestVoteResp;
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
-    mode::{Context, Mode, ModeTransition},
-    rpc::{AppendEntries, Rpc},
+    mode::{Context, ElectionResult, Mode, ModeTransition},
+    rpc::{AppendEntries, RequestVoteResp, Rpc},
     server::ServerId,
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
@@ -150,8 +148,11 @@ impl Candidate {
         //% Compliance:
         //% Send RequestVote RPCs to all other servers
         for (_id, peer) in context.peer_map.iter_mut() {
-            let prev_log_term_idx = context.state.peers_prev_term_idx(peer);
-            Rpc::new_request_vote(current_term, context.server_id, prev_log_term_idx)
+            //% Compliance:
+            //% lastLogIndex: index of candidate’s last log entry (§5.4)
+            //% lastLogTerm: term of candidate’s last log entry (§5.4)
+            let last_log_term_idx = context.state.log.last_term_idx();
+            Rpc::new_request_vote(current_term, context.server_id, last_log_term_idx)
                 .encode_mut(&mut buf);
             peer.send(buf.as_mut_slice().to_vec());
         }
@@ -181,9 +182,9 @@ impl Candidate {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mode::cast_unsafe;
     use crate::{
         log::{Term, TermIdx},
+        mode::cast_unsafe,
         peer::Peer,
         state::State,
         timeout::Timeout,
