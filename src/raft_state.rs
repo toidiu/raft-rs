@@ -1,5 +1,5 @@
 use crate::{
-    io::ServerIO,
+    io::ServerEgress,
     log::{Idx, Log, Term, TermIdx},
     peer::Peer,
     server::ServerId,
@@ -49,9 +49,9 @@ pub struct RaftState {
 }
 
 impl RaftState {
-    pub fn new<T: ServerIO>(
+    pub fn new<E: ServerEgress>(
         election_timer: Timeout,
-        peer_map: &BTreeMap<ServerId, Peer<T>>,
+        peer_map: &BTreeMap<ServerId, Peer<E>>,
     ) -> Self {
         let log = Log::new();
         let mut next_idx_map = BTreeMap::new();
@@ -68,7 +68,10 @@ impl RaftState {
         let match_idx = Idx::initial();
 
         for (id, peer) in peer_map.iter() {
-            let Peer { id: _, io: _ } = peer;
+            let Peer {
+                id: _,
+                io_egress: _,
+            } = peer;
 
             next_idx_map.insert(*id, next_log_idx);
             match_idx_map.insert(*id, match_idx);
@@ -86,7 +89,7 @@ impl RaftState {
     }
 
     // Calculate the prev TermIdx for the peer
-    pub fn peers_prev_term_idx<T: ServerIO>(&self, peer: &Peer<T>) -> TermIdx {
+    pub fn peers_prev_term_idx<E: ServerEgress>(&self, peer: &Peer<E>) -> TermIdx {
         // next Idx should always be > 0
         let peers_next_idx = self.next_idx.get(&peer.id).unwrap();
         assert!(!peers_next_idx.is_initial());

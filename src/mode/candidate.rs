@@ -1,5 +1,5 @@
 use crate::{
-    io::{ServerIO, IO_BUF_LEN},
+    io::{ServerEgress, IO_BUF_LEN},
     mode::{Context, ElectionResult, Mode, ModeTransition},
     rpc::{AppendEntries, RequestVoteResp, Rpc},
     server::ServerId,
@@ -13,13 +13,13 @@ pub struct Candidate {
 }
 
 impl Candidate {
-    pub fn on_candidate<IO: ServerIO>(&mut self, context: &mut Context<IO>) -> ModeTransition {
+    pub fn on_candidate<E: ServerEgress>(&mut self, context: &mut Context<E>) -> ModeTransition {
         //% Compliance:
         //% On conversion to candidate, start election:
         self.start_election(context)
     }
 
-    pub fn on_timeout<IO: ServerIO>(&mut self, context: &mut Context<IO>) -> ModeTransition {
+    pub fn on_timeout<E: ServerEgress>(&mut self, context: &mut Context<E>) -> ModeTransition {
         //% Compliance:
         //% A timeout occurs and there is no winner (can happen if too many servers become
         //% candidates at the same time)
@@ -31,11 +31,11 @@ impl Candidate {
         self.start_election(context)
     }
 
-    pub fn on_recv<IO: ServerIO>(
+    pub fn on_recv<E: ServerEgress>(
         &mut self,
         peer_id: ServerId,
         rpc: crate::rpc::Rpc,
-        context: &mut Context<IO>,
+        context: &mut Context<E>,
     ) -> (ModeTransition, Option<Rpc>) {
         match rpc {
             Rpc::RequestVote(request_vote) => {
@@ -56,10 +56,10 @@ impl Candidate {
         }
     }
 
-    fn on_recv_append_entries<IO: ServerIO>(
+    fn on_recv_append_entries<E: ServerEgress>(
         &mut self,
         append_entries: AppendEntries,
-        context: &mut Context<IO>,
+        context: &mut Context<E>,
     ) -> (ModeTransition, Option<Rpc>) {
         let AppendEntries {
             term,
@@ -68,7 +68,7 @@ impl Candidate {
             leader_commit_idx: _,
             entries: _,
         } = append_entries;
-        let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
+        let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io_egress;
         //% Compliance:
         //% another server establishes itself as a leader
         //% - a candidate receives AppendEntries from another server claiming to be a leader
@@ -97,11 +97,11 @@ impl Candidate {
         }
     }
 
-    fn on_recv_request_vote_resp<IO: ServerIO>(
+    fn on_recv_request_vote_resp<E: ServerEgress>(
         &mut self,
         peer_id: ServerId,
         request_vote_resp: RequestVoteResp,
-        context: &mut Context<IO>,
+        context: &mut Context<E>,
     ) -> ModeTransition {
         let RequestVoteResp { term, vote_granted } = request_vote_resp;
         let term_matches = context.raft_state.current_term == term;
@@ -124,7 +124,7 @@ impl Candidate {
         ModeTransition::None
     }
 
-    fn start_election<IO: ServerIO>(&mut self, context: &mut Context<IO>) -> ModeTransition {
+    fn start_election<E: ServerEgress>(&mut self, context: &mut Context<E>) -> ModeTransition {
         //% Compliance:
         //% Increment currentTerm
         context.raft_state.current_term.increment();
@@ -159,10 +159,10 @@ impl Candidate {
         ModeTransition::None
     }
 
-    fn on_vote_received<IO: ServerIO>(
+    fn on_vote_received<E: ServerEgress>(
         &mut self,
         voter_id: ServerId,
-        context: &Context<IO>,
+        context: &Context<E>,
     ) -> ElectionResult {
         debug_assert!(
             context.peer_map.contains_key(&voter_id) || voter_id == context.server_id,
@@ -221,7 +221,7 @@ mod tests {
         // Expect RequestVote RPC sent to all peers
         let expected_rpc = Rpc::new_request_vote(state.current_term, server_id, TermIdx::initial());
         for (_id, peer) in peer_map.iter_mut() {
-            let Peer { id: _, io } = peer;
+            let Peer { id: _, io_egress } = peer;
             let rpc_bytes = io.send_queue.pop().unwrap();
             let buffer = DecoderBuffer::new(&rpc_bytes);
             let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
@@ -249,7 +249,7 @@ mod tests {
         let transition = candidate.start_election(&mut context);
         assert!(matches!(transition, ModeTransition::ToLeader));
 
-        // No RPC sent. Unable to inspect IO since there are no peers
+        // No RPC sent. Unable to inspect E since there are no peers
         assert!(peer_map.first_entry().is_none());
     }
 

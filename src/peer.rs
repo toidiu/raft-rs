@@ -1,44 +1,40 @@
-use crate::{io::ServerIO, server::ServerId};
+use crate::{io::ServerEgress, server::ServerId};
 
 #[derive(Debug)]
-pub struct Peer<IO: ServerIO> {
+pub struct Peer<E: ServerEgress> {
     pub id: ServerId,
-    pub io: IO,
+    pub io_egress: E,
 }
 
-impl<IO: ServerIO> Peer<IO> {
-    pub fn new(id: ServerId, io: IO) -> Self {
-        Peer { id, io }
+impl<E: ServerEgress> Peer<E> {
+    pub fn new(id: ServerId, io_egress: E) -> Self {
+        Peer { id, io_egress }
     }
 
     pub fn send(&mut self, data: Vec<u8>) {
-        self.io.send(data);
-    }
-
-    pub fn recv(&mut self) -> Option<Vec<u8>> {
-        self.io.recv()
+        self.io_egress.send(data);
     }
 }
 
-impl<IO: ServerIO> PartialOrd for Peer<IO> {
+impl<E: ServerEgress> PartialOrd for Peer<E> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.id.cmp(&other.id))
     }
 }
 
-impl<IO: ServerIO> Ord for Peer<IO> {
+impl<E: ServerEgress> Ord for Peer<E> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.id.cmp(&other.id)
     }
 }
 
-impl<IO: ServerIO> PartialEq for Peer<IO> {
+impl<E: ServerEgress> PartialEq for Peer<E> {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl<IO: ServerIO> Eq for Peer<IO> {}
+impl<E: ServerEgress> Eq for Peer<E> {}
 
 #[cfg(test)]
 mod testing {

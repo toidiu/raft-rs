@@ -1,5 +1,5 @@
 use crate::{
-    io::{ServerIO, IO_BUF_LEN},
+    io::{ServerEgress, IO_BUF_LEN},
     log::MatchOutcome,
     mode::{Context, ModeTransition},
     rpc::{AppendEntries, Rpc},
@@ -11,7 +11,7 @@ use std::cmp::min;
 pub struct Follower;
 
 impl Follower {
-    pub fn on_follower<IO: ServerIO>(&mut self, _context: &mut Context<IO>) {}
+    pub fn on_follower<E: ServerEgress>(&mut self, _context: &mut Context<E>) {}
 
     pub fn on_timeout(&mut self) -> ModeTransition {
         //% Compliance:
@@ -30,7 +30,7 @@ impl Follower {
         ModeTransition::ToCandidate
     }
 
-    pub fn on_recv<IO: ServerIO>(&mut self, rpc: crate::rpc::Rpc, context: &mut Context<IO>) {
+    pub fn on_recv<E: ServerEgress>(&mut self, rpc: crate::rpc::Rpc, context: &mut Context<E>) {
         //% Compliance:
         //% Respond to RPCs from candidates and leaders
         match rpc {
@@ -44,10 +44,10 @@ impl Follower {
         }
     }
 
-    fn on_recv_append_entries<IO: ServerIO>(
+    fn on_recv_append_entries<E: ServerEgress>(
         &mut self,
         append_entries: AppendEntries,
-        context: &mut Context<IO>,
+        context: &mut Context<E>,
     ) {
         let current_term = context.raft_state.current_term;
 
@@ -103,7 +103,7 @@ impl Follower {
             .peer_map
             .get_mut(&append_entries.leader_id)
             .unwrap()
-            .io;
+            .io_egress;
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_append_entry_resp(current_term, response).encode_mut(&mut buf);
@@ -160,7 +160,7 @@ mod tests {
             );
             follower.on_recv(recv_rpc, &mut context);
 
-            let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
+            let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io_egress;
             let rpc = helper_inspect_sent_rpc(leader_io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
             assert_eq!(expected_rpc, rpc);
@@ -181,7 +181,7 @@ mod tests {
             // on_recv AppendEntries
             follower.on_recv(recv_rpc, &mut context);
 
-            let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
+            let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io_egress;
             let rpc = helper_inspect_sent_rpc(leader_io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
             assert_eq!(expected_rpc, rpc);
@@ -204,7 +204,7 @@ mod tests {
             // on_recv AppendEntries
             follower.on_recv(recv_rpc, &mut context);
 
-            let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
+            let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io_egress;
             let rpc = helper_inspect_sent_rpc(leader_io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
             assert_eq!(expected_rpc, rpc);
@@ -229,7 +229,7 @@ mod tests {
             );
             follower.on_recv(recv_rpc, &mut context);
 
-            let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
+            let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io_egress;
             let rpc = helper_inspect_sent_rpc(leader_io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
             assert_eq!(expected_rpc, rpc);
