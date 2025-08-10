@@ -177,8 +177,8 @@ mod tests {
         network_io.recv(vec![2]);
         assert_eq!(ingress_cnt, 2);
 
-        assert_eq!(server_ingress.recv(), Some(vec![1, 2]));
-        assert_eq!(server_ingress.recv(), None);
+        assert_eq!(server_ingress.recv_raw(), Some(vec![1, 2]));
+        assert_eq!(server_ingress.recv_raw(), None);
         assert_eq!(ingress_cnt, 2);
     }
 
@@ -189,9 +189,9 @@ mod tests {
 
         // Send
         assert_eq!(egress_cnt, 0);
-        server_egress.send(vec![3]);
+        server_egress.send_raw(&[3]);
         assert_eq!(egress_cnt, 1);
-        server_egress.send(vec![4]);
+        server_egress.send_raw(&[4]);
         assert_eq!(egress_cnt, 2);
 
         assert_eq!(network_io.send(), Some(vec![3, 4]));
@@ -209,12 +209,12 @@ mod tests {
         assert_eq!(ingress_cnt, 1);
         assert_eq!(egress_cnt, 0);
 
-        server_egress.send(vec![6]);
+        server_egress.send_raw(&[6]);
         assert_eq!(ingress_cnt, 1);
         assert_eq!(egress_cnt, 1);
 
-        assert_eq!(server_ingress.recv(), Some(vec![5]));
-        assert_eq!(server_ingress.recv(), None);
+        assert_eq!(server_ingress.recv_raw(), Some(vec![5]));
+        assert_eq!(server_ingress.recv_raw(), None);
         assert_eq!(network_io.send(), Some(vec![6]));
         assert_eq!(network_io.send(), None);
 

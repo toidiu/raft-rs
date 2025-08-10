@@ -1,4 +1,4 @@
-use crate::{io::ServerEgress, server::ServerId};
+use crate::{io::ServerEgress, rpc::Rpc, server::ServerId};
 
 #[derive(Debug)]
 pub struct Peer<E: ServerEgress> {
@@ -11,8 +11,8 @@ impl<E: ServerEgress> Peer<E> {
         Peer { id, io_egress }
     }
 
-    pub fn send(&mut self, data: Vec<u8>) {
-        self.io_egress.send(data);
+    pub fn send_rpc(&mut self, rpc: Rpc) {
+        self.io_egress.send_rpc(rpc);
     }
 }
 

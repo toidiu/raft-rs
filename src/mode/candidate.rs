@@ -1,10 +1,9 @@
 use crate::{
-    io::{ServerEgress, IO_BUF_LEN},
+    io::ServerEgress,
     mode::{Context, ElectionResult, Mode, ModeTransition},
     rpc::{AppendEntries, RequestVoteResp, Rpc},
     server::ServerId,
 };
-use s2n_codec::{EncoderBuffer, EncoderValue};
 use std::collections::HashSet;
 
 #[derive(Debug, Default)]
@@ -88,11 +87,9 @@ impl Candidate {
             //% Compliance:
             //% if the leader's current term is < the candidate's
             //% - reject the RPC and continue in the candidate state
-            let mut slice = vec![0; IO_BUF_LEN];
-            let mut buf = EncoderBuffer::new(&mut slice);
             let term = context.raft_state.current_term;
-            Rpc::new_append_entry_resp(term, false).encode_mut(&mut buf);
-            leader_io.send(buf.as_mut_slice().to_vec());
+            let rpc = Rpc::new_append_entry_resp(term, false);
+            leader_io.send_rpc(rpc);
             (ModeTransition::None, None)
         }
     }
@@ -144,16 +141,13 @@ impl Candidate {
         //% Reset election timer
         context.raft_state.election_timer.reset();
 
-        let mut slice = vec![0; IO_BUF_LEN];
-        let mut buf = EncoderBuffer::new(&mut slice);
         let current_term = context.raft_state.current_term;
         //% Compliance:
         //% Send RequestVote RPCs to all other servers
         for (_id, peer) in context.peer_map.iter_mut() {
             let prev_log_term_idx = context.raft_state.peers_prev_term_idx(peer);
-            Rpc::new_request_vote(current_term, context.server_id, prev_log_term_idx)
-                .encode_mut(&mut buf);
-            peer.send(buf.as_mut_slice().to_vec());
+            let rpc = Rpc::new_request_vote(current_term, context.server_id, prev_log_term_idx);
+            peer.send_rpc(rpc);
         }
 
         ModeTransition::None

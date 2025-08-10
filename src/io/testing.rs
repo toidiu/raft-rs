@@ -1,8 +1,8 @@
 use crate::{
-    io::{ServerEgress, ServerIngress},
+    io::{ServerEgress, ServerIngress, IO_BUF_LEN},
     rpc::Rpc,
 };
-use s2n_codec::DecoderBuffer;
+use s2n_codec::{DecoderBuffer, EncoderBuffer, EncoderValue};
 use std::task::Poll;
 
 #[derive(Debug)]
@@ -21,13 +21,24 @@ impl MockIo {
 }
 
 impl ServerEgress for MockIo {
-    fn send(&mut self, data: Vec<u8>) {
-        self.send_queue.push(data);
+    #[cfg(test)]
+    fn send_raw(&mut self, data: &[u8]) {
+        self.send_queue.push(data.to_vec());
+    }
+
+    fn send_rpc(&mut self, mut rpc: Rpc) {
+        let mut slice = vec![0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        rpc.encode_mut(&mut buf);
+        let data = buf.as_mut_slice();
+
+        self.send_raw(data)
     }
 }
 
 impl ServerIngress for MockIo {
-    fn recv(&mut self) -> Option<Vec<u8>> {
+    #[cfg(test)]
+    fn recv_raw(&mut self) -> Option<Vec<u8>> {
         self.recv_queue.pop()
     }
 

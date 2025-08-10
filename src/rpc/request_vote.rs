@@ -1,10 +1,10 @@
 use crate::{
-    io::{ServerEgress, IO_BUF_LEN},
+    io::ServerEgress,
     log::{Term, TermIdx},
     rpc::Rpc,
     server::{Context, ServerId},
 };
-use s2n_codec::{DecoderValue, EncoderBuffer, EncoderValue};
+use s2n_codec::{DecoderValue, EncoderValue};
 
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,10 +69,8 @@ impl RequestVote {
             .get_mut(&self.candidate_id)
             .unwrap()
             .io_egress;
-        let mut slice = vec![0; IO_BUF_LEN];
-        let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_request_vote_resp(current_term, grant_vote).encode_mut(&mut buf);
-        candidate_io.send(buf.as_mut_slice().to_vec());
+        let rpc = Rpc::new_request_vote_resp(current_term, grant_vote);
+        candidate_io.send_rpc(rpc);
     }
 }
 
