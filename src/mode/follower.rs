@@ -34,9 +34,11 @@ impl Follower {
         //% Compliance:
         //% Respond to RPCs from candidates and leaders
         match rpc {
-            Rpc::RV(request_vote) => request_vote.on_recv(context),
-            Rpc::AE(append_entries) => self.on_recv_append_entries(append_entries, context),
-            Rpc::RVR(_) | Rpc::AER(_) => {
+            Rpc::RequestVote(request_vote) => request_vote.on_recv(context),
+            Rpc::AppendEntry(append_entries) => {
+                self.on_recv_append_entries(append_entries, context)
+            }
+            Rpc::RequestVoteResp(_) | Rpc::AppendEntryResp(_) => {
                 todo!("it might be possible to get a response from a previous term")
             }
         }
