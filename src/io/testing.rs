@@ -1,4 +1,4 @@
-use crate::io::{ServerRx, ServerTx, IO_BUF_LEN};
+use crate::io::{ServerTx, IO_BUF_LEN};
 use core::task::Waker;
 use s2n_codec::{EncoderBuffer, EncoderValue};
 use std::collections::VecDeque;
@@ -29,17 +29,5 @@ impl ServerTx for Io {
         let data = buf.as_mut_slice().to_vec();
         println!("  -------> {:?}", data);
         self.tx.push_back(data)
-    }
-}
-
-impl ServerRx for Io {
-    fn recv(&mut self) -> Option<Vec<u8>> {
-        let data = self.rx.pop_front();
-        println!("  <------- {:?}", data);
-        data
-    }
-
-    fn poll_rx_ready(&mut self, _cx: &mut std::task::Context) -> std::task::Poll<()> {
-        unimplemented!()
     }
 }

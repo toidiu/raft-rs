@@ -11,7 +11,7 @@ pub(crate) mod testing;
 #[cfg(test)]
 pub(crate) use network::NetRx;
 pub(crate) use network::{NetTx, NetworkIo};
-pub(crate) use server::{ServerIo, ServerIoEgress, ServerIoIngress, ServerRx, ServerTx};
+pub(crate) use server::{ServerIoEgress, ServerIoIngress, ServerRx, ServerTx};
 
 // The size of the buffer used to send/recv from the IO queues
 pub const IO_BUF_LEN: usize = 1024;
@@ -97,30 +97,18 @@ macro_rules! impl_io_ready(($io:ident, $fut:ident, $poll_fn:ident) => {
     }
 });
 
-impl_io_ready!(ServerIo, RxReady, poll_rx_ready);
 impl_io_ready!(ServerIoIngress, RxReady, poll_rx_ready);
 impl_io_ready!(NetworkIo, TxReady, poll_tx_ready);
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{log::TermIdx, rpc::Rpc};
-    use s2n_codec::{EncoderBuffer, EncoderValue};
 
     // network::recv and server::send are separate queues
     #[test]
     fn producer_consumer() {
-        let (mut server_io, mut network_io) = BufferIo::split_server_and_network();
-
-        let mut buf = [0; IO_BUF_LEN];
-        let mut buf = EncoderBuffer::new(&mut buf);
-        let (rpc, rpc_data) = {
-            let rpc = Rpc::new_append_entry(0, TermIdx::new(0, 1));
-
-            rpc.clone().encode_mut(&mut buf);
-            let rpc_data = buf.as_mut_slice();
-            (rpc, rpc_data)
-        };
+        let (mut server_io_ingress, mut server_io_egress, mut network_io) =
+            BufferIo::split_server_and_network();
 
         // send and receive multiple times
         for _ in 0..10 {
@@ -128,13 +116,13 @@ mod tests {
             network_io.recv_from_socket(vec![1, 2]);
             network_io.recv_from_socket(vec![3, 4]);
             // push to server queue
-            server_io.send_rpc(rpc);
+            server_io_egress.send_raw(&[5, 6]);
 
             // recv from network queue
-            assert_eq!(server_io.recv(), Some(vec![1, 2, 3, 4]));
-            assert_eq!(server_io.recv(), None);
+            assert_eq!(server_io_ingress.recv_raw(), Some(vec![1, 2, 3, 4]));
+            assert_eq!(server_io_ingress.recv_raw(), None);
             // recv from server queue
-            assert_eq!(network_io.send_to_socket(), Some(rpc_data.to_vec()));
+            assert_eq!(network_io.send_to_socket(), Some(vec![5, 6]));
             assert_eq!(network_io.send_to_socket(), None);
         }
     }

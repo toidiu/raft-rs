@@ -230,10 +230,11 @@ mod tests {
 
     #[test]
     fn encode_decode_request_vote() {
-        let (mut server_io, mut network_io) = BufferIo::split_server_and_network();
+        let (mut _server_io_ingress, mut server_io_egress, mut network_io) =
+            BufferIo::split_server_and_network();
 
-        let sent_rpc = Rpc::new_request_vote(0, ServerId::new(), TermIdx::new(2, 3));
-        server_io.send_rpc(sent_rpc);
+        let rpc = Rpc::new_request_vote(0, ServerId::new(), TermIdx::new(2, 3));
+        server_io_egress.send_rpc(rpc);
 
         let bytes = network_io.send_to_socket().unwrap();
         let buf = DecoderBuffer::new(&bytes);
@@ -243,30 +244,33 @@ mod tests {
 
     #[test]
     fn encode_decode_request_vote_res() {
-        let (mut server_io, mut network_io) = BufferIo::split_server_and_network();
+        let (mut _server_io_ingress, mut server_io_egress, mut network_io) =
+            BufferIo::split_server_and_network();
 
         let rpc = Rpc::new_request_vote_resp(0, ServerId::new(), true);
-        server_io.send_rpc(rpc);
+        server_io_egress.send_rpc(rpc);
 
         network_io.send_to_socket().unwrap();
     }
 
     #[test]
     fn encode_decode_append_entry() {
-        let (mut server_io, mut network_io) = BufferIo::split_server_and_network();
+        let (mut _server_io_ingress, mut server_io_egress, mut network_io) =
+            BufferIo::split_server_and_network();
 
         let rpc = Rpc::new_append_entry(0, TermIdx::new(8, 9));
-        server_io.send_rpc(rpc);
+        server_io_egress.send_rpc(rpc);
 
         network_io.send_to_socket().unwrap();
     }
 
     #[test]
     fn encode_decode_append_entry_res() {
-        let (mut server_io, mut network_io) = BufferIo::split_server_and_network();
+        let (mut _server_io_ingress, mut server_io_egress, mut network_io) =
+            BufferIo::split_server_and_network();
 
         let rpc = Rpc::new_append_entry_resp(0, true);
-        server_io.send_rpc(rpc);
+        server_io_egress.send_rpc(rpc);
 
         network_io.send_to_socket().unwrap();
     }

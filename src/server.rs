@@ -1,12 +1,10 @@
 use crate::{
     clock::Clock,
     io::{BufferIo, NetworkIo, ServerIoEgress, ServerIoIngress, ServerRx},
-    rpc::Rpc,
     state::{ServerId, State},
 };
 use core::{future::Future, task::Poll};
 use pin_project_lite::pin_project;
-use s2n_codec::{DecoderBuffer, DecoderValue};
 
 #[derive(Debug)]
 pub struct Server {
@@ -41,19 +39,8 @@ impl Server {
     }
 
     pub fn recv(&mut self) {
-        // FIXME
-        // if let Some(mut recv_rpc) = self.io_ingress.recv_rpc() {
-        //     while let Some(rpc) = recv_rpc.next() {
-        //         self.state.recv(&mut self.io_egress, rpc);
-        //     }
-        // }
-
-        if let Some(bytes) = self.io_ingress.recv() {
-            let mut buf = DecoderBuffer::new(&bytes);
-            while !buf.is_empty() {
-                let (rpc, buffer) = Rpc::decode(buf).unwrap();
-                println!("  server <--- {:?}", rpc);
-                buf = buffer;
+        if let Some(mut recv_rpc) = self.io_ingress.recv_rpc() {
+            while let Some(rpc) = recv_rpc.next() {
                 self.state.recv(&mut self.io_egress, rpc);
             }
         }
@@ -90,7 +77,7 @@ impl Server {
     #[cfg(test)]
     fn send_test_data(&mut self, data: &[u8]) {
         use crate::io::ServerTx;
-        self.io_egress.send_raw_bytes(data);
+        self.io_egress.send_raw(data);
     }
 }
 
@@ -141,13 +128,14 @@ mod tests {
         clock::Clock,
         io::{NetRx, NetTx},
         log::{self, TermIdx},
+        rpc::Rpc,
         testing::cast_unsafe,
     };
     use core::{
         sync::atomic::{AtomicBool, Ordering},
         time::Duration,
     };
-    use s2n_codec::{EncoderBuffer, EncoderValue};
+    use s2n_codec::{DecoderBuffer, DecoderValue, EncoderBuffer, EncoderValue};
     use std::sync::Arc;
     use tokio::time::{advance, sleep};
 
