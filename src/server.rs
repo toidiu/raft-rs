@@ -78,7 +78,7 @@ impl Server {
     }
 
     #[cfg(test)]
-    fn send_test_data(&mut self, data: Vec<u8>) {
+    fn send_test_data(&mut self, data: &[u8]) {
         use crate::io::ServerTx;
         // println!("---send test data: {:?}", data);
         self.io.send(data);
@@ -218,7 +218,7 @@ mod tests {
         }
 
         // server: send data
-        server.send_test_data(vec![END_MARKER]);
+        server.send_test_data(&[END_MARKER]);
         while wait_complete.load(Ordering::SeqCst) {
             advance(Duration::from_millis(300)).await;
             // println!("---waiting for finish tag");

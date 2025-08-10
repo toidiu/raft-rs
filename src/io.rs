@@ -41,7 +41,8 @@ impl BufferIo {
             tx_waker: tx_waker.clone(),
         };
         let server_io = ServerIo {
-            buf: [0; IO_BUF_LEN],
+            rx_buf: [0; IO_BUF_LEN],
+            tx_buf: [0; IO_BUF_LEN],
             rx: rx_queue,
             tx: tx_queue,
             rx_waker: rx_waker.clone(),
@@ -86,7 +87,9 @@ impl_io_ready!(NetworkIo, TxReady, poll_tx_ready);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{log::TermIdx, rpc::Rpc};
 
+    // network::recv and server::send are separate queues
     #[test]
     fn producer_consumer() {
         let (mut server_io, mut network_io) = BufferIo::split();
@@ -95,6 +98,8 @@ mod tests {
         network_io.recv_from_socket(vec![2]);
         server_io.send(vec![3]);
         server_io.send(vec![4]);
+        server_io.send_rpc(rpc);
+        server_io.send_rpc(rpc);
 
         assert_eq!(server_io.recv(), Some(vec![1, 2]));
         assert_eq!(server_io.recv(), None);

@@ -236,7 +236,7 @@ mod tests {
         let mut buf = EncoderBuffer::new(&mut slice);
         let mut sent_rpc = Rpc::new_request_vote(0, ServerId::new(), TermIdx::new(2, 3));
         sent_rpc.encode_mut(&mut buf);
-        server_io.send(buf.as_mut_slice().to_vec());
+        server_io.send(buf.as_mut_slice());
 
         let bytes = network_io.send_to_socket().unwrap();
         let buf = DecoderBuffer::new(&bytes);
@@ -248,10 +248,8 @@ mod tests {
     fn encode_decode_request_vote_res() {
         let (mut server_io, mut network_io) = BufferIo::split();
 
-        let mut slice = vec![0; IO_BUF_LEN];
-        let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_request_vote_resp(0, ServerId::new(), true).encode_mut(&mut buf);
-        server_io.send(buf.as_mut_slice().to_vec());
+        let rpc = Rpc::new_request_vote_resp(0, ServerId::new(), true);
+        server_io.send_rpc(rpc);
 
         network_io.send_to_socket().unwrap();
     }
@@ -260,10 +258,8 @@ mod tests {
     fn encode_decode_append_entry() {
         let (mut server_io, mut network_io) = BufferIo::split();
 
-        let mut slice = vec![0; IO_BUF_LEN];
-        let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_append_entry(0, TermIdx::new(8, 9)).encode_mut(&mut buf);
-        server_io.send(buf.as_mut_slice().to_vec());
+        let rpc = Rpc::new_append_entry(0, TermIdx::new(8, 9));
+        server_io.send_rpc(rpc);
 
         network_io.send_to_socket().unwrap();
     }
@@ -272,10 +268,8 @@ mod tests {
     fn encode_decode_append_entry_res() {
         let (mut server_io, mut network_io) = BufferIo::split();
 
-        let mut slice = vec![0; IO_BUF_LEN];
-        let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_append_entry_resp(0, true).encode_mut(&mut buf);
-        server_io.send(buf.as_mut_slice().to_vec());
+        let rpc = Rpc::new_append_entry_resp(0, true);
+        server_io.send_rpc(rpc);
 
         network_io.send_to_socket().unwrap();
     }

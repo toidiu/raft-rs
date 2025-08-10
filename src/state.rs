@@ -1,16 +1,14 @@
 use crate::{
     clock::Clock,
-    io::{ServerTx, IO_BUF_LEN},
+    io::ServerTx,
     log::Term,
     rpc::{AppendEntries, RequestVote, RespAppendEntries, RespRequestVote, Rpc},
     state::inner::{ElectionResult, Inner},
 };
-use s2n_codec::{DecoderValue, EncoderBuffer, EncoderValue};
+use s2n_codec::{DecoderValue, EncoderValue};
 use uuid::Uuid;
 
 mod inner;
-
-static TX_BUFFER: [u8; IO_BUF_LEN] = [0; IO_BUF_LEN];
 
 /// Raft state diagram.
 ///
@@ -223,12 +221,10 @@ impl State {
 
         // # Compliance:
         // Send RequestVote RPCs to all other servers
-        let mut slice = TX_BUFFER;
-        let mut buf = EncoderBuffer::new(&mut slice);
         let term = self.inner.curr_term.0;
         let last_committed_term_idx = self.inner.last_committed_term_idx();
-        Rpc::new_request_vote(term, self.inner.id, last_committed_term_idx).encode_mut(&mut buf);
-        tx.send(buf.as_mut_slice().to_vec());
+        let rpc = Rpc::new_request_vote(term, self.inner.id, last_committed_term_idx);
+        tx.send_rpc(rpc);
     }
 
     fn on_follower(&mut self) {
@@ -277,10 +273,8 @@ impl State {
         let voted_for_resp = term_up_to_date && logs_up_to_date && give_vote;
 
         let term = self.inner.curr_term.0;
-        let mut slice = TX_BUFFER;
-        let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_request_vote_resp(term, ServerId::new(), voted_for_resp).encode_mut(&mut buf);
-        tx.send(buf.as_mut_slice().to_vec());
+        let rpc = Rpc::new_request_vote_resp(term, ServerId::new(), voted_for_resp);
+        tx.send_rpc(rpc);
     }
 
     fn on_append_entry<T: ServerTx>(&mut self, rpc: AppendEntries, tx: &mut T) {
@@ -310,10 +304,8 @@ impl State {
         let success = term_up_to_date && log_contains_entry;
 
         let term = self.inner.curr_term.0;
-        let mut slice = TX_BUFFER;
-        let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_append_entry_resp(term, success).encode_mut(&mut buf);
-        tx.send(buf.as_mut_slice().to_vec());
+        let rpc = Rpc::new_append_entry_resp(term, success);
+        tx.send_rpc(rpc);
     }
 }
 

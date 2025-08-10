@@ -1,5 +1,6 @@
-use crate::io::{ServerRx, ServerTx};
+use crate::io::{ServerRx, ServerTx, IO_BUF_LEN};
 use core::task::Waker;
+use s2n_codec::{EncoderBuffer, EncoderValue};
 use std::collections::VecDeque;
 
 pub struct Io {
@@ -19,7 +20,13 @@ impl Io {
 }
 
 impl ServerTx for Io {
-    fn send(&mut self, data: Vec<u8>) {
+    fn send_rpc(&mut self, mut rpc: crate::rpc::Rpc) {
+        let mut buf = [0; IO_BUF_LEN];
+
+        let mut buf = EncoderBuffer::new(&mut buf);
+        rpc.encode_mut(&mut buf);
+
+        let data = buf.as_mut_slice().to_vec();
         println!("  -------> {:?}", data);
         self.tx.push_back(data)
     }
