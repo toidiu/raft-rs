@@ -132,6 +132,7 @@ mod tests {
         clock::Clock,
         io::{NetRx, NetTx},
         log::{self, TermIdx},
+        testing::cast_unsafe,
     };
     use core::{
         sync::atomic::{AtomicBool, Ordering},
@@ -225,5 +226,45 @@ mod tests {
         }
 
         assert_eq!(server.state.inner.curr_term, log::Term(9));
+    }
+
+    #[tokio::test]
+    async fn send_recv() {
+        let clock = Clock::default();
+        let server_list = vec![ServerId::new(), ServerId::new()];
+        let (mut server, mut rx_network_io) = Server::new(clock, server_list.clone());
+        let mut tx_network_io = rx_network_io.clone();
+
+        assert_eq!(server.state.inner.curr_term, log::Term(0));
+
+        let term = 1;
+        // network: simulate receiving a message from the network
+        let mut slice = vec![0; 100];
+        let mut buf = EncoderBuffer::new(&mut slice);
+        let last_log_term_idx = TermIdx::new(8, 1);
+        Rpc::new_request_vote(term, server_list[0], last_log_term_idx).encode(&mut buf);
+        let (written, buf) = buf.split_mut();
+        rx_network_io.recv_from_socket(written.to_vec());
+
+        let mut buf = EncoderBuffer::new(buf);
+        Rpc::new_append_entry(term, TermIdx::new(3, 1)).encode(&mut buf);
+        rx_network_io.recv_from_socket(buf.as_mut_slice().to_vec());
+
+        // server: recv data and queue and data to send
+        server.recv();
+
+        // network: check data to send out to the network
+        let bytes = tx_network_io.send_to_socket().unwrap();
+        let buffer = DecoderBuffer::new(&bytes);
+        let (rpc, buffer) = Rpc::decode(buffer).unwrap();
+        let _rpc = cast_unsafe!(rpc, Rpc::RespRequestVote);
+
+        let (rpc, buffer) = Rpc::decode(buffer).unwrap();
+        let _rpc = cast_unsafe!(rpc, Rpc::RespAppendEntries);
+
+        // only 2 responses sent
+        assert!(Rpc::decode(buffer).is_err());
+
+        assert_eq!(server.state.inner.curr_term, log::Term(1));
     }
 }

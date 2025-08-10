@@ -10,6 +10,8 @@ use uuid::Uuid;
 
 mod inner;
 
+static TX_BUFFER: [u8; IO_BUF_LEN] = [0; IO_BUF_LEN];
+
 /// Raft state diagram.
 ///
 /// 1: startup
@@ -221,7 +223,7 @@ impl State {
 
         // # Compliance:
         // Send RequestVote RPCs to all other servers
-        let mut slice = vec![0; IO_BUF_LEN];
+        let mut slice = TX_BUFFER;
         let mut buf = EncoderBuffer::new(&mut slice);
         let term = self.inner.curr_term.0;
         let last_committed_term_idx = self.inner.last_committed_term_idx();
@@ -275,7 +277,7 @@ impl State {
         let voted_for_resp = term_up_to_date && logs_up_to_date && give_vote;
 
         let term = self.inner.curr_term.0;
-        let mut slice = vec![0; IO_BUF_LEN];
+        let mut slice = TX_BUFFER;
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_request_vote_resp(term, ServerId::new(), voted_for_resp).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
@@ -308,7 +310,7 @@ impl State {
         let success = term_up_to_date && log_contains_entry;
 
         let term = self.inner.curr_term.0;
-        let mut slice = vec![0; IO_BUF_LEN];
+        let mut slice = TX_BUFFER;
         let mut buf = EncoderBuffer::new(&mut slice);
         Rpc::new_append_entry_resp(term, success).encode_mut(&mut buf);
         tx.send(buf.as_mut_slice().to_vec());
