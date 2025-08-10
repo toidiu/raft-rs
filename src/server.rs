@@ -38,15 +38,21 @@ impl Server {
     }
 
     pub fn recv(&mut self) {
-        if let Some(bytes) = self.io.recv() {
-            let mut buf = DecoderBuffer::new(&bytes);
-            while !buf.is_empty() {
-                let (rpc, buffer) = Rpc::decode(buf).unwrap();
-                println!("  server <--- {:?}", rpc);
-                buf = buffer;
-                self.state.recv(&mut self.io, rpc);
+        if let Some(mut recv_rpc) = self.io.recv_rpc() {
+            while let Some(rpc) = recv_rpc.next() {
+                // self.state.recv(&mut self.io, rpc);
             }
         }
+
+        // if let Some(bytes) = self.io.recv() {
+        //     let mut buf = DecoderBuffer::new(&bytes);
+        //     while !buf.is_empty() {
+        //         let (rpc, buffer) = Rpc::decode(buf).unwrap();
+        //         println!("  server <--- {:?}", rpc);
+        //         buf = buffer;
+        //         self.state.recv(&mut self.io, rpc);
+        //     }
+        // }
     }
 
     async fn poll(&mut self) {

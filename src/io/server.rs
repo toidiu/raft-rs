@@ -3,7 +3,7 @@ use crate::{
     rpc::Rpc,
 };
 use core::task::{Context, Poll, Waker};
-use s2n_codec::{EncoderBuffer, EncoderValue};
+use s2n_codec::{DecoderBuffer, DecoderValue, EncoderBuffer, EncoderValue};
 use std::{
     collections::VecDeque,
     io::Read,
@@ -14,7 +14,7 @@ use std::{
 pub trait ServerRx {
     fn recv(&mut self) -> Option<Vec<u8>>;
 
-    fn recv_rpc(&mut self) -> Option<Rpc> {
+    fn recv_rpc(&mut self) -> Option<RecvRpc> {
         unimplemented!()
     }
 
@@ -60,20 +60,17 @@ impl ServerRx for ServerIo {
             None
         }
     }
-    //
-    // fn recv_rpc(&mut self) -> Option<Rpc> {
-    //     let len = self.rx.lock().unwrap().read(&mut self.rx_buf).ok()?;
-    //     if len > 0 {
-    //         self.rx_buf[0..len].to_vec()
-    //
-    //         let mut buf = DecoderBuffer::new(&bytes);
-    //         while !buf.is_empty() {
-    //             let (rpc, buffer) = Rpc::decode(buf).unwrap();
-    //             }
-    //     } else {
-    //         None
-    //     }
-    // }
+
+    fn recv_rpc(&mut self) -> Option<RecvRpc> {
+        let len = self
+            .ingress_queue
+            .lock()
+            .unwrap()
+            .read(&mut self.rx_buf)
+            .ok()?;
+
+        Some(RecvRpc::new(&self.rx_buf[0..len]))
+    }
 
     fn poll_rx_ready(&mut self, cx: &mut Context) -> Poll<()> {
         let rdy = !self.ingress_queue.lock().unwrap().is_empty();
@@ -105,6 +102,35 @@ impl ServerTx for ServerIo {
 
         if let Some(waker) = self.tx_waker.lock().unwrap().deref() {
             waker.wake_by_ref();
+        }
+    }
+}
+
+pub struct RecvRpc<'a> {
+    // buf: &'a [u8],
+    buf: DecoderBuffer<'a>,
+}
+
+impl<'a> RecvRpc<'a> {
+    fn new(buf: &'a [u8]) -> Self {
+        let buf = DecoderBuffer::new(buf);
+        RecvRpc { buf }
+    }
+}
+
+impl<'a> Iterator for RecvRpc<'a> {
+    type Item = Rpc;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let len = self.buf.len();
+        if len > 0 {
+            let (rpc, buf) = Rpc::decode(self.buf).expect("should only receive valid RPC bytes");
+            // update the buffer to point to the next set of bytes
+            self.buf = buf;
+
+            Some(rpc)
+        } else {
+            None
         }
     }
 }
