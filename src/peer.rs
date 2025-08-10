@@ -17,6 +17,7 @@ impl<E: ServerEgress> Peer<E> {
 }
 
 impl<E: ServerEgress> PartialOrd for Peer<E> {
+    #[allow(clippy::non_canonical_partial_ord_impl)]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.id.cmp(&other.id))
     }
@@ -42,7 +43,7 @@ mod testing {
     use std::collections::BTreeMap;
 
     impl Peer<MockIo> {
-        pub fn mock(fill: u8) -> (ServerId, Self) {
+        fn mock(fill: u8) -> (ServerId, Self) {
             let id = ServerId::new([fill; 16]);
             // FIXME pass in IO when this is used
 
