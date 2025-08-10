@@ -1,5 +1,5 @@
 use crate::{
-    io::{ServerRx, ServerTx},
+    io::{ServerEgress, ServerIngress},
     rpc::Rpc,
 };
 use s2n_codec::DecoderBuffer;
@@ -20,18 +20,18 @@ impl MockIO {
     }
 }
 
-impl ServerTx for MockIO {
+impl ServerEgress for MockIO {
     fn send(&mut self, data: Vec<u8>) {
         self.send_queue.push(data);
     }
 }
 
-impl ServerRx for MockIO {
+impl ServerIngress for MockIO {
     fn recv(&mut self) -> Option<Vec<u8>> {
         self.recv_queue.pop()
     }
 
-    fn poll_rx_ready(&mut self, _cx: &mut std::task::Context) -> Poll<()> {
+    fn poll_ingress_queue_ready(&mut self, _cx: &mut std::task::Context) -> Poll<()> {
         if self.recv_queue.is_empty() {
             Poll::Pending
         } else {

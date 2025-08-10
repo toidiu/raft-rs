@@ -11,10 +11,10 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct NetworkIoImpl {
     pub buf: [u8; IO_BUF_LEN],
-    pub rx_queue: Arc<Mutex<VecDeque<u8>>>,
-    pub tx_queue: Arc<Mutex<VecDeque<u8>>>,
-    pub rx_waker: Arc<Mutex<Option<Waker>>>,
-    pub tx_waker: Arc<Mutex<Option<Waker>>>,
+    pub ingress_queue: Arc<Mutex<VecDeque<u8>>>,
+    pub egress_queue: Arc<Mutex<VecDeque<u8>>>,
+    pub ingress_waker: Arc<Mutex<Option<Waker>>>,
+    pub egress_waker: Arc<Mutex<Option<Waker>>>,
 }
 
 pub trait NetRx {
@@ -26,7 +26,7 @@ pub trait NetTx {
     // Send data over the network
     fn send(&mut self) -> Option<Vec<u8>>;
 
-    fn poll_tx_ready(&mut self, cx: &mut Context) -> Poll<()>;
+    fn poll_egress_queue_ready(&mut self, cx: &mut Context) -> Poll<()>;
 
     // A Future which can be polled to check for new messages in the queue
     fn tx_ready(&mut self) -> TxReady<Self> {
@@ -38,8 +38,8 @@ impl NetRx for NetworkIoImpl {
     fn recv(&mut self, data: Vec<u8>) {
         dbg!("  network <--- {:?}", &data);
 
-        self.rx_queue.lock().unwrap().extend(data);
-        if let Some(waker) = self.rx_waker.lock().unwrap().deref() {
+        self.ingress_queue.lock().unwrap().extend(data);
+        if let Some(waker) = self.ingress_waker.lock().unwrap().deref() {
             waker.wake_by_ref();
         }
     }
@@ -48,7 +48,7 @@ impl NetRx for NetworkIoImpl {
 impl NetTx for NetworkIoImpl {
     fn send(&mut self) -> Option<Vec<u8>> {
         let bytes_to_send = self
-            .tx_queue
+            .egress_queue
             .lock()
             .unwrap()
             .read(&mut self.buf[0..])
@@ -61,11 +61,11 @@ impl NetTx for NetworkIoImpl {
         }
     }
 
-    fn poll_tx_ready(&mut self, cx: &mut Context) -> Poll<()> {
+    fn poll_egress_queue_ready(&mut self, cx: &mut Context) -> Poll<()> {
         // register the shared Waker
-        *self.tx_waker.lock().unwrap() = Some(cx.waker().clone());
+        *self.egress_waker.lock().unwrap() = Some(cx.waker().clone());
 
-        let bytes_available = !self.tx_queue.lock().unwrap().is_empty();
+        let bytes_available = !self.egress_queue.lock().unwrap().is_empty();
         if bytes_available {
             Poll::Ready(())
         } else {
