@@ -22,29 +22,32 @@ pub struct BufferIo;
 impl BufferIo {
     pub fn split() -> (ServerIo, NetworkIo) {
         // ```
-        //   [ServerIo]                            [NetworkIo]
-        //  server process                       network socket
         //
-        //              <- recv [rx-queue]  <- recv
-        //              send -> [tx-queue]  -> send
+        //                      [ ingress-queue ]
+        //             <- recv                      <- recv_from_socket
+        //
+        //    [ServerIo]                                          [NetworkIo]
+        //
+        //             send ->                      -> send_to_socket
+        //                      [ egress-queue ]
         // ```
-        let rx_queue = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
-        let tx_queue = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
+        let ingress_queue = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
+        let egress_queue = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
         let rx_waker = Arc::new(Mutex::new(None));
         let tx_waker = Arc::new(Mutex::new(None));
 
         let network_io = NetworkIo {
             buf: [0; IO_BUF_LEN],
-            rx: rx_queue.clone(),
-            tx: tx_queue.clone(),
+            ingress_queue: ingress_queue.clone(),
+            egress_queue: egress_queue.clone(),
             rx_waker: rx_waker.clone(),
             tx_waker: tx_waker.clone(),
         };
         let server_io = ServerIo {
             rx_buf: [0; IO_BUF_LEN],
             tx_buf: [0; IO_BUF_LEN],
-            rx: rx_queue,
-            tx: tx_queue,
+            ingress_queue,
+            egress_queue,
             rx_waker: rx_waker.clone(),
             tx_waker: tx_waker.clone(),
         };

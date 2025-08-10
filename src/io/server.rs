@@ -14,6 +14,10 @@ use std::{
 pub trait ServerRx {
     fn recv(&mut self) -> Option<Vec<u8>>;
 
+    fn recv_rpc(&mut self) -> Option<Rpc> {
+        unimplemented!()
+    }
+
     fn poll_rx_ready(&mut self, cx: &mut Context) -> Poll<()>;
 
     // A handle to a Future to check for new messages
@@ -36,24 +40,43 @@ pub trait ServerTx {
 pub struct ServerIo {
     pub rx_buf: [u8; IO_BUF_LEN],
     pub tx_buf: [u8; IO_BUF_LEN],
-    pub rx: Arc<Mutex<VecDeque<u8>>>,
-    pub tx: Arc<Mutex<VecDeque<u8>>>,
+    pub ingress_queue: Arc<Mutex<VecDeque<u8>>>,
+    pub egress_queue: Arc<Mutex<VecDeque<u8>>>,
     pub rx_waker: Arc<Mutex<Option<Waker>>>,
     pub tx_waker: Arc<Mutex<Option<Waker>>>,
 }
 
 impl ServerRx for ServerIo {
     fn recv(&mut self) -> Option<Vec<u8>> {
-        let len = self.rx.lock().unwrap().read(&mut self.rx_buf).ok()?;
+        let len = self
+            .ingress_queue
+            .lock()
+            .unwrap()
+            .read(&mut self.rx_buf)
+            .ok()?;
         if len > 0 {
             Some(self.rx_buf[0..len].to_vec())
         } else {
             None
         }
     }
+    //
+    // fn recv_rpc(&mut self) -> Option<Rpc> {
+    //     let len = self.rx.lock().unwrap().read(&mut self.rx_buf).ok()?;
+    //     if len > 0 {
+    //         self.rx_buf[0..len].to_vec()
+    //
+    //         let mut buf = DecoderBuffer::new(&bytes);
+    //         while !buf.is_empty() {
+    //             let (rpc, buffer) = Rpc::decode(buf).unwrap();
+    //             }
+    //     } else {
+    //         None
+    //     }
+    // }
 
     fn poll_rx_ready(&mut self, cx: &mut Context) -> Poll<()> {
-        let rdy = !self.rx.lock().unwrap().is_empty();
+        let rdy = !self.ingress_queue.lock().unwrap().is_empty();
         *self.rx_waker.lock().unwrap() = Some(cx.waker().clone());
         if rdy {
             Poll::Ready(())
@@ -66,7 +89,7 @@ impl ServerRx for ServerIo {
 impl ServerTx for ServerIo {
     #[cfg(test)]
     fn send_raw_bytes(&mut self, data: &[u8]) {
-        self.tx.lock().unwrap().extend(data.iter());
+        self.egress_queue.lock().unwrap().extend(data.iter());
 
         if let Some(waker) = self.tx_waker.lock().unwrap().deref() {
             waker.wake_by_ref();
@@ -78,7 +101,7 @@ impl ServerTx for ServerIo {
         rpc.encode_mut(&mut buf);
         let data = buf.as_mut_slice();
 
-        self.tx.lock().unwrap().extend(data.iter());
+        self.egress_queue.lock().unwrap().extend(data.iter());
 
         if let Some(waker) = self.tx_waker.lock().unwrap().deref() {
             waker.wake_by_ref();

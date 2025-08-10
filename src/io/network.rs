@@ -26,8 +26,8 @@ pub trait NetTx {
 #[derive(Debug, Clone)]
 pub struct NetworkIo {
     pub buf: [u8; IO_BUF_LEN],
-    pub rx: Arc<Mutex<VecDeque<u8>>>,
-    pub tx: Arc<Mutex<VecDeque<u8>>>,
+    pub ingress_queue: Arc<Mutex<VecDeque<u8>>>,
+    pub egress_queue: Arc<Mutex<VecDeque<u8>>>,
     pub rx_waker: Arc<Mutex<Option<Waker>>>,
     pub tx_waker: Arc<Mutex<Option<Waker>>>,
 }
@@ -36,7 +36,7 @@ impl NetRx for NetworkIo {
     fn recv_from_socket(&mut self, data: Vec<u8>) {
         println!("  network <--- {:?}", data);
 
-        self.rx.lock().unwrap().extend(data);
+        self.ingress_queue.lock().unwrap().extend(data);
         if let Some(waker) = self.rx_waker.lock().unwrap().deref() {
             waker.wake_by_ref();
         }
@@ -45,7 +45,12 @@ impl NetRx for NetworkIo {
 
 impl NetTx for NetworkIo {
     fn send_to_socket(&mut self) -> Option<Vec<u8>> {
-        let len = self.tx.lock().unwrap().read(&mut self.buf[0..]).ok()?;
+        let len = self
+            .egress_queue
+            .lock()
+            .unwrap()
+            .read(&mut self.buf[0..])
+            .ok()?;
         if len > 0 {
             println!("  ---> network {:?}", &self.buf[0..len]);
             Some(self.buf[0..len].to_vec())
@@ -55,7 +60,7 @@ impl NetTx for NetworkIo {
     }
 
     fn poll_tx_ready(&mut self, cx: &mut Context) -> Poll<()> {
-        let rdy = !self.tx.lock().unwrap().is_empty();
+        let rdy = !self.egress_queue.lock().unwrap().is_empty();
         *self.tx_waker.lock().unwrap() = Some(cx.waker().clone());
         if rdy {
             Poll::Ready(())
