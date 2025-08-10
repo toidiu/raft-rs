@@ -29,7 +29,7 @@ pub trait NetTx {
     fn poll_egress_queue_ready(&mut self, cx: &mut Context) -> Poll<()>;
 
     // A Future which can be polled to check for new messages in the queue
-    fn tx_ready(&mut self) -> TxReady<Self> {
+    fn tx_ready(&mut self) -> TxReady<'_, Self> {
         TxReady(self)
     }
 }

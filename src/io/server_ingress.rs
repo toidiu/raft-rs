@@ -20,7 +20,7 @@ pub trait ServerIngress {
     fn poll_ingress_queue_ready(&mut self, cx: &mut Context) -> Poll<()>;
 
     // A Future which can be polled to check for new messages in the queue
-    fn ingress_queue_ready(&mut self) -> RxReady<Self> {
+    fn ingress_queue_ready(&mut self) -> RxReady<'_, Self> {
         RxReady(self)
     }
 }
