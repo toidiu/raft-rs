@@ -8,11 +8,11 @@ use std::{
 };
 
 pub trait NetRx {
-    fn recv(&mut self, data: Vec<u8>);
+    fn recv_from_socket(&mut self, data: Vec<u8>);
 }
 
 pub trait NetTx {
-    fn send(&mut self) -> Option<Vec<u8>>;
+    fn send_to_socket(&mut self) -> Option<Vec<u8>>;
 
     fn poll_tx_ready(&mut self, cx: &mut Context) -> Poll<()>;
 
@@ -33,7 +33,7 @@ pub struct NetworkIo {
 }
 
 impl NetRx for NetworkIo {
-    fn recv(&mut self, data: Vec<u8>) {
+    fn recv_from_socket(&mut self, data: Vec<u8>) {
         println!("  network <--- {:?}", data);
 
         self.rx.lock().unwrap().extend(data);
@@ -44,7 +44,7 @@ impl NetRx for NetworkIo {
 }
 
 impl NetTx for NetworkIo {
-    fn send(&mut self) -> Option<Vec<u8>> {
+    fn send_to_socket(&mut self) -> Option<Vec<u8>> {
         let len = self.tx.lock().unwrap().read(&mut self.buf[0..]).ok()?;
         if len > 0 {
             println!("  ---> network {:?}", &self.buf[0..len]);

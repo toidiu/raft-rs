@@ -91,23 +91,23 @@ mod tests {
     fn producer_consumer() {
         let (mut server_io, mut network_io) = BufferIo::split();
 
-        network_io.recv(vec![1]);
-        network_io.recv(vec![2]);
+        network_io.recv_from_socket(vec![1]);
+        network_io.recv_from_socket(vec![2]);
         server_io.send(vec![3]);
         server_io.send(vec![4]);
 
         assert_eq!(server_io.recv(), Some(vec![1, 2]));
         assert_eq!(server_io.recv(), None);
 
-        assert_eq!(network_io.send(), Some(vec![3, 4]));
-        assert_eq!(network_io.send(), None);
+        assert_eq!(network_io.send_to_socket(), Some(vec![3, 4]));
+        assert_eq!(network_io.send_to_socket(), None);
 
-        network_io.recv(vec![5]);
+        network_io.recv_from_socket(vec![5]);
         server_io.send(vec![6]);
         assert_eq!(server_io.recv(), Some(vec![5]));
         assert_eq!(server_io.recv(), None);
 
-        assert_eq!(network_io.send(), Some(vec![6]));
-        assert_eq!(network_io.send(), None);
+        assert_eq!(network_io.send_to_socket(), Some(vec![6]));
+        assert_eq!(network_io.send_to_socket(), None);
     }
 }

@@ -238,7 +238,7 @@ mod tests {
         sent_rpc.encode_mut(&mut buf);
         server_io.send(buf.as_mut_slice().to_vec());
 
-        let bytes = network_io.send().unwrap();
+        let bytes = network_io.send_to_socket().unwrap();
         let buf = DecoderBuffer::new(&bytes);
         let (recv_rpc, _buf) = Rpc::decode(buf).unwrap();
         cast_unsafe!(recv_rpc, Rpc::RequestVote);
@@ -253,7 +253,7 @@ mod tests {
         Rpc::new_request_vote_resp(0, ServerId::new(), true).encode_mut(&mut buf);
         server_io.send(buf.as_mut_slice().to_vec());
 
-        network_io.send().unwrap();
+        network_io.send_to_socket().unwrap();
     }
 
     #[test]
@@ -265,7 +265,7 @@ mod tests {
         Rpc::new_append_entry(0, TermIdx::new(8, 9)).encode_mut(&mut buf);
         server_io.send(buf.as_mut_slice().to_vec());
 
-        network_io.send().unwrap();
+        network_io.send_to_socket().unwrap();
     }
 
     #[test]
@@ -277,6 +277,6 @@ mod tests {
         Rpc::new_append_entry_resp(0, true).encode_mut(&mut buf);
         server_io.send(buf.as_mut_slice().to_vec());
 
-        network_io.send().unwrap();
+        network_io.send_to_socket().unwrap();
     }
 }

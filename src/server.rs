@@ -131,7 +131,7 @@ mod tests {
     use crate::{
         clock::Clock,
         io::{NetRx, NetTx},
-        log::TermIdx,
+        log::{self, TermIdx},
     };
     use core::{
         sync::atomic::{AtomicBool, Ordering},
@@ -139,7 +139,7 @@ mod tests {
     };
     use s2n_codec::{EncoderBuffer, EncoderValue};
     use std::sync::Arc;
-    use tokio::time::advance;
+    use tokio::time::{advance, sleep};
 
     const END_MARKER: u8 = 128;
 
@@ -148,27 +148,30 @@ mod tests {
         tokio::time::pause();
         let clock = Clock::default();
         let server_list = vec![ServerId::new(), ServerId::new()];
-        let (mut server, mut network_io) = Server::new(clock, server_list.clone());
+        let (mut server, mut rx_network_io) = Server::new(clock, server_list.clone());
 
         let wait_complete = Arc::new(AtomicBool::new(true));
         let set_wait = wait_complete.clone();
 
-        // network: simulate sending a message
-        let mut tx_network_io = network_io.clone();
+        // network: check data to send out to the network
+        let mut tx_network_io = rx_network_io.clone();
         tokio::spawn(async move {
             while set_wait.load(Ordering::SeqCst) {
                 tx_network_io.tx_ready().await;
-
                 tokio::time::advance(Duration::from_millis(10)).await;
-                if let Some(bytes) = tx_network_io.send() {
+
+                if let Some(bytes) = tx_network_io.send_to_socket() {
                     let mut bytes = DecoderBuffer::new(&bytes);
+
                     while !bytes.is_empty() {
+                        // Should receive either an Rpc or the END_MARKER
                         if let Ok((rpc, buffer)) = Rpc::decode(bytes) {
                             println!("  ---> network {:?}", rpc);
                             bytes = buffer;
                         } else {
-                            if let Ok(end_marker) = bytes.peek_byte(0) {
-                                if end_marker == END_MARKER {
+                            match bytes.peek_byte(0) {
+                                // the server sent the END_MARKER
+                                Ok(end_marger) if end_marger == END_MARKER => {
                                     set_wait.store(false, Ordering::Relaxed);
                                     // println!(
                                     //     "-o-o-o-o-o-o-o-o-o-o-o-o-o-o END {:?} {:?}",
@@ -177,16 +180,15 @@ mod tests {
                                     // );
                                     break;
                                 }
+                                _ => panic!("received unexpected bytes {:?}", bytes),
                             }
-
-                            panic!("received unexpected bytes {:?}", bytes);
                         }
                     }
                 }
             }
         });
 
-        // network: simulate receiving a message over the network
+        // network: simulate receiving a message from the network
         tokio::spawn(async move {
             for i in 0..5 {
                 advance(Duration::from_millis(30)).await;
@@ -196,11 +198,13 @@ mod tests {
                 let last_log_term_idx = TermIdx::new(8, 1);
                 Rpc::new_request_vote(i, server_list[0], last_log_term_idx).encode(&mut buf);
                 let (written, buf) = buf.split_mut();
-                network_io.recv(written.to_vec());
+                rx_network_io.recv_from_socket(written.to_vec());
 
                 let mut buf = EncoderBuffer::new(buf);
                 Rpc::new_append_entry(i, TermIdx::new(3, 1)).encode(&mut buf);
-                network_io.recv(buf.as_mut_slice().to_vec());
+                rx_network_io.recv_from_socket(buf.as_mut_slice().to_vec());
+
+                sleep(Duration::from_millis(10)).await;
             }
         });
 
@@ -219,5 +223,7 @@ mod tests {
             // println!("---waiting for finish tag");
             // println!("---{i} elapsed: {:?}", clock.elapsed());
         }
+
+        assert_eq!(server.state.inner.curr_term, log::Term(9));
     }
 }
