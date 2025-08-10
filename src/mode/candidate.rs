@@ -1,9 +1,7 @@
-use crate::mode::ElectionResult;
-use crate::rpc::RequestVoteResp;
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
-    mode::{Context, Mode, ModeTransition},
-    rpc::{AppendEntries, Rpc},
+    mode::{Context, ElectionResult, Mode, ModeTransition},
+    rpc::{AppendEntries, RequestVoteResp, Rpc},
     server::ServerId,
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
@@ -72,7 +70,7 @@ impl Candidate {
         //% Compliance:
         //% another server establishes itself as a leader
         //% - a candidate receives AppendEntries from another server claiming to be a leader
-        if term >= context.state.current_term {
+        if term >= context.raft_state.current_term {
             //% Compliance:
             //% if that leader's current term is >= the candidate's
             //% - recognize the server as the new leader
@@ -90,7 +88,7 @@ impl Candidate {
             //% - reject the RPC and continue in the candidate state
             let mut slice = vec![0; IO_BUF_LEN];
             let mut buf = EncoderBuffer::new(&mut slice);
-            let term = context.state.current_term;
+            let term = context.raft_state.current_term;
             Rpc::new_append_entry_resp(term, false).encode_mut(&mut buf);
             leader_io.send(buf.as_mut_slice().to_vec());
             (ModeTransition::None, None)
@@ -104,7 +102,7 @@ impl Candidate {
         context: &mut Context<IO>,
     ) -> ModeTransition {
         let RequestVoteResp { term, vote_granted } = request_vote_resp;
-        let term_matches = context.state.current_term == term;
+        let term_matches = context.raft_state.current_term == term;
 
         if term_matches && vote_granted {
             //% Compliance:
@@ -127,7 +125,7 @@ impl Candidate {
     fn start_election<IO: ServerIO>(&mut self, context: &mut Context<IO>) -> ModeTransition {
         //% Compliance:
         //% Increment currentTerm
-        context.state.current_term.increment();
+        context.raft_state.current_term.increment();
 
         //% Compliance:
         //% Vote for self
@@ -142,15 +140,15 @@ impl Candidate {
 
         //% Compliance:
         //% Reset election timer
-        context.state.election_timer.reset();
+        context.raft_state.election_timer.reset();
 
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
-        let current_term = context.state.current_term;
+        let current_term = context.raft_state.current_term;
         //% Compliance:
         //% Send RequestVote RPCs to all other servers
         for (_id, peer) in context.peer_map.iter_mut() {
-            let prev_log_term_idx = context.state.peers_prev_term_idx(peer);
+            let prev_log_term_idx = context.raft_state.peers_prev_term_idx(peer);
             Rpc::new_request_vote(current_term, context.server_id, prev_log_term_idx)
                 .encode_mut(&mut buf);
             peer.send(buf.as_mut_slice().to_vec());
@@ -181,11 +179,11 @@ impl Candidate {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mode::cast_unsafe;
     use crate::{
         log::{Term, TermIdx},
+        mode::cast_unsafe,
         peer::Peer,
-        state::State,
+        raft_state::RaftState,
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -200,12 +198,12 @@ mod tests {
         let peer_fill = 11;
         let server_id = ServerId::new([peer_fill; 16]);
         let mut peer_map = Peer::mock_as_map(&[peer_fill, 12]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
         assert!(state.current_term.is_initial());
 
         let mut context = Context {
             server_id,
-            state: &mut state,
+            raft_state: &mut state,
             peer_map: &mut peer_map,
         };
         let mut candidate = Candidate::default();
@@ -236,10 +234,10 @@ mod tests {
 
         let server_id = ServerId::new([6; 16]);
         let mut peer_map = Peer::mock_as_map(&[]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
         let mut context = Context {
             server_id,
-            state: &mut state,
+            raft_state: &mut state,
             peer_map: &mut peer_map,
         };
         let mut candidate = Candidate::default();
@@ -262,11 +260,11 @@ mod tests {
         let peer2_fill = 2;
         let peer2_id = ServerId::new([peer2_fill; 16]);
         let mut peer_map = Peer::mock_as_map(&[peer2_fill, 3]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
 
         let context = Context {
             server_id: self_id,
-            state: &mut state,
+            raft_state: &mut state,
             peer_map: &mut peer_map,
         };
         let mut candidate = Candidate::default();
@@ -304,7 +302,7 @@ mod tests {
         let peer_id2_fill = 2;
         let peer_id2 = ServerId::new([peer_id2_fill; 16]);
         let mut peer_map = Peer::mock_as_map(&[peer_id2_fill]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
 
         let term_current = Term::from(2);
         let term_election = term_current + 1;
@@ -312,7 +310,7 @@ mod tests {
 
         let mut context = Context {
             server_id,
-            state: &mut state,
+            raft_state: &mut state,
             peer_map: &mut peer_map,
         };
         assert_eq!(Mode::quorum(&context), 2);
@@ -353,7 +351,7 @@ mod tests {
         let peer_id3 = ServerId::new([peer_id3_fill; 16]);
         let peer_id4_fill = 4;
         let mut peer_map = Peer::mock_as_map(&[peer_id2_fill, peer_id3_fill, peer_id4_fill]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
 
         let term_current = Term::from(2);
         let term_election = term_current + 1;
@@ -361,7 +359,7 @@ mod tests {
 
         let mut context = Context {
             server_id,
-            state: &mut state,
+            raft_state: &mut state,
             peer_map: &mut peer_map,
         };
         assert_eq!(Mode::quorum(&context), 3);

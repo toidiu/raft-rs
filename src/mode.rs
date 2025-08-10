@@ -30,13 +30,12 @@
 //! ```
 //! https://textik.com/#8dbf6540e0dd1676
 
-use crate::server::ServerId;
 use crate::{
     io::ServerIO,
     macros::cast_unsafe,
     mode::{candidate::Candidate, follower::Follower, leader::Leader},
     rpc::Rpc,
-    server::Context,
+    server::{Context, ServerId},
 };
 
 mod candidate;
@@ -69,8 +68,8 @@ impl Mode {
         //% Compliance:
         //% If RPC request or response contains term T > currentTerm: set currentTerm = T, convert
         //% to follower (§5.1)
-        if rpc.term() > &context.state.current_term {
-            context.state.current_term = *rpc.term();
+        if rpc.term() > &context.raft_state.current_term {
+            context.raft_state.current_term = *rpc.term();
             self.on_follower(context);
         }
 
@@ -171,8 +170,8 @@ mod tests {
         io::testing::helper_inspect_sent_rpc,
         log::{Idx, Term, TermIdx},
         peer::Peer,
+        raft_state::RaftState,
         server::ServerId,
-        state::State,
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -184,11 +183,11 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let mut peer_map = Peer::mock_as_map(&[]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
         let server_id = ServerId::new([6; 16]);
         let mut context = Context {
             server_id,
-            state: &mut state,
+            raft_state: &mut state,
             peer_map: &mut peer_map,
         };
         assert_eq!(Mode::quorum(&context), 1);
@@ -215,13 +214,13 @@ mod tests {
         let leader_id_fill = 2;
         let leader_id = ServerId::new([leader_id_fill; 16]);
         let mut peer_map = Peer::mock_as_map(&[leader_id_fill]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
         let current_term = Term::from(2);
         state.current_term = current_term;
 
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
-            state: &mut state,
+            raft_state: &mut state,
             peer_map: &mut peer_map,
         };
         let mut mode = Mode::C(Candidate::default());
@@ -261,12 +260,12 @@ mod tests {
         let peer_fill = 2;
         let peer_id = ServerId::new([peer_fill; 16]);
         let mut peer_map = Peer::mock_as_map(&[peer_fill]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
         state.current_term = current_term;
 
         let mut context = Context {
             server_id: ServerId::new([1; 16]),
-            state: &mut state,
+            raft_state: &mut state,
             peer_map: &mut peer_map,
         };
         let mut mode = Mode::C(Candidate::default());

@@ -7,7 +7,7 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-pub struct State {
+pub struct RaftState {
     //  ==== Persistent state on all servers ====
     //% Compliance:
     //% `currentTerm` latest term server has seen (initialized to 0 on first boot, increases
@@ -48,7 +48,7 @@ pub struct State {
     pub election_timer: Timeout,
 }
 
-impl State {
+impl RaftState {
     pub fn new<T: ServerIO>(
         election_timer: Timeout,
         peer_map: &BTreeMap<ServerId, Peer<T>>,
@@ -73,7 +73,7 @@ impl State {
             next_idx_map.insert(*id, next_log_idx);
             match_idx_map.insert(*id, match_idx);
         }
-        State {
+        RaftState {
             current_term: Term::initial(),
             voted_for: None,
             log,
@@ -110,7 +110,7 @@ impl State {
 mod tests {
     use crate::{
         log::Entry,
-        state::{Idx, Peer, ServerId, State, Term, TermIdx},
+        raft_state::{Idx, Peer, RaftState, ServerId, Term, TermIdx},
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -124,7 +124,7 @@ mod tests {
         let peer2_fill = 2;
         let peer2_id = ServerId::new([peer2_fill; 16]);
         let peer_map = Peer::mock_as_map(&[peer2_fill, 3]);
-        let state = State::new(timeout, &peer_map);
+        let state = RaftState::new(timeout, &peer_map);
 
         // retrieve the prev_term_idx for peer (expect initial since log is empty)
         let peer2 = peer_map.get(&peer2_id).unwrap();
@@ -140,7 +140,7 @@ mod tests {
         let peer2_fill = 2;
         let peer2_id = ServerId::new([peer2_fill; 16]);
         let peer_map = Peer::mock_as_map(&[peer2_fill, 3]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
 
         // insert a log entry
         let next_idx = Idx::from(2);

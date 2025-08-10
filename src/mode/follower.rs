@@ -1,8 +1,7 @@
-use crate::mode::ModeTransition;
 use crate::{
     io::{ServerIO, IO_BUF_LEN},
     log::MatchOutcome,
-    mode::Context,
+    mode::{Context, ModeTransition},
     rpc::{AppendEntries, Rpc},
 };
 use s2n_codec::{EncoderBuffer, EncoderValue};
@@ -48,7 +47,7 @@ impl Follower {
         append_entries: AppendEntries,
         context: &mut Context<IO>,
     ) {
-        let current_term = context.state.current_term;
+        let current_term = context.raft_state.current_term;
 
         //% Compliance:
         //% Reply false if term < currentTerm (§5.1)
@@ -58,7 +57,7 @@ impl Follower {
         //% matches prevLogTerm (§5.3)
         let log_contains_matching_prev_entry = matches!(
             context
-                .state
+                .raft_state
                 .log
                 .entry_matches(append_entries.prev_log_term_idx),
             MatchOutcome::Match
@@ -79,7 +78,7 @@ impl Follower {
             //% Append any new entries not already in the log
             let mut entry_idx = append_entries.prev_log_term_idx.idx + 1;
             for entry in append_entries.entries.into_iter() {
-                let _match_outcome = context.state.log.match_leaders_log(entry, entry_idx);
+                let _match_outcome = context.raft_state.log.match_leaders_log(entry, entry_idx);
                 entry_idx += 1;
             }
 
@@ -87,13 +86,13 @@ impl Follower {
             //% If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of
             //% last new entry)
             assert!(
-                append_entries.leader_commit_idx <= context.state.log.prev_idx(),
+                append_entries.leader_commit_idx <= context.raft_state.log.prev_idx(),
                 "leader_commit_idx should not be greater than the number of enties in the log"
             );
-            if append_entries.leader_commit_idx > context.state.commit_idx {
-                context.state.commit_idx = min(
+            if append_entries.leader_commit_idx > context.raft_state.commit_idx {
+                context.raft_state.commit_idx = min(
                     append_entries.leader_commit_idx,
-                    context.state.log.prev_idx(),
+                    context.raft_state.log.prev_idx(),
                 );
             }
         }
@@ -117,8 +116,8 @@ mod tests {
         io::testing::helper_inspect_sent_rpc,
         log::{Entry, Idx, Term, TermIdx},
         peer::Peer,
+        raft_state::RaftState,
         server::ServerId,
-        state::State,
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -133,14 +132,14 @@ mod tests {
         let leader_id_fill = 2;
         let leader_id = ServerId::new([leader_id_fill; 16]);
         let mut peer_map = Peer::mock_as_map(&[leader_id_fill]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
         let current_term = Term::from(2);
         state.current_term = current_term;
 
         let mut follower = Follower;
         let mut context = Context {
             server_id,
-            state: &mut state,
+            raft_state: &mut state,
             peer_map: &mut peer_map,
         };
         let leader_commit_idx = Idx::initial();
@@ -163,7 +162,7 @@ mod tests {
             let rpc = helper_inspect_sent_rpc(leader_io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
             assert_eq!(expected_rpc, rpc);
-            assert!(context.state.log.entries.is_empty());
+            assert!(context.raft_state.log.entries.is_empty());
         }
 
         // Expect response false
@@ -184,7 +183,7 @@ mod tests {
             let rpc = helper_inspect_sent_rpc(leader_io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
             assert_eq!(expected_rpc, rpc);
-            assert!(context.state.log.entries.is_empty());
+            assert!(context.raft_state.log.entries.is_empty());
         }
 
         // Expect response false
@@ -207,7 +206,7 @@ mod tests {
             let rpc = helper_inspect_sent_rpc(leader_io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
             assert_eq!(expected_rpc, rpc);
-            assert!(context.state.log.entries.is_empty());
+            assert!(context.raft_state.log.entries.is_empty());
         }
 
         // Expect response true
@@ -215,8 +214,8 @@ mod tests {
         //  - update commit_idx
         let leader_commit_idx = Idx::from(1);
         {
-            assert!(context.state.log.entries.is_empty());
-            assert_eq!(context.state.commit_idx, Idx::initial());
+            assert!(context.raft_state.log.entries.is_empty());
+            assert_eq!(context.raft_state.commit_idx, Idx::initial());
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_append_entry(
