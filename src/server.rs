@@ -1,6 +1,6 @@
 use crate::{
     clock::Clock,
-    io::{BufferIo, NetworkIo, ServerIo, ServerRx},
+    io::{BufferIo, NetworkIo, ServerIoEgress, ServerIoIngress, ServerRx},
     rpc::Rpc,
     state::{ServerId, State},
 };
@@ -13,24 +13,27 @@ pub struct Server {
     clock: Clock,
     state: State,
     // IO handle to send and receive Rpc messages
-    io: ServerIo,
+    io_ingress: ServerIoIngress,
+    io_egress: ServerIoEgress,
 }
 
 impl Server {
     fn new(clock: Clock, server_list: Vec<ServerId>) -> (Server, NetworkIo) {
-        let (server_io, network_io) = BufferIo::split();
+        let (server_io_ingress, server_io_egress, network_io) =
+            BufferIo::split_server_and_network();
         (
             Server {
                 clock,
                 state: State::new(clock, server_list),
-                io: server_io,
+                io_ingress: server_io_ingress,
+                io_egress: server_io_egress,
             },
             network_io,
         )
     }
 
     pub fn on_timeout(&mut self) {
-        self.state.on_timeout(&mut self.io);
+        self.state.on_timeout(&mut self.io_egress);
     }
 
     fn id(&self) -> ServerId {
@@ -38,27 +41,28 @@ impl Server {
     }
 
     pub fn recv(&mut self) {
-        if let Some(mut recv_rpc) = self.io.recv_rpc() {
-            while let Some(rpc) = recv_rpc.next() {
-                // self.state.recv(&mut self.io, rpc);
-            }
-        }
-
-        // if let Some(bytes) = self.io.recv() {
-        //     let mut buf = DecoderBuffer::new(&bytes);
-        //     while !buf.is_empty() {
-        //         let (rpc, buffer) = Rpc::decode(buf).unwrap();
-        //         println!("  server <--- {:?}", rpc);
-        //         buf = buffer;
-        //         self.state.recv(&mut self.io, rpc);
+        // FIXME
+        // if let Some(mut recv_rpc) = self.io_ingress.recv_rpc() {
+        //     while let Some(rpc) = recv_rpc.next() {
+        //         self.state.recv(&mut self.io_egress, rpc);
         //     }
         // }
+
+        if let Some(bytes) = self.io_ingress.recv() {
+            let mut buf = DecoderBuffer::new(&bytes);
+            while !buf.is_empty() {
+                let (rpc, buffer) = Rpc::decode(buf).unwrap();
+                println!("  server <--- {:?}", rpc);
+                buf = buffer;
+                self.state.recv(&mut self.io_egress, rpc);
+            }
+        }
     }
 
     async fn poll(&mut self) {
         let fut = ServerFut {
             timeout: &mut self.state.inner.timer,
-            recv: self.io.rx_ready(),
+            recv: self.io_ingress.rx_ready(),
         };
 
         let Outcome {
@@ -86,7 +90,7 @@ impl Server {
     #[cfg(test)]
     fn send_test_data(&mut self, data: &[u8]) {
         use crate::io::ServerTx;
-        self.io.send_raw_bytes(data);
+        self.io_egress.send_raw_bytes(data);
     }
 }
 

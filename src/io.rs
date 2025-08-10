@@ -11,7 +11,7 @@ pub(crate) mod testing;
 #[cfg(test)]
 pub(crate) use network::NetRx;
 pub(crate) use network::{NetTx, NetworkIo};
-pub(crate) use server::{ServerIo, ServerRx, ServerTx};
+pub(crate) use server::{ServerIo, ServerIoEgress, ServerIoIngress, ServerRx, ServerTx};
 
 // The size of the buffer used to send/recv from the IO queues
 pub const IO_BUF_LEN: usize = 1024;
@@ -20,7 +20,7 @@ pub const IO_BUF_LEN: usize = 1024;
 pub struct BufferIo;
 
 impl BufferIo {
-    pub fn split() -> (ServerIo, NetworkIo) {
+    pub fn split_server_and_network() -> (ServerIoIngress, ServerIoEgress, NetworkIo) {
         // ```
         //
         //                      [ ingress-queue ]
@@ -43,15 +43,28 @@ impl BufferIo {
             rx_waker: rx_waker.clone(),
             tx_waker: tx_waker.clone(),
         };
-        let server_io = ServerIo {
+
+        let server_io_ingress = ServerIoIngress {
             rx_buf: [0; IO_BUF_LEN],
-            tx_buf: [0; IO_BUF_LEN],
-            ingress_queue,
-            egress_queue,
+            ingress_queue: ingress_queue.clone(),
             rx_waker: rx_waker.clone(),
+        };
+
+        let server_io_egress = ServerIoEgress {
+            tx_buf: [0; IO_BUF_LEN],
+            egress_queue: egress_queue.clone(),
             tx_waker: tx_waker.clone(),
         };
-        (server_io, network_io)
+
+        // let server_io = ServerIo {
+        //     rx_buf: [0; IO_BUF_LEN],
+        //     tx_buf: [0; IO_BUF_LEN],
+        //     ingress_queue,
+        //     egress_queue,
+        //     rx_waker: rx_waker.clone(),
+        //     tx_waker: tx_waker.clone(),
+        // };
+        (server_io_ingress, server_io_egress, network_io)
     }
 }
 
@@ -85,6 +98,7 @@ macro_rules! impl_io_ready(($io:ident, $fut:ident, $poll_fn:ident) => {
 });
 
 impl_io_ready!(ServerIo, RxReady, poll_rx_ready);
+impl_io_ready!(ServerIoIngress, RxReady, poll_rx_ready);
 impl_io_ready!(NetworkIo, TxReady, poll_tx_ready);
 
 #[cfg(test)]
@@ -96,7 +110,7 @@ mod tests {
     // network::recv and server::send are separate queues
     #[test]
     fn producer_consumer() {
-        let (mut server_io, mut network_io) = BufferIo::split();
+        let (mut server_io, mut network_io) = BufferIo::split_server_and_network();
 
         let mut buf = [0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut buf);

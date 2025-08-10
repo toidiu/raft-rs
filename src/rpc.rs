@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn encode_decode_request_vote() {
-        let (mut server_io, mut network_io) = BufferIo::split();
+        let (mut server_io, mut network_io) = BufferIo::split_server_and_network();
 
         let sent_rpc = Rpc::new_request_vote(0, ServerId::new(), TermIdx::new(2, 3));
         server_io.send_rpc(sent_rpc);
@@ -243,7 +243,7 @@ mod tests {
 
     #[test]
     fn encode_decode_request_vote_res() {
-        let (mut server_io, mut network_io) = BufferIo::split();
+        let (mut server_io, mut network_io) = BufferIo::split_server_and_network();
 
         let rpc = Rpc::new_request_vote_resp(0, ServerId::new(), true);
         server_io.send_rpc(rpc);
@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn encode_decode_append_entry() {
-        let (mut server_io, mut network_io) = BufferIo::split();
+        let (mut server_io, mut network_io) = BufferIo::split_server_and_network();
 
         let rpc = Rpc::new_append_entry(0, TermIdx::new(8, 9));
         server_io.send_rpc(rpc);
@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn encode_decode_append_entry_res() {
-        let (mut server_io, mut network_io) = BufferIo::split();
+        let (mut server_io, mut network_io) = BufferIo::split_server_and_network();
 
         let rpc = Rpc::new_append_entry_resp(0, true);
         server_io.send_rpc(rpc);

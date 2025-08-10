@@ -11,6 +11,91 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+/// A handle to the underlying BufferIo
+#[derive(Debug)]
+pub struct ServerIo {
+    pub rx_buf: [u8; IO_BUF_LEN],
+    pub tx_buf: [u8; IO_BUF_LEN],
+    pub ingress_queue: Arc<Mutex<VecDeque<u8>>>,
+    pub egress_queue: Arc<Mutex<VecDeque<u8>>>,
+    pub rx_waker: Arc<Mutex<Option<Waker>>>,
+    pub tx_waker: Arc<Mutex<Option<Waker>>>,
+}
+
+#[derive(Debug)]
+pub struct ServerIoIngress {
+    pub rx_buf: [u8; IO_BUF_LEN],
+    pub ingress_queue: Arc<Mutex<VecDeque<u8>>>,
+    pub rx_waker: Arc<Mutex<Option<Waker>>>,
+}
+
+#[derive(Debug)]
+pub struct ServerIoEgress {
+    pub tx_buf: [u8; IO_BUF_LEN],
+    pub egress_queue: Arc<Mutex<VecDeque<u8>>>,
+    pub tx_waker: Arc<Mutex<Option<Waker>>>,
+}
+
+impl ServerRx for ServerIoIngress {
+    fn recv(&mut self) -> Option<Vec<u8>> {
+        let len = self
+            .ingress_queue
+            .lock()
+            .unwrap()
+            .read(&mut self.rx_buf)
+            .ok()?;
+        if len > 0 {
+            Some(self.rx_buf[0..len].to_vec())
+        } else {
+            None
+        }
+    }
+
+    fn recv_rpc(&mut self) -> Option<RecvRpc> {
+        let len = self
+            .ingress_queue
+            .lock()
+            .unwrap()
+            .read(&mut self.rx_buf)
+            .ok()?;
+
+        Some(RecvRpc::new(&self.rx_buf[0..len]))
+    }
+
+    fn poll_rx_ready(&mut self, cx: &mut Context) -> Poll<()> {
+        let rdy = !self.ingress_queue.lock().unwrap().is_empty();
+        *self.rx_waker.lock().unwrap() = Some(cx.waker().clone());
+        if rdy {
+            Poll::Ready(())
+        } else {
+            Poll::Pending
+        }
+    }
+}
+
+impl ServerTx for ServerIoEgress {
+    #[cfg(test)]
+    fn send_raw_bytes(&mut self, data: &[u8]) {
+        self.egress_queue.lock().unwrap().extend(data.iter());
+
+        if let Some(waker) = self.tx_waker.lock().unwrap().deref() {
+            waker.wake_by_ref();
+        }
+    }
+
+    fn send_rpc(&mut self, mut rpc: Rpc) {
+        let mut buf = EncoderBuffer::new(&mut self.tx_buf);
+        rpc.encode_mut(&mut buf);
+        let data = buf.as_mut_slice();
+
+        self.egress_queue.lock().unwrap().extend(data.iter());
+
+        if let Some(waker) = self.tx_waker.lock().unwrap().deref() {
+            waker.wake_by_ref();
+        }
+    }
+}
+
 pub trait ServerRx {
     fn recv(&mut self) -> Option<Vec<u8>>;
 
@@ -33,17 +118,6 @@ pub trait ServerTx {
     }
 
     fn send_rpc(&mut self, rpc: Rpc);
-}
-
-/// A handle to the underlying BufferIo
-#[derive(Debug)]
-pub struct ServerIo {
-    pub rx_buf: [u8; IO_BUF_LEN],
-    pub tx_buf: [u8; IO_BUF_LEN],
-    pub ingress_queue: Arc<Mutex<VecDeque<u8>>>,
-    pub egress_queue: Arc<Mutex<VecDeque<u8>>>,
-    pub rx_waker: Arc<Mutex<Option<Waker>>>,
-    pub tx_waker: Arc<Mutex<Option<Waker>>>,
 }
 
 impl ServerRx for ServerIo {
