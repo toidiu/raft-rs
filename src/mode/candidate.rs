@@ -222,7 +222,7 @@ mod tests {
         let expected_rpc = Rpc::new_request_vote(state.current_term, server_id, TermIdx::initial());
         for (_id, peer) in peer_map.iter_mut() {
             let Peer { id: _, io_egress } = peer;
-            let rpc_bytes = io.send_queue.pop().unwrap();
+            let rpc_bytes = io_egress.send_queue.pop().unwrap();
             let buffer = DecoderBuffer::new(&rpc_bytes);
             let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
             assert_eq!(expected_rpc, sent_request_vote);
