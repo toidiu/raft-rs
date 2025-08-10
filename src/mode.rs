@@ -43,24 +43,24 @@ mod follower;
 mod leader;
 
 pub enum Mode {
-    F(Follower),
-    C(Candidate),
-    L(Leader),
+    Follower(Follower),
+    Candidate(Candidate),
+    Leader(Leader),
 }
 
 impl Mode {
     fn on_timeout<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
         match self {
-            Mode::F(follower) => {
+            Mode::Follower(follower) => {
                 let transition = follower.on_timeout();
                 self.handle_mode_transition(transition, context);
             }
-            Mode::C(candidate) => {
+            Mode::Candidate(candidate) => {
                 let transition = candidate.on_timeout(context);
                 self.handle_mode_transition(transition, context);
             }
 
-            Mode::L(leader) => leader.on_timeout(context),
+            Mode::Leader(leader) => leader.on_timeout(context),
         }
     }
 
@@ -74,19 +74,19 @@ impl Mode {
         }
 
         let process_rpc_again = match self {
-            Mode::F(follower) => {
+            Mode::Follower(follower) => {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
                 //% leader or granting vote to candidate: convert to candidate
                 follower.on_recv(rpc, context);
                 None
             }
-            Mode::C(candidate) => {
+            Mode::Candidate(candidate) => {
                 let (transition, rpc) = candidate.on_recv(peer_id, rpc, context);
                 self.handle_mode_transition(transition, context);
                 rpc
             }
-            Mode::L(leader) => {
+            Mode::Leader(leader) => {
                 leader.on_recv(rpc, context);
                 None
             }
@@ -115,14 +115,14 @@ impl Mode {
     }
 
     fn on_follower<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
-        *self = Mode::F(Follower);
-        let follower = cast_unsafe!(self, Mode::F);
+        *self = Mode::Follower(Follower);
+        let follower = cast_unsafe!(self, Mode::Follower);
         follower.on_follower(context);
     }
 
     fn on_candidate<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
-        *self = Mode::C(Candidate::default());
-        let candidate = cast_unsafe!(self, Mode::C);
+        *self = Mode::Candidate(Candidate::default());
+        let candidate = cast_unsafe!(self, Mode::Candidate);
 
         match candidate.on_candidate(context) {
             ModeTransition::None => (),
@@ -137,8 +137,8 @@ impl Mode {
     }
 
     fn on_leader<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
-        *self = Mode::L(Leader);
-        let leader = cast_unsafe!(self, Mode::L);
+        *self = Mode::Leader(Leader);
+        let leader = cast_unsafe!(self, Mode::Leader);
         leader.on_leader(context);
     }
 
@@ -223,7 +223,7 @@ mod tests {
             raft_state: &mut state,
             peer_map: &mut peer_map,
         };
-        let mut mode = Mode::C(Candidate::default());
+        let mut mode = Mode::Candidate(Candidate::default());
 
         // Mock send AppendEntries to Candidate with `term => current_term`
         let append_entries = Rpc::new_append_entry(
@@ -236,7 +236,7 @@ mod tests {
         mode.on_recv(leader_id, append_entries, &mut context);
 
         // expect Mode::Follower
-        assert!(matches!(mode, Mode::F(_)));
+        assert!(matches!(mode, Mode::Follower(_)));
 
         // decode the sent RPC
         let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
@@ -268,7 +268,7 @@ mod tests {
             raft_state: &mut state,
             peer_map: &mut peer_map,
         };
-        let mut mode = Mode::C(Candidate::default());
+        let mut mode = Mode::Candidate(Candidate::default());
 
         // Mock send AppendEntries to Candidate with `term => current_term`
         let append_entries = Rpc::new_append_entry(
@@ -281,7 +281,7 @@ mod tests {
         mode.on_recv(peer_id, append_entries, &mut context);
 
         // expect Mode::Candidate
-        assert!(matches!(mode, Mode::C(_)));
+        assert!(matches!(mode, Mode::Candidate(_)));
 
         // decode the sent RPC
         let peer_io = &mut context.peer_map.get_mut(&peer_id).unwrap().io;
