@@ -1,13 +1,10 @@
-use crate::io::ServerIO;
-use crate::io::IO_BUF_LEN;
-use crate::rpc::Rpc;
-use crate::server::Context;
 use crate::{
+    io::{ServerIO, IO_BUF_LEN},
     log::{Term, TermIdx},
-    server::ServerId,
+    rpc::Rpc,
+    server::{Context, ServerId},
 };
-use s2n_codec::EncoderBuffer;
-use s2n_codec::{DecoderValue, EncoderValue};
+use s2n_codec::{DecoderValue, EncoderBuffer, EncoderValue};
 
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,7 +27,7 @@ impl RequestVote {
     pub const TAG: u8 = 1;
 
     pub fn on_recv<IO: ServerIO>(self, context: &mut Context<IO>) {
-        let current_term = context.state.current_term;
+        let current_term = context.raft_state.current_term;
 
         //% Compliance:
         //% Reply false if term < currentTerm (§5.1)
@@ -47,11 +44,11 @@ impl RequestVote {
         //% -	RequestVote includes info about candidate's log
         //% -	voter denies vote if its own log is more `up-to-date`
         let log_up_to_date_criteria = context
-            .state
+            .raft_state
             .log
             .is_candidate_log_up_to_date(&self.last_log_term_idx);
 
-        let voted_for_criteria = if let Some(voted_for) = context.state.voted_for {
+        let voted_for_criteria = if let Some(voted_for) = context.raft_state.voted_for {
             //% Compliance:
             //% and votedFor is candidateId, grant vote (§5.2, §5.4)
             voted_for == self.candidate_id
@@ -64,7 +61,7 @@ impl RequestVote {
         let grant_vote = term_criteria && log_up_to_date_criteria && voted_for_criteria;
         if grant_vote {
             // set local state to capture granting the vote
-            context.state.voted_for = Some(self.candidate_id);
+            context.raft_state.voted_for = Some(self.candidate_id);
         }
 
         let candidate_io = &mut context.peer_map.get_mut(&self.candidate_id).unwrap().io;
@@ -135,13 +132,13 @@ impl EncoderValue for RequestVoteResp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::macros::cast_unsafe;
     use crate::{
         io::testing::helper_inspect_sent_rpc,
         log::{Entry, Idx, Term, TermIdx},
+        macros::cast_unsafe,
         peer::Peer,
+        raft_state::RaftState,
         server::ServerId,
-        state::State,
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -194,14 +191,14 @@ mod tests {
         let candidate_id_fill = 2;
         let candidate_id = ServerId::new([candidate_id_fill; 16]);
         let mut peer_map = Peer::mock_as_map(&[candidate_id_fill]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
         let current_term = Term::initial();
         state.current_term = current_term;
         assert!(state.log.entries.is_empty());
 
         let mut context = Context {
             server_id,
-            state: &mut state,
+            raft_state: &mut state,
             peer_map: &mut peer_map,
         };
         let rpc_term_idx_initial = TermIdx::initial();
@@ -244,7 +241,7 @@ mod tests {
         let candidate_id_fill = 2;
         let candidate_id = ServerId::new([candidate_id_fill; 16]);
         let mut peer_map = Peer::mock_as_map(&[candidate_id_fill]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
 
         let idx_lt = Idx::from(1);
         let idx_eq = Idx::from(2);
@@ -261,7 +258,7 @@ mod tests {
 
         let mut context = Context {
             server_id,
-            state: &mut state,
+            raft_state: &mut state,
             peer_map: &mut peer_map,
         };
 
@@ -367,14 +364,14 @@ mod tests {
         let peer2_id = ServerId::new([peer2_id_fill; 16]);
 
         let mut peer_map = Peer::mock_as_map(&[candidate_id_fill, peer2_id_fill]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
 
         let term_current = Term::from(2);
         state.current_term = term_current;
 
         let mut context = Context {
             server_id,
-            state: &mut state,
+            raft_state: &mut state,
             peer_map: &mut peer_map,
         };
 
@@ -383,7 +380,7 @@ mod tests {
         // == vote_granted None ==
         // Expect: grant vote
         {
-            context.state.voted_for = None;
+            context.raft_state.voted_for = None;
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
@@ -398,7 +395,7 @@ mod tests {
         // == vote_granted Some(candidate_id) ==
         // Expect: grant vote
         {
-            context.state.voted_for = Some(candidate_id);
+            context.raft_state.voted_for = Some(candidate_id);
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
@@ -413,7 +410,7 @@ mod tests {
         // == vote_granted Some(!candidate_id) ==
         // Expect: NO grant vote
         {
-            context.state.voted_for = Some(peer2_id);
+            context.raft_state.voted_for = Some(peer2_id);
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
@@ -435,7 +432,7 @@ mod tests {
         let candidate_id_fill = 2;
         let candidate_id = ServerId::new([candidate_id_fill; 16]);
         let mut peer_map = Peer::mock_as_map(&[candidate_id_fill]);
-        let mut state = State::new(timeout, &peer_map);
+        let mut state = RaftState::new(timeout, &peer_map);
 
         let term_prev = Term::from(1);
         let term_current = Term::from(2);
@@ -444,7 +441,7 @@ mod tests {
 
         let mut context = Context {
             server_id,
-            state: &mut state,
+            raft_state: &mut state,
             peer_map: &mut peer_map,
         };
 

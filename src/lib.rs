@@ -6,9 +6,9 @@ mod log;
 mod macros;
 mod mode;
 mod peer;
+mod raft_state;
 mod rpc;
 mod server;
-mod state;
 mod timeout;
 
 fn start() {}
