@@ -14,15 +14,15 @@ pub use request_vote::{RequestVote, RequestVoteResp};
 #[allow(clippy::upper_case_acronyms)]
 #[must_use]
 pub enum Rpc {
-    RV(RequestVote),
-    RVR(RequestVoteResp),
-    AE(AppendEntries),
-    AER(AppendEntriesResp),
+    RequestVote(RequestVote),
+    RequestVoteResp(RequestVoteResp),
+    AppendEntry(AppendEntries),
+    AppendEntryResp(AppendEntriesResp),
 }
 
 impl Rpc {
     pub fn new_request_vote(term: Term, candidate_id: ServerId, last_log_term_idx: TermIdx) -> Rpc {
-        Rpc::RV(RequestVote {
+        Rpc::RequestVote(RequestVote {
             term,
             candidate_id,
             last_log_term_idx,
@@ -30,7 +30,7 @@ impl Rpc {
     }
 
     pub fn new_request_vote_resp(term: Term, vote_granted: bool) -> Rpc {
-        Rpc::RVR(RequestVoteResp { term, vote_granted })
+        Rpc::RequestVoteResp(RequestVoteResp { term, vote_granted })
     }
 
     pub fn new_append_entry(
@@ -40,7 +40,7 @@ impl Rpc {
         leader_commit_idx: Idx,
         entries: Vec<Entry>,
     ) -> Rpc {
-        Rpc::AE(AppendEntries {
+        Rpc::AppendEntry(AppendEntries {
             term,
             leader_id,
             prev_log_term_idx,
@@ -50,15 +50,15 @@ impl Rpc {
     }
 
     pub fn new_append_entry_resp(term: Term, success: bool) -> Rpc {
-        Rpc::AER(AppendEntriesResp { term, success })
+        Rpc::AppendEntryResp(AppendEntriesResp { term, success })
     }
 
     pub fn term(&self) -> &Term {
         match self {
-            Rpc::RV(RequestVote { term, .. }) => term,
-            Rpc::RVR(RequestVoteResp { term, .. }) => term,
-            Rpc::AE(AppendEntries { term, .. }) => term,
-            Rpc::AER(AppendEntriesResp { term, .. }) => term,
+            Rpc::RequestVote(RequestVote { term, .. }) => term,
+            Rpc::RequestVoteResp(RequestVoteResp { term, .. }) => term,
+            Rpc::AppendEntry(AppendEntries { term, .. }) => term,
+            Rpc::AppendEntryResp(AppendEntriesResp { term, .. }) => term,
         }
     }
 }
@@ -70,19 +70,19 @@ impl<'a> DecoderValue<'a> for Rpc {
         match tag {
             RequestVote::TAG => {
                 let (rpc, buffer) = buffer.decode()?;
-                Ok((Rpc::RV(rpc), buffer))
+                Ok((Rpc::RequestVote(rpc), buffer))
             }
             RequestVoteResp::TAG => {
                 let (rpc, buffer) = buffer.decode()?;
-                Ok((Rpc::RVR(rpc), buffer))
+                Ok((Rpc::RequestVoteResp(rpc), buffer))
             }
             AppendEntries::TAG => {
                 let (rpc, buffer) = buffer.decode()?;
-                Ok((Rpc::AE(rpc), buffer))
+                Ok((Rpc::AppendEntry(rpc), buffer))
             }
             AppendEntriesResp::TAG => {
                 let (rpc, buffer) = buffer.decode()?;
-                Ok((Rpc::AER(rpc), buffer))
+                Ok((Rpc::AppendEntryResp(rpc), buffer))
             }
             _tag => Err(DecoderError::InvariantViolation("received unexpected tag")),
         }
@@ -92,19 +92,19 @@ impl<'a> DecoderValue<'a> for Rpc {
 impl EncoderValue for Rpc {
     fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
         match self {
-            Rpc::RV(inner) => {
+            Rpc::RequestVote(inner) => {
                 encoder.write_slice(&[RequestVote::TAG]);
                 encoder.encode(inner);
             }
-            Rpc::RVR(inner) => {
+            Rpc::RequestVoteResp(inner) => {
                 encoder.write_slice(&[RequestVoteResp::TAG]);
                 encoder.encode(inner);
             }
-            Rpc::AE(inner) => {
+            Rpc::AppendEntry(inner) => {
                 encoder.write_slice(&[AppendEntries::TAG]);
                 encoder.encode(inner);
             }
-            Rpc::AER(inner) => {
+            Rpc::AppendEntryResp(inner) => {
                 encoder.write_slice(&[AppendEntriesResp::TAG]);
                 encoder.encode(inner);
             }

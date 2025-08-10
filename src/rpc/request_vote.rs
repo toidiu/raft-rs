@@ -207,7 +207,7 @@ mod tests {
         {
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(current_term, candidate_id, rpc_term_idx_initial);
-            cast_unsafe!(recv_rpc, Rpc::RV).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
 
             let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);
@@ -223,7 +223,7 @@ mod tests {
                 .with_idx(Idx::from(1));
             let rpc_term = Term::from(1);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RV).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
 
             let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);
@@ -271,7 +271,7 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RV).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
 
             let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);
@@ -289,7 +289,7 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RV).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
 
             let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);
@@ -307,7 +307,7 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RV).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
 
             let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);
@@ -325,7 +325,7 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RV).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
 
             let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);
@@ -343,7 +343,7 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RV).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
 
             let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);
@@ -384,7 +384,7 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RV).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
 
             let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);
@@ -399,7 +399,7 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RV).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
 
             let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);
@@ -414,7 +414,7 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RV).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
 
             let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);
@@ -454,7 +454,7 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RV).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
 
             let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);
@@ -469,7 +469,7 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RV).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
 
             let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);
@@ -484,7 +484,7 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RV).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
 
             let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io;
             let rpc = helper_inspect_sent_rpc(candidate_io);

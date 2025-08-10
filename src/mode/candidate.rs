@@ -38,17 +38,19 @@ impl Candidate {
         context: &mut Context<IO>,
     ) -> (ModeTransition, Option<Rpc>) {
         match rpc {
-            Rpc::RV(request_vote) => {
+            Rpc::RequestVote(request_vote) => {
                 request_vote.on_recv(context);
                 (ModeTransition::None, None)
             }
-            Rpc::RVR(request_vote_resp) => {
+            Rpc::RequestVoteResp(request_vote_resp) => {
                 let transition =
                     self.on_recv_request_vote_resp(peer_id, request_vote_resp, context);
                 (transition, None)
             }
-            Rpc::AE(append_entries) => self.on_recv_append_entries(append_entries, context),
-            Rpc::AER(_) => {
+            Rpc::AppendEntry(append_entries) => {
+                self.on_recv_append_entries(append_entries, context)
+            }
+            Rpc::AppendEntryResp(_) => {
                 todo!("it might be possible to get a response from a previous term")
             }
         }
@@ -80,7 +82,7 @@ impl Candidate {
             //% If AppendEntries RPC received from new leader: convert to follower
 
             // Convert to Follower and process/respond to the RPC
-            let rpc = Rpc::AE(append_entries);
+            let rpc = Rpc::AppendEntry(append_entries);
             (ModeTransition::ToFollower, Some(rpc))
         } else {
             //% Compliance:
@@ -325,14 +327,19 @@ mod tests {
         // grant and no_grant vote RPC
 
         // peer 2 DOES grant vote but has older Term
-        let prev_term_rpc = cast_unsafe!(Rpc::new_request_vote_resp(term_current, true), Rpc::RVR);
+        let prev_term_rpc = cast_unsafe!(
+            Rpc::new_request_vote_resp(term_current, true),
+            Rpc::RequestVoteResp
+        );
         let transition = candidate.on_recv_request_vote_resp(peer_id2, prev_term_rpc, &mut context);
         assert!(matches!(transition, ModeTransition::None));
         assert_eq!(candidate.votes_received.len(), 1);
 
         // peer 2 DOES grant vote but has election Term
-        let election_term_rpc =
-            cast_unsafe!(Rpc::new_request_vote_resp(term_election, true), Rpc::RVR);
+        let election_term_rpc = cast_unsafe!(
+            Rpc::new_request_vote_resp(term_election, true),
+            Rpc::RequestVoteResp
+        );
         let transition =
             candidate.on_recv_request_vote_resp(peer_id2, election_term_rpc, &mut context);
         assert!(matches!(transition, ModeTransition::ToLeader));
@@ -372,10 +379,14 @@ mod tests {
         assert_eq!(candidate.votes_received.len(), 1);
 
         // grant and no_grant vote RPC
-        let grant_vote_rpc =
-            cast_unsafe!(Rpc::new_request_vote_resp(term_election, true), Rpc::RVR);
-        let no_grant_vote_rpc =
-            cast_unsafe!(Rpc::new_request_vote_resp(term_election, false), Rpc::RVR);
+        let grant_vote_rpc = cast_unsafe!(
+            Rpc::new_request_vote_resp(term_election, true),
+            Rpc::RequestVoteResp
+        );
+        let no_grant_vote_rpc = cast_unsafe!(
+            Rpc::new_request_vote_resp(term_election, false),
+            Rpc::RequestVoteResp
+        );
 
         // peer 2 DOES grant vote
         let transition =
