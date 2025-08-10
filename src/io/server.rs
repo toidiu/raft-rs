@@ -23,8 +23,9 @@ pub trait ServerRx {
 }
 
 pub trait ServerTx {
-    fn send(&mut self, _data: &[u8]) {
-        todo!()
+    #[cfg(test)]
+    fn send_raw_bytes(&mut self, _data: &[u8]) {
+        unimplemented!()
     }
 
     fn send_rpc(&mut self, rpc: Rpc);
@@ -63,10 +64,9 @@ impl ServerRx for ServerIo {
 }
 
 impl ServerTx for ServerIo {
-    fn send(&mut self, data: &[u8]) {
-        println!("  server ---> {:?}", data);
-
-        self.tx.lock().unwrap().extend(data);
+    #[cfg(test)]
+    fn send_raw_bytes(&mut self, data: &[u8]) {
+        self.tx.lock().unwrap().extend(data.iter());
 
         if let Some(waker) = self.tx_waker.lock().unwrap().deref() {
             waker.wake_by_ref();

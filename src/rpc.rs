@@ -221,22 +221,19 @@ impl AppendEntries {
 #[cfg(test)]
 mod tests {
     use crate::{
-        io::{BufferIo, NetTx, ServerTx, IO_BUF_LEN},
+        io::{BufferIo, NetTx, ServerTx},
         rpc::{Rpc, TermIdx},
         state::ServerId,
         testing::cast_unsafe,
     };
-    use s2n_codec::{DecoderBuffer, DecoderValue, EncoderBuffer, EncoderValue};
+    use s2n_codec::{DecoderBuffer, DecoderValue};
 
     #[test]
     fn encode_decode_request_vote() {
         let (mut server_io, mut network_io) = BufferIo::split();
 
-        let mut slice = vec![0; IO_BUF_LEN];
-        let mut buf = EncoderBuffer::new(&mut slice);
-        let mut sent_rpc = Rpc::new_request_vote(0, ServerId::new(), TermIdx::new(2, 3));
-        sent_rpc.encode_mut(&mut buf);
-        server_io.send(buf.as_mut_slice());
+        let sent_rpc = Rpc::new_request_vote(0, ServerId::new(), TermIdx::new(2, 3));
+        server_io.send_rpc(sent_rpc);
 
         let bytes = network_io.send_to_socket().unwrap();
         let buf = DecoderBuffer::new(&bytes);

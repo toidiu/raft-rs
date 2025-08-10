@@ -88,31 +88,37 @@ impl_io_ready!(NetworkIo, TxReady, poll_tx_ready);
 mod tests {
     use super::*;
     use crate::{log::TermIdx, rpc::Rpc};
+    use s2n_codec::{EncoderBuffer, EncoderValue};
 
     // network::recv and server::send are separate queues
     #[test]
     fn producer_consumer() {
         let (mut server_io, mut network_io) = BufferIo::split();
 
-        network_io.recv_from_socket(vec![1]);
-        network_io.recv_from_socket(vec![2]);
-        server_io.send(vec![3]);
-        server_io.send(vec![4]);
-        server_io.send_rpc(rpc);
-        server_io.send_rpc(rpc);
+        let mut buf = [0; IO_BUF_LEN];
+        let mut buf = EncoderBuffer::new(&mut buf);
+        let (rpc, rpc_data) = {
+            let rpc = Rpc::new_append_entry(0, TermIdx::new(0, 1));
 
-        assert_eq!(server_io.recv(), Some(vec![1, 2]));
-        assert_eq!(server_io.recv(), None);
+            rpc.clone().encode_mut(&mut buf);
+            let rpc_data = buf.as_mut_slice();
+            (rpc, rpc_data)
+        };
 
-        assert_eq!(network_io.send_to_socket(), Some(vec![3, 4]));
-        assert_eq!(network_io.send_to_socket(), None);
+        // send and receive multiple times
+        for _ in 0..10 {
+            // push to network queue
+            network_io.recv_from_socket(vec![1, 2]);
+            network_io.recv_from_socket(vec![3, 4]);
+            // push to server queue
+            server_io.send_rpc(rpc);
 
-        network_io.recv_from_socket(vec![5]);
-        server_io.send(vec![6]);
-        assert_eq!(server_io.recv(), Some(vec![5]));
-        assert_eq!(server_io.recv(), None);
-
-        assert_eq!(network_io.send_to_socket(), Some(vec![6]));
-        assert_eq!(network_io.send_to_socket(), None);
+            // recv from network queue
+            assert_eq!(server_io.recv(), Some(vec![1, 2, 3, 4]));
+            assert_eq!(server_io.recv(), None);
+            // recv from server queue
+            assert_eq!(network_io.send_to_socket(), Some(rpc_data.to_vec()));
+            assert_eq!(network_io.send_to_socket(), None);
+        }
     }
 }

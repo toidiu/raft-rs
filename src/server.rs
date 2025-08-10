@@ -80,8 +80,7 @@ impl Server {
     #[cfg(test)]
     fn send_test_data(&mut self, data: &[u8]) {
         use crate::io::ServerTx;
-        // println!("---send test data: {:?}", data);
-        self.io.send(data);
+        self.io.send_raw_bytes(data);
     }
 }
 
