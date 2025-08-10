@@ -31,7 +31,7 @@
 //! https://textik.com/#8dbf6540e0dd1676
 
 use crate::{
-    io::ServerIO,
+    io::ServerEgress,
     macros::cast_unsafe,
     mode::{candidate::Candidate, follower::Follower, leader::Leader},
     rpc::Rpc,
@@ -49,7 +49,7 @@ pub enum Mode {
 }
 
 impl Mode {
-    fn on_timeout<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
+    fn on_timeout<E: ServerEgress>(&mut self, context: &mut Context<E>) {
         match self {
             Mode::Follower(follower) => {
                 let transition = follower.on_timeout();
@@ -64,7 +64,7 @@ impl Mode {
         }
     }
 
-    fn on_recv<IO: ServerIO>(&mut self, peer_id: ServerId, rpc: Rpc, context: &mut Context<IO>) {
+    fn on_recv<E: ServerEgress>(&mut self, peer_id: ServerId, rpc: Rpc, context: &mut Context<E>) {
         //% Compliance:
         //% If RPC request or response contains term T > currentTerm: set currentTerm = T, convert
         //% to follower (§5.1)
@@ -101,10 +101,10 @@ impl Mode {
         }
     }
 
-    fn handle_mode_transition<IO: ServerIO>(
+    fn handle_mode_transition<E: ServerEgress>(
         &mut self,
         transition: ModeTransition,
-        context: &mut Context<IO>,
+        context: &mut Context<E>,
     ) {
         match transition {
             ModeTransition::None => (),
@@ -114,13 +114,13 @@ impl Mode {
         }
     }
 
-    fn on_follower<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
+    fn on_follower<E: ServerEgress>(&mut self, context: &mut Context<E>) {
         *self = Mode::Follower(Follower);
         let follower = cast_unsafe!(self, Mode::Follower);
         follower.on_follower(context);
     }
 
-    fn on_candidate<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
+    fn on_candidate<E: ServerEgress>(&mut self, context: &mut Context<E>) {
         *self = Mode::Candidate(Candidate::default());
         let candidate = cast_unsafe!(self, Mode::Candidate);
 
@@ -136,13 +136,13 @@ impl Mode {
         }
     }
 
-    fn on_leader<IO: ServerIO>(&mut self, context: &mut Context<IO>) {
+    fn on_leader<E: ServerEgress>(&mut self, context: &mut Context<E>) {
         *self = Mode::Leader(Leader);
         let leader = cast_unsafe!(self, Mode::Leader);
         leader.on_leader(context);
     }
 
-    fn quorum<IO: ServerIO>(context: &Context<IO>) -> usize {
+    fn quorum<E: ServerEgress>(context: &Context<E>) -> usize {
         let peer_plus_self = context.peer_map.len() + 1;
         let half = peer_plus_self / 2;
         half + 1
@@ -239,7 +239,7 @@ mod tests {
         assert!(matches!(mode, Mode::Follower(_)));
 
         // decode the sent RPC
-        let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io;
+        let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io_egress;
         let sent_request_vote = helper_inspect_sent_rpc(leader_io);
         assert!(leader_io.send_queue.is_empty());
 
@@ -284,7 +284,7 @@ mod tests {
         assert!(matches!(mode, Mode::Candidate(_)));
 
         // decode the sent RPC
-        let peer_io = &mut context.peer_map.get_mut(&peer_id).unwrap().io;
+        let peer_io = &mut context.peer_map.get_mut(&peer_id).unwrap().io_egress;
         assert!(peer_io.send_queue.len() == 1);
         let sent_request_vote = helper_inspect_sent_rpc(peer_io);
 

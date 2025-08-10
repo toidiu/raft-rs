@@ -1,17 +1,17 @@
-use crate::{io::ServerIO, mode::Mode, peer::Peer, raft_state::RaftState};
+use crate::{io::ServerEgress, mode::Mode, peer::Peer, raft_state::RaftState};
 use s2n_codec::{DecoderValue, EncoderValue};
 use std::collections::BTreeMap;
 
-struct Server<IO: ServerIO> {
+struct Server<E: ServerEgress> {
     mode: Mode,
     state: RaftState,
-    peer_map: BTreeMap<ServerId, Peer<IO>>,
+    peer_map: BTreeMap<ServerId, Peer<E>>,
 }
 
-pub struct Context<'a, IO: ServerIO> {
+pub struct Context<'a, E: ServerEgress> {
     pub server_id: ServerId,
     pub raft_state: &'a mut RaftState,
-    pub peer_map: &'a mut BTreeMap<ServerId, Peer<IO>>,
+    pub peer_map: &'a mut BTreeMap<ServerId, Peer<E>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
