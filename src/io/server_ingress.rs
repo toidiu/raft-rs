@@ -1,5 +1,9 @@
-use crate::io::{RxReady, IO_BUF_LEN};
+use crate::{
+    io::{RxReady, IO_BUF_LEN},
+    rpc::Rpc,
+};
 use core::task::{Context, Poll, Waker};
+use s2n_codec::{DecoderBuffer, DecoderValue};
 use std::{
     collections::VecDeque,
     io::Read,
@@ -15,7 +19,12 @@ pub struct ServerIngressImpl {
 }
 
 pub trait ServerIngress {
-    fn recv(&mut self) -> Option<Vec<u8>>;
+    #[cfg(test)]
+    fn recv_raw(&mut self) -> Option<Vec<u8>>;
+
+    fn recv_rpc(&mut self) -> Option<RecvRpc<'_>> {
+        todo!()
+    }
 
     fn poll_ingress_queue_ready(&mut self, cx: &mut Context) -> Poll<()>;
 
@@ -27,7 +36,8 @@ pub trait ServerIngress {
 
 impl ServerIngress for ServerIngressImpl {
     // Retrieve data for the Server to process
-    fn recv(&mut self) -> Option<Vec<u8>> {
+    #[cfg(test)]
+    fn recv_raw(&mut self) -> Option<Vec<u8>> {
         let bytes_to_recv = self
             .ingress_queue
             .lock()
@@ -42,6 +52,17 @@ impl ServerIngress for ServerIngressImpl {
         }
     }
 
+    fn recv_rpc(&mut self) -> Option<RecvRpc<'_>> {
+        let len = self
+            .ingress_queue
+            .lock()
+            .unwrap()
+            .read(&mut self.buf)
+            .ok()?;
+
+        Some(RecvRpc::new(&self.buf[0..len]))
+    }
+
     fn poll_ingress_queue_ready(&mut self, cx: &mut Context) -> Poll<()> {
         // register the shared Waker
         *self.ingress_waker.lock().unwrap() = Some(cx.waker().clone());
@@ -51,6 +72,35 @@ impl ServerIngress for ServerIngressImpl {
             Poll::Ready(())
         } else {
             Poll::Pending
+        }
+    }
+}
+
+pub struct RecvRpc<'a> {
+    // buf: &'a [u8],
+    buf: DecoderBuffer<'a>,
+}
+
+impl<'a> RecvRpc<'a> {
+    fn new(buf: &'a [u8]) -> Self {
+        let buf = DecoderBuffer::new(buf);
+        RecvRpc { buf }
+    }
+}
+
+impl<'a> Iterator for RecvRpc<'a> {
+    type Item = Rpc;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let len = self.buf.len();
+        if len > 0 {
+            let (rpc, buf) = Rpc::decode(self.buf).expect("should only receive valid RPC bytes");
+            // update the buffer to point to the next set of bytes
+            self.buf = buf;
+
+            Some(rpc)
+        } else {
+            None
         }
     }
 }

@@ -1,10 +1,9 @@
 use crate::{
-    io::{ServerEgress, IO_BUF_LEN},
+    io::ServerEgress,
     log::MatchOutcome,
     mode::{Context, ModeTransition},
     rpc::{AppendEntries, Rpc},
 };
-use s2n_codec::{EncoderBuffer, EncoderValue};
 use std::cmp::min;
 
 #[derive(Debug, Default)]
@@ -104,10 +103,8 @@ impl Follower {
             .get_mut(&append_entries.leader_id)
             .unwrap()
             .io_egress;
-        let mut slice = vec![0; IO_BUF_LEN];
-        let mut buf = EncoderBuffer::new(&mut slice);
-        Rpc::new_append_entry_resp(current_term, response).encode_mut(&mut buf);
-        leader_io.send(buf.as_mut_slice().to_vec());
+        let rpc = Rpc::new_append_entry_resp(current_term, response);
+        leader_io.send_rpc(rpc);
     }
 }
 
