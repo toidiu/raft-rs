@@ -26,7 +26,7 @@ pub struct RequestVote {
 impl RequestVote {
     pub const TAG: u8 = 1;
 
-    pub fn on_recv<E: ServerEgress>(self, context: &mut Context<E>) {
+    pub fn on_recv<E: ServerEgress>(self, context: &mut Context, io_egress: &mut E) {
         let current_term = context.raft_state.current_term;
 
         //% Compliance:
@@ -64,13 +64,8 @@ impl RequestVote {
             context.raft_state.voted_for = Some(self.candidate_id);
         }
 
-        let candidate_io = &mut context
-            .peer_map
-            .get_mut(&self.candidate_id)
-            .unwrap()
-            .io_egress;
         let rpc = Rpc::new_request_vote_resp(current_term, grant_vote);
-        candidate_io.send_rpc(rpc);
+        io_egress.send_rpc(rpc);
     }
 }
 
@@ -135,10 +130,10 @@ impl EncoderValue for RequestVoteResp {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::helper_inspect_sent_rpc,
+        io::testing::{helper_inspect_sent_rpc, MockIo},
         log::{Entry, Idx, Term, TermIdx},
         macros::cast_unsafe,
-        peer::Peer,
+        peer::PeerInfo,
         raft_state::RaftState,
         server::ServerId,
         timeout::Timeout,
@@ -192,12 +187,13 @@ mod tests {
         let server_id = ServerId::new([1; 16]);
         let candidate_id_fill = 2;
         let candidate_id = ServerId::new([candidate_id_fill; 16]);
-        let mut peer_map = Peer::mock_as_map(&[candidate_id_fill]);
+        let mut peer_map = PeerInfo::mock_as_map(&[candidate_id_fill]);
         let mut state = RaftState::new(timeout, &peer_map);
         let current_term = Term::initial();
         state.current_term = current_term;
         assert!(state.log.entries.is_empty());
 
+        let mut io = MockIo::new();
         let mut context = Context {
             server_id,
             raft_state: &mut state,
@@ -209,10 +205,9 @@ mod tests {
         {
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(current_term, candidate_id, rpc_term_idx_initial);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context, &mut io);
 
-            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(current_term, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -225,10 +220,9 @@ mod tests {
                 .with_idx(Idx::from(1));
             let rpc_term = Term::from(1);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context, &mut io);
 
-            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(current_term, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -242,7 +236,7 @@ mod tests {
         let server_id = ServerId::new([1; 16]);
         let candidate_id_fill = 2;
         let candidate_id = ServerId::new([candidate_id_fill; 16]);
-        let mut peer_map = Peer::mock_as_map(&[candidate_id_fill]);
+        let mut peer_map = PeerInfo::mock_as_map(&[candidate_id_fill]);
         let mut state = RaftState::new(timeout, &peer_map);
 
         let idx_lt = Idx::from(1);
@@ -258,6 +252,7 @@ mod tests {
             .log
             .push(vec![Entry::new(term_prev, 3), Entry::new(term_current, 6)]);
 
+        let mut io = MockIo::new();
         let mut context = Context {
             server_id,
             raft_state: &mut state,
@@ -273,10 +268,9 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context, &mut io);
 
-            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -291,10 +285,9 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context, &mut io);
 
-            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
             assert_eq!(expected_rpc, rpc);
         }
@@ -309,10 +302,9 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context, &mut io);
 
-            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -327,10 +319,9 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context, &mut io);
 
-            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
             assert_eq!(expected_rpc, rpc);
         }
@@ -345,10 +336,9 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context, &mut io);
 
-            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -365,12 +355,13 @@ mod tests {
         let peer2_id_fill = 3;
         let peer2_id = ServerId::new([peer2_id_fill; 16]);
 
-        let mut peer_map = Peer::mock_as_map(&[candidate_id_fill, peer2_id_fill]);
+        let mut peer_map = PeerInfo::mock_as_map(&[candidate_id_fill, peer2_id_fill]);
         let mut state = RaftState::new(timeout, &peer_map);
 
         let term_current = Term::from(2);
         state.current_term = term_current;
 
+        let mut io = MockIo::new();
         let mut context = Context {
             server_id,
             raft_state: &mut state,
@@ -386,10 +377,9 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context, &mut io);
 
-            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -401,10 +391,9 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context, &mut io);
 
-            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -416,10 +405,9 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context, &mut io);
 
-            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
             assert_eq!(expected_rpc, rpc);
         }
@@ -433,7 +421,7 @@ mod tests {
         let server_id = ServerId::new([1; 16]);
         let candidate_id_fill = 2;
         let candidate_id = ServerId::new([candidate_id_fill; 16]);
-        let mut peer_map = Peer::mock_as_map(&[candidate_id_fill]);
+        let mut peer_map = PeerInfo::mock_as_map(&[candidate_id_fill]);
         let mut state = RaftState::new(timeout, &peer_map);
 
         let term_prev = Term::from(1);
@@ -441,6 +429,7 @@ mod tests {
         let term_ahead = Term::from(3);
         state.current_term = term_current;
 
+        let mut io = MockIo::new();
         let mut context = Context {
             server_id,
             raft_state: &mut state,
@@ -456,10 +445,9 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context, &mut io);
 
-            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -471,10 +459,9 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context, &mut io);
 
-            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -486,10 +473,9 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut context, &mut io);
 
-            let candidate_io = &mut context.peer_map.get_mut(&candidate_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(candidate_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
             assert_eq!(expected_rpc, rpc);
         }

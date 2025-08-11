@@ -10,7 +10,7 @@ use std::cmp::min;
 pub struct Follower;
 
 impl Follower {
-    pub fn on_follower<E: ServerEgress>(&mut self, _context: &mut Context<E>) {}
+    pub fn on_follower(&mut self, _context: &mut Context) {}
 
     pub fn on_timeout(&mut self) -> ModeTransition {
         //% Compliance:
@@ -29,13 +29,18 @@ impl Follower {
         ModeTransition::ToCandidate
     }
 
-    pub fn on_recv<E: ServerEgress>(&mut self, rpc: crate::rpc::Rpc, context: &mut Context<E>) {
+    pub fn on_recv<E: ServerEgress>(
+        &mut self,
+        rpc: crate::rpc::Rpc,
+        context: &mut Context,
+        io_egress: &mut E,
+    ) {
         //% Compliance:
         //% Respond to RPCs from candidates and leaders
         match rpc {
-            Rpc::RequestVote(request_vote) => request_vote.on_recv(context),
+            Rpc::RequestVote(request_vote) => request_vote.on_recv(context, io_egress),
             Rpc::AppendEntry(append_entries) => {
-                self.on_recv_append_entries(append_entries, context)
+                self.on_recv_append_entries(append_entries, context, io_egress)
             }
             Rpc::RequestVoteResp(_) | Rpc::AppendEntryResp(_) => {
                 todo!("it might be possible to get a response from a previous term")
@@ -46,7 +51,8 @@ impl Follower {
     fn on_recv_append_entries<E: ServerEgress>(
         &mut self,
         append_entries: AppendEntries,
-        context: &mut Context<E>,
+        context: &mut Context,
+        io_egress: &mut E,
     ) {
         let current_term = context.raft_state.current_term;
 
@@ -98,11 +104,7 @@ impl Follower {
             }
         }
 
-        let leader_io = &mut context
-            .peer_map
-            .get_mut(&append_entries.leader_id)
-            .unwrap()
-            .io_egress;
+        let leader_io = io_egress;
         let rpc = Rpc::new_append_entry_resp(current_term, response);
         leader_io.send_rpc(rpc);
     }
@@ -112,9 +114,9 @@ impl Follower {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::helper_inspect_sent_rpc,
+        io::testing::{helper_inspect_sent_rpc, MockIo},
         log::{Entry, Idx, Term, TermIdx},
-        peer::Peer,
+        peer::PeerInfo,
         raft_state::RaftState,
         server::ServerId,
         timeout::Timeout,
@@ -130,7 +132,7 @@ mod tests {
         let server_id = ServerId::new([1; 16]);
         let leader_id_fill = 2;
         let leader_id = ServerId::new([leader_id_fill; 16]);
-        let mut peer_map = Peer::mock_as_map(&[leader_id_fill]);
+        let mut peer_map = PeerInfo::mock_as_map(&[leader_id_fill]);
         let mut state = RaftState::new(timeout, &peer_map);
         let current_term = Term::from(2);
         state.current_term = current_term;
@@ -144,6 +146,8 @@ mod tests {
         let leader_commit_idx = Idx::initial();
         let prev_log_term_idx = TermIdx::initial();
 
+        let mut io = MockIo::new();
+
         // Expect response true
         // - but no entries are sent
         {
@@ -155,10 +159,9 @@ mod tests {
                 leader_commit_idx,
                 vec![],
             );
-            follower.on_recv(recv_rpc, &mut context);
+            follower.on_recv(recv_rpc, &mut context, &mut io);
 
-            let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(leader_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
             assert_eq!(expected_rpc, rpc);
             assert!(context.raft_state.log.entries.is_empty());
@@ -176,10 +179,9 @@ mod tests {
                 vec![Entry::new(current_term, 3), Entry::new(current_term, 6)],
             );
             // on_recv AppendEntries
-            follower.on_recv(recv_rpc, &mut context);
+            follower.on_recv(recv_rpc, &mut context, &mut io);
 
-            let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(leader_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
             assert_eq!(expected_rpc, rpc);
             assert!(context.raft_state.log.entries.is_empty());
@@ -199,10 +201,9 @@ mod tests {
                 vec![Entry::new(current_term, 3), Entry::new(current_term, 6)],
             );
             // on_recv AppendEntries
-            follower.on_recv(recv_rpc, &mut context);
+            follower.on_recv(recv_rpc, &mut context, &mut io);
 
-            let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(leader_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
             assert_eq!(expected_rpc, rpc);
             assert!(context.raft_state.log.entries.is_empty());
@@ -224,10 +225,9 @@ mod tests {
                 leader_commit_idx,
                 vec![Entry::new(current_term, 3), Entry::new(current_term, 6)],
             );
-            follower.on_recv(recv_rpc, &mut context);
+            follower.on_recv(recv_rpc, &mut context, &mut io);
 
-            let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io_egress;
-            let rpc = helper_inspect_sent_rpc(leader_io);
+            let rpc = helper_inspect_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
             assert_eq!(expected_rpc, rpc);
 

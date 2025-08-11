@@ -1,18 +1,16 @@
-use crate::{io::ServerEgress, mode::Context};
-
 #[derive(Debug, Default)]
 pub struct Leader;
 
 impl Leader {
-    pub fn on_leader<E: ServerEgress>(&mut self, _context: &mut Context<E>) {
+    pub fn on_leader(&mut self) {
         todo!()
     }
 
-    pub fn on_timeout<E: ServerEgress>(&mut self, _context: &mut Context<E>) {
+    pub fn on_timeout(&mut self) {
         todo!()
     }
 
-    pub fn on_recv<E: ServerEgress>(&mut self, _rpc: crate::rpc::Rpc, _context: &mut Context<E>) {
+    pub fn on_recv(&mut self, _rpc: crate::rpc::Rpc) {
         todo!()
     }
 }

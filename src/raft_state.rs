@@ -1,7 +1,6 @@
 use crate::{
-    io::ServerEgress,
     log::{Idx, Log, Term, TermIdx},
-    peer::Peer,
+    peer::PeerInfo,
     server::ServerId,
     timeout::Timeout,
 };
@@ -49,10 +48,7 @@ pub struct RaftState {
 }
 
 impl RaftState {
-    pub fn new<E: ServerEgress>(
-        election_timer: Timeout,
-        peer_map: &BTreeMap<ServerId, Peer<E>>,
-    ) -> Self {
+    pub fn new(election_timer: Timeout, peer_map: &BTreeMap<ServerId, PeerInfo>) -> Self {
         let log = Log::new();
         let mut next_idx_map = BTreeMap::new();
         let mut match_idx_map = BTreeMap::new();
@@ -68,10 +64,7 @@ impl RaftState {
         let match_idx = Idx::initial();
 
         for (id, peer) in peer_map.iter() {
-            let Peer {
-                id: _,
-                io_egress: _,
-            } = peer;
+            let PeerInfo { id: _ } = peer;
 
             next_idx_map.insert(*id, next_log_idx);
             match_idx_map.insert(*id, match_idx);
@@ -89,7 +82,7 @@ impl RaftState {
     }
 
     // Calculate the prev TermIdx for the peer
-    pub fn peers_prev_term_idx<E: ServerEgress>(&self, peer: &Peer<E>) -> TermIdx {
+    pub fn peers_prev_term_idx(&self, peer: &PeerInfo) -> TermIdx {
         // next Idx should always be > 0
         let peers_next_idx = self.next_idx.get(&peer.id).unwrap();
         assert!(!peers_next_idx.is_initial());
@@ -113,7 +106,7 @@ impl RaftState {
 mod tests {
     use crate::{
         log::Entry,
-        raft_state::{Idx, Peer, RaftState, ServerId, Term, TermIdx},
+        raft_state::{Idx, PeerInfo, RaftState, ServerId, Term, TermIdx},
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -126,7 +119,7 @@ mod tests {
 
         let peer2_fill = 2;
         let peer2_id = ServerId::new([peer2_fill; 16]);
-        let peer_map = Peer::mock_as_map(&[peer2_fill, 3]);
+        let peer_map = PeerInfo::mock_as_map(&[peer2_fill, 3]);
         let state = RaftState::new(timeout, &peer_map);
 
         // retrieve the prev_term_idx for peer (expect initial since log is empty)
@@ -142,7 +135,7 @@ mod tests {
 
         let peer2_fill = 2;
         let peer2_id = ServerId::new([peer2_fill; 16]);
-        let peer_map = Peer::mock_as_map(&[peer2_fill, 3]);
+        let peer_map = PeerInfo::mock_as_map(&[peer2_fill, 3]);
         let mut state = RaftState::new(timeout, &peer_map);
 
         // insert a log entry
