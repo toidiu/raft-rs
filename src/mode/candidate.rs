@@ -12,13 +12,21 @@ pub struct Candidate {
 }
 
 impl Candidate {
-    pub fn on_candidate<E: ServerEgress>(&mut self, context: &mut Context<E>) -> ModeTransition {
+    pub fn on_candidate<E: ServerEgress>(
+        &mut self,
+        context: &mut Context,
+        io_egress: &mut E,
+    ) -> ModeTransition {
         //% Compliance:
         //% On conversion to candidate, start election:
-        self.start_election(context)
+        self.start_election(context, io_egress)
     }
 
-    pub fn on_timeout<E: ServerEgress>(&mut self, context: &mut Context<E>) -> ModeTransition {
+    pub fn on_timeout<E: ServerEgress>(
+        &mut self,
+        context: &mut Context,
+        io_egress: &mut E,
+    ) -> ModeTransition {
         //% Compliance:
         //% A timeout occurs and there is no winner (can happen if too many servers become
         //% candidates at the same time)
@@ -27,18 +35,19 @@ impl Candidate {
         //
         //% Compliance:
         //% If election timeout elapses: start new election
-        self.start_election(context)
+        self.start_election(context, io_egress)
     }
 
     pub fn on_recv<E: ServerEgress>(
         &mut self,
         peer_id: ServerId,
         rpc: crate::rpc::Rpc,
-        context: &mut Context<E>,
+        context: &mut Context,
+        io_egress: &mut E,
     ) -> (ModeTransition, Option<Rpc>) {
         match rpc {
             Rpc::RequestVote(request_vote) => {
-                request_vote.on_recv(context);
+                request_vote.on_recv(context, io_egress);
                 (ModeTransition::None, None)
             }
             Rpc::RequestVoteResp(request_vote_resp) => {
@@ -47,7 +56,7 @@ impl Candidate {
                 (transition, None)
             }
             Rpc::AppendEntry(append_entries) => {
-                self.on_recv_append_entries(append_entries, context)
+                self.on_recv_append_entries(append_entries, context, io_egress)
             }
             Rpc::AppendEntryResp(_) => {
                 todo!("it might be possible to get a response from a previous term")
@@ -58,16 +67,16 @@ impl Candidate {
     fn on_recv_append_entries<E: ServerEgress>(
         &mut self,
         append_entries: AppendEntries,
-        context: &mut Context<E>,
+        context: &mut Context,
+        io_egress: &mut E,
     ) -> (ModeTransition, Option<Rpc>) {
         let AppendEntries {
             term,
-            leader_id,
+            leader_id: _,
             prev_log_term_idx: _,
             leader_commit_idx: _,
             entries: _,
         } = append_entries;
-        let leader_io = &mut context.peer_map.get_mut(&leader_id).unwrap().io_egress;
         //% Compliance:
         //% another server establishes itself as a leader
         //% - a candidate receives AppendEntries from another server claiming to be a leader
@@ -89,16 +98,17 @@ impl Candidate {
             //% - reject the RPC and continue in the candidate state
             let term = context.raft_state.current_term;
             let rpc = Rpc::new_append_entry_resp(term, false);
+            let leader_io = io_egress;
             leader_io.send_rpc(rpc);
             (ModeTransition::None, None)
         }
     }
 
-    fn on_recv_request_vote_resp<E: ServerEgress>(
+    fn on_recv_request_vote_resp(
         &mut self,
         peer_id: ServerId,
         request_vote_resp: RequestVoteResp,
-        context: &mut Context<E>,
+        context: &mut Context,
     ) -> ModeTransition {
         let RequestVoteResp { term, vote_granted } = request_vote_resp;
         let term_matches = context.raft_state.current_term == term;
@@ -121,7 +131,11 @@ impl Candidate {
         ModeTransition::None
     }
 
-    fn start_election<E: ServerEgress>(&mut self, context: &mut Context<E>) -> ModeTransition {
+    fn start_election<E: ServerEgress>(
+        &mut self,
+        context: &mut Context,
+        io_egress: &mut E,
+    ) -> ModeTransition {
         //% Compliance:
         //% Increment currentTerm
         context.raft_state.current_term.increment();
@@ -147,17 +161,13 @@ impl Candidate {
         for (_id, peer) in context.peer_map.iter_mut() {
             let prev_log_term_idx = context.raft_state.peers_prev_term_idx(peer);
             let rpc = Rpc::new_request_vote(current_term, context.server_id, prev_log_term_idx);
-            peer.send_rpc(rpc);
+            peer.send_rpc(io_egress, rpc);
         }
 
         ModeTransition::None
     }
 
-    fn on_vote_received<E: ServerEgress>(
-        &mut self,
-        voter_id: ServerId,
-        context: &Context<E>,
-    ) -> ElectionResult {
+    fn on_vote_received(&mut self, voter_id: ServerId, context: &Context) -> ElectionResult {
         debug_assert!(
             context.peer_map.contains_key(&voter_id) || voter_id == context.server_id,
             "voter id not a raft peer"
@@ -176,9 +186,10 @@ impl Candidate {
 mod tests {
     use super::*;
     use crate::{
+        io::testing::MockIo,
         log::{Term, TermIdx},
         mode::cast_unsafe,
-        peer::Peer,
+        peer::PeerInfo,
         raft_state::RaftState,
         timeout::Timeout,
     };
@@ -193,10 +204,11 @@ mod tests {
 
         let peer_fill = 11;
         let server_id = ServerId::new([peer_fill; 16]);
-        let mut peer_map = Peer::mock_as_map(&[peer_fill, 12]);
+        let mut peer_map = PeerInfo::mock_as_map(&[peer_fill, 12]);
         let mut state = RaftState::new(timeout, &peer_map);
         assert!(state.current_term.is_initial());
 
+        let mut io = MockIo::new();
         let mut context = Context {
             server_id,
             raft_state: &mut state,
@@ -205,7 +217,7 @@ mod tests {
         let mut candidate = Candidate::default();
 
         // Trigger election
-        let transition = candidate.start_election(&mut context);
+        let transition = candidate.start_election(&mut context, &mut io);
 
         // Expect no transitions since quorum is >1
         assert!(matches!(transition, ModeTransition::None));
@@ -215,8 +227,8 @@ mod tests {
         // Expect RequestVote RPC sent to all peers
         let expected_rpc = Rpc::new_request_vote(state.current_term, server_id, TermIdx::initial());
         for (_id, peer) in peer_map.iter_mut() {
-            let Peer { id: _, io_egress } = peer;
-            let rpc_bytes = io_egress.send_queue.pop().unwrap();
+            let PeerInfo { id: _ } = peer;
+            let rpc_bytes = io.send_queue.pop().unwrap();
             let buffer = DecoderBuffer::new(&rpc_bytes);
             let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
             assert_eq!(expected_rpc, sent_request_vote);
@@ -229,8 +241,10 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let server_id = ServerId::new([6; 16]);
-        let mut peer_map = Peer::mock_as_map(&[]);
+        let mut peer_map = PeerInfo::mock_as_map(&[]);
         let mut state = RaftState::new(timeout, &peer_map);
+
+        let mut io = MockIo::new();
         let mut context = Context {
             server_id,
             raft_state: &mut state,
@@ -240,7 +254,7 @@ mod tests {
         assert_eq!(Mode::quorum(&context), 1);
 
         // Elect self
-        let transition = candidate.start_election(&mut context);
+        let transition = candidate.start_election(&mut context, &mut io);
         assert!(matches!(transition, ModeTransition::ToLeader));
 
         // No RPC sent. Unable to inspect E since there are no peers
@@ -255,7 +269,7 @@ mod tests {
         let self_id = ServerId::new([1; 16]);
         let peer2_fill = 2;
         let peer2_id = ServerId::new([peer2_fill; 16]);
-        let mut peer_map = Peer::mock_as_map(&[peer2_fill, 3]);
+        let mut peer_map = PeerInfo::mock_as_map(&[peer2_fill, 3]);
         let mut state = RaftState::new(timeout, &peer_map);
 
         let context = Context {
@@ -297,13 +311,14 @@ mod tests {
         let server_id = ServerId::new([1; 16]);
         let peer_id2_fill = 2;
         let peer_id2 = ServerId::new([peer_id2_fill; 16]);
-        let mut peer_map = Peer::mock_as_map(&[peer_id2_fill]);
+        let mut peer_map = PeerInfo::mock_as_map(&[peer_id2_fill]);
         let mut state = RaftState::new(timeout, &peer_map);
 
         let term_current = Term::from(2);
         let term_election = term_current + 1;
         state.current_term = term_current;
 
+        let mut io = MockIo::new();
         let mut context = Context {
             server_id,
             raft_state: &mut state,
@@ -314,7 +329,7 @@ mod tests {
         // Initialize Candidate (votes for self)
         let mut candidate = Candidate::default();
         assert_eq!(candidate.votes_received.len(), 0);
-        let transition = candidate.start_election(&mut context);
+        let transition = candidate.start_election(&mut context, &mut io);
         assert!(matches!(transition, ModeTransition::None));
         assert_eq!(candidate.votes_received.len(), 1);
 
@@ -351,13 +366,14 @@ mod tests {
         let peer_id3_fill = 3;
         let peer_id3 = ServerId::new([peer_id3_fill; 16]);
         let peer_id4_fill = 4;
-        let mut peer_map = Peer::mock_as_map(&[peer_id2_fill, peer_id3_fill, peer_id4_fill]);
+        let mut peer_map = PeerInfo::mock_as_map(&[peer_id2_fill, peer_id3_fill, peer_id4_fill]);
         let mut state = RaftState::new(timeout, &peer_map);
 
         let term_current = Term::from(2);
         let term_election = term_current + 1;
         state.current_term = term_current;
 
+        let mut io = MockIo::new();
         let mut context = Context {
             server_id,
             raft_state: &mut state,
@@ -368,7 +384,7 @@ mod tests {
         // Initialize Candidate (votes for self)
         let mut candidate = Candidate::default();
         assert_eq!(candidate.votes_received.len(), 0);
-        let transition = candidate.start_election(&mut context);
+        let transition = candidate.start_election(&mut context, &mut io);
         assert!(matches!(transition, ModeTransition::None));
         assert_eq!(candidate.votes_received.len(), 1);
 

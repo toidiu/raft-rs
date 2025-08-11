@@ -1,53 +1,50 @@
 use crate::{io::ServerEgress, rpc::Rpc, server::ServerId};
 
 #[derive(Debug)]
-pub struct Peer<E: ServerEgress> {
+pub struct PeerInfo {
     pub id: ServerId,
-    pub io_egress: E,
 }
 
-impl<E: ServerEgress> Peer<E> {
-    pub fn new(id: ServerId, io_egress: E) -> Self {
-        Peer { id, io_egress }
+impl PeerInfo {
+    pub fn new(id: ServerId) -> Self {
+        PeerInfo { id }
     }
 
-    pub fn send_rpc(&mut self, rpc: Rpc) {
-        self.io_egress.send_rpc(rpc);
+    pub fn send_rpc<E: ServerEgress>(&mut self, io_egress: &mut E, rpc: Rpc) {
+        io_egress.send_rpc(rpc);
     }
 }
 
-impl<E: ServerEgress> PartialOrd for Peer<E> {
+impl PartialOrd for PeerInfo {
     #[allow(clippy::non_canonical_partial_ord_impl)]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.id.cmp(&other.id))
     }
 }
 
-impl<E: ServerEgress> Ord for Peer<E> {
+impl Ord for PeerInfo {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.id.cmp(&other.id)
     }
 }
 
-impl<E: ServerEgress> PartialEq for Peer<E> {
+impl PartialEq for PeerInfo {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl<E: ServerEgress> Eq for Peer<E> {}
+impl Eq for PeerInfo {}
 
 #[cfg(test)]
 mod testing {
-    use crate::{io::testing::MockIo, peer::Peer, server::ServerId};
+    use crate::{peer::PeerInfo, server::ServerId};
     use std::collections::BTreeMap;
 
-    impl Peer<MockIo> {
+    impl PeerInfo {
         fn mock(fill: u8) -> (ServerId, Self) {
             let id = ServerId::new([fill; 16]);
-            // FIXME pass in IO when this is used
-
-            (id, Self::new(id, MockIo::new()))
+            (id, Self::new(id))
         }
 
         pub fn mock_as_map(ids_fill: &[u8]) -> BTreeMap<ServerId, Self> {
