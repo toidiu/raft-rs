@@ -1,7 +1,6 @@
 use crate::{
     log::{Idx, Log, Term, TermIdx},
-    peer::PeerInfo,
-    server::ServerId,
+    server::{PeerInfo, ServerId},
     timeout::Timeout,
 };
 use std::collections::BTreeMap;
@@ -48,7 +47,7 @@ pub struct RaftState {
 }
 
 impl RaftState {
-    pub fn new(election_timer: Timeout, peer_map: &BTreeMap<ServerId, PeerInfo>) -> Self {
+    pub fn new(election_timer: Timeout, peer_list: &[PeerInfo]) -> Self {
         let log = Log::new();
         let mut next_idx_map = BTreeMap::new();
         let mut match_idx_map = BTreeMap::new();
@@ -63,8 +62,8 @@ impl RaftState {
         //% (initialized to 0, increases monotonically)
         let match_idx = Idx::initial();
 
-        for (id, peer) in peer_map.iter() {
-            let PeerInfo { id: _ } = peer;
+        for peer in peer_list.iter() {
+            let PeerInfo { id } = peer;
 
             next_idx_map.insert(*id, next_log_idx);
             match_idx_map.insert(*id, match_idx);
@@ -117,14 +116,14 @@ mod tests {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
-        let peer2_fill = 2;
-        let peer2_id = ServerId::new([peer2_fill; 16]);
-        let peer_map = PeerInfo::mock_as_map(&[peer2_fill, 3]);
-        let state = RaftState::new(timeout, &peer_map);
+        let peer2_id = ServerId::new([2; 16]);
+        let peer3_id = ServerId::new([3; 16]);
+        let peer_list = PeerInfo::mock_list(&[peer2_id, peer3_id]);
+        let state = RaftState::new(timeout, &peer_list);
 
         // retrieve the prev_term_idx for peer (expect initial since log is empty)
-        let peer2 = peer_map.get(&peer2_id).unwrap();
-        let term_idx = state.peers_prev_term_idx(peer2);
+        let peer2_info = peer_list.iter().find(|&x| x.id == peer2_id).unwrap();
+        let term_idx = state.peers_prev_term_idx(peer2_info);
         assert!(term_idx.is_initial());
     }
 
@@ -133,10 +132,10 @@ mod tests {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
-        let peer2_fill = 2;
-        let peer2_id = ServerId::new([peer2_fill; 16]);
-        let peer_map = PeerInfo::mock_as_map(&[peer2_fill, 3]);
-        let mut state = RaftState::new(timeout, &peer_map);
+        let peer2_id = ServerId::new([2; 16]);
+        let peer3_id = ServerId::new([3; 16]);
+        let peer_list = PeerInfo::mock_list(&[peer2_id, peer3_id]);
+        let mut state = RaftState::new(timeout, &peer_list);
 
         // insert a log entry
         let next_idx = Idx::from(2);
@@ -151,8 +150,8 @@ mod tests {
         state.next_idx.insert(peer2_id, next_idx);
 
         // retrieve the prev_term_idx for peer
-        let peer2 = peer_map.get(&peer2_id).unwrap();
-        let term_idx = state.peers_prev_term_idx(peer2);
+        let peer2_info = peer_list.iter().find(|&x| x.id == peer2_id).unwrap();
+        let term_idx = state.peers_prev_term_idx(peer2_info);
         assert_eq!(
             term_idx,
             TermIdx::builder()

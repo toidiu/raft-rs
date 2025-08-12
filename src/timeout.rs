@@ -19,7 +19,9 @@ const MAX_REARM_DURATION: u64 = 300;
 ///
 /// The `timeout_ready() -> TimeoutReady` returns a Future which must be polled to make progress.
 /// Upon expiration, TimeoutReady will auto-rearm the Timeout (relative to `Instant::now()`) to
-/// ensure perpetual progress.
+/// ensure perpetual progress. The auto-rearming is meant to prevent errors where implementations
+/// forget to re-arm the timer and works well in environments where a timer is the primary driver
+/// of a program.
 ///
 /// Due to auto-rearming, a Timeout is meant to be reused even after it expires:
 ///
