@@ -34,8 +34,9 @@ use crate::{
     io::ServerEgress,
     macros::cast_unsafe,
     mode::{candidate::Candidate, follower::Follower, leader::Leader},
+    raft_state::RaftState,
     rpc::Rpc,
-    server::{Context, ServerId},
+    server::{PeerInfo, ServerId},
 };
 
 mod candidate;
@@ -49,15 +50,25 @@ pub enum Mode {
 }
 
 impl Mode {
-    fn on_timeout<E: ServerEgress>(&mut self, context: &mut Context, io_egress: &mut E) {
+    fn on_timeout<E: ServerEgress>(
+        &mut self,
+        server_id: &ServerId,
+        peer_list: &[PeerInfo],
+        raft_state: &mut RaftState,
+        io_egress: &mut E,
+    ) {
         match self {
             Mode::Follower(follower) => {
                 let transition = follower.on_timeout();
-                self.handle_mode_transition(transition, context, io_egress);
+                self.handle_mode_transition(
+                    server_id, peer_list, transition, raft_state, io_egress,
+                );
             }
             Mode::Candidate(candidate) => {
-                let transition = candidate.on_timeout(context, io_egress);
-                self.handle_mode_transition(transition, context, io_egress);
+                let transition = candidate.on_timeout(server_id, peer_list, raft_state, io_egress);
+                self.handle_mode_transition(
+                    server_id, peer_list, transition, raft_state, io_egress,
+                );
             }
 
             Mode::Leader(leader) => leader.on_timeout(),
@@ -66,17 +77,19 @@ impl Mode {
 
     fn on_recv<E: ServerEgress>(
         &mut self,
+        server_id: &ServerId,
         peer_id: ServerId,
         rpc: Rpc,
-        context: &mut Context,
+        peer_list: &[PeerInfo],
+        raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
         //% Compliance:
         //% If RPC request or response contains term T > currentTerm: set currentTerm = T, convert
         //% to follower (§5.1)
-        if rpc.term() > &context.raft_state.current_term {
-            context.raft_state.current_term = *rpc.term();
-            self.on_follower(context);
+        if rpc.term() > &raft_state.current_term {
+            raft_state.current_term = *rpc.term();
+            self.on_follower();
         }
 
         let process_rpc_again = match self {
@@ -84,12 +97,15 @@ impl Mode {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
                 //% leader or granting vote to candidate: convert to candidate
-                follower.on_recv(rpc, context, io_egress);
+                follower.on_recv(rpc, raft_state, io_egress);
                 None
             }
             Mode::Candidate(candidate) => {
-                let (transition, rpc) = candidate.on_recv(peer_id, rpc, context, io_egress);
-                self.handle_mode_transition(transition, context, io_egress);
+                let (transition, rpc) =
+                    candidate.on_recv(peer_id, rpc, peer_list, raft_state, io_egress);
+                self.handle_mode_transition(
+                    server_id, peer_list, transition, raft_state, io_egress,
+                );
                 rpc
             }
             Mode::Leader(leader) => {
@@ -103,35 +119,45 @@ impl Mode {
         // An RPC might only be partially processed if it results in a ModeTransition and should be
         // processed again by the new Mode.
         if let Some(rpc) = process_rpc_again {
-            self.on_recv(peer_id, rpc, context, io_egress)
+            self.on_recv(server_id, peer_id, rpc, peer_list, raft_state, io_egress)
         }
     }
 
     fn handle_mode_transition<E: ServerEgress>(
         &mut self,
+        server_id: &ServerId,
+        peer_list: &[PeerInfo],
         transition: ModeTransition,
-        context: &mut Context,
+        raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
         match transition {
             ModeTransition::None => (),
-            ModeTransition::ToFollower => self.on_follower(context),
-            ModeTransition::ToCandidate => self.on_candidate(context, io_egress),
+            ModeTransition::ToFollower => self.on_follower(),
+            ModeTransition::ToCandidate => {
+                self.on_candidate(server_id, peer_list, raft_state, io_egress)
+            }
             ModeTransition::ToLeader => self.on_leader(),
         }
     }
 
-    fn on_follower(&mut self, context: &mut Context) {
+    fn on_follower(&mut self) {
         *self = Mode::Follower(Follower);
         let follower = cast_unsafe!(self, Mode::Follower);
-        follower.on_follower(context);
+        follower.on_follower();
     }
 
-    fn on_candidate<E: ServerEgress>(&mut self, context: &mut Context, io_egress: &mut E) {
+    fn on_candidate<E: ServerEgress>(
+        &mut self,
+        server_id: &ServerId,
+        peer_list: &[PeerInfo],
+        raft_state: &mut RaftState,
+        io_egress: &mut E,
+    ) {
         *self = Mode::Candidate(Candidate::default());
         let candidate = cast_unsafe!(self, Mode::Candidate);
 
-        match candidate.on_candidate(context, io_egress) {
+        match candidate.on_candidate(server_id, peer_list, raft_state, io_egress) {
             ModeTransition::None => (),
             ModeTransition::ToLeader => {
                 // If the quorum size is 1, then a candidate will become leader immediately
@@ -149,8 +175,8 @@ impl Mode {
         leader.on_leader();
     }
 
-    fn quorum(context: &Context) -> usize {
-        let peer_plus_self = context.peer_map.len() + 1;
+    fn quorum(peer_list: &[PeerInfo]) -> usize {
+        let peer_plus_self = peer_list.len() + 1;
         let half = peer_plus_self / 2;
         half + 1
     }
@@ -176,9 +202,8 @@ mod tests {
     use crate::{
         io::testing::{helper_inspect_sent_rpc, MockIo},
         log::{Idx, Term, TermIdx},
-        peer::PeerInfo,
         raft_state::RaftState,
-        server::ServerId,
+        server::{PeerInfo, ServerId},
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -186,30 +211,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_quorum() {
-        let prng = Pcg32::from_seed([0; 16]);
-        let timeout = Timeout::new(prng.clone());
+        let peer2_id = ServerId::new([2; 16]);
+        let peer3_id = ServerId::new([3; 16]);
+        let peer4_id = ServerId::new([4; 16]);
 
-        let mut peer_map = PeerInfo::mock_as_map(&[]);
-        let mut state = RaftState::new(timeout, &peer_map);
-        let server_id = ServerId::new([6; 16]);
-        let mut context = Context {
-            server_id,
-            raft_state: &mut state,
-            peer_map: &mut peer_map,
-        };
-        assert_eq!(Mode::quorum(&context), 1);
+        let peer_list = PeerInfo::mock_list(&[]);
+        assert_eq!(Mode::quorum(&peer_list), 1);
 
-        let mut peer_map = PeerInfo::mock_as_map(&[1]);
-        context.peer_map = &mut peer_map;
-        assert_eq!(Mode::quorum(&context), 2);
+        let peer_list = PeerInfo::mock_list(&[peer2_id]);
+        assert_eq!(Mode::quorum(&peer_list), 2);
 
-        let mut peer_map = PeerInfo::mock_as_map(&[1, 2]);
-        context.peer_map = &mut peer_map;
-        assert_eq!(Mode::quorum(&context), 2);
+        let peer_list = PeerInfo::mock_list(&[peer2_id, peer3_id]);
+        assert_eq!(Mode::quorum(&peer_list), 2);
 
-        let mut peer_map = PeerInfo::mock_as_map(&[1, 2, 3]);
-        context.peer_map = &mut peer_map;
-        assert_eq!(Mode::quorum(&context), 3);
+        let peer_list = PeerInfo::mock_list(&[peer2_id, peer3_id, peer4_id]);
+        assert_eq!(Mode::quorum(&peer_list), 3);
     }
 
     #[tokio::test]
@@ -218,18 +234,13 @@ mod tests {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
-        let leader_id_fill = 2;
-        let leader_id = ServerId::new([leader_id_fill; 16]);
-        let mut peer_map = PeerInfo::mock_as_map(&[leader_id_fill]);
-        let mut state = RaftState::new(timeout, &peer_map);
+        let server_id = ServerId::new([1; 16]);
+        let leader_id = ServerId::new([2; 16]);
+        let peer_list = PeerInfo::mock_list(&[leader_id]);
+        let mut state = RaftState::new(timeout, &peer_list);
         let current_term = Term::from(2);
         state.current_term = current_term;
 
-        let mut context = Context {
-            server_id: ServerId::new([1; 16]),
-            raft_state: &mut state,
-            peer_map: &mut peer_map,
-        };
         let mut mode = Mode::Candidate(Candidate::default());
 
         // Mock send AppendEntries to Candidate with `term => current_term`
@@ -241,7 +252,14 @@ mod tests {
             vec![],
         );
         let mut leader_io = MockIo::new();
-        mode.on_recv(leader_id, append_entries, &mut context, &mut leader_io);
+        mode.on_recv(
+            &server_id,
+            leader_id,
+            append_entries,
+            &peer_list,
+            &mut state,
+            &mut leader_io,
+        );
 
         // expect Mode::Follower
         assert!(matches!(mode, Mode::Follower(_)));
@@ -264,18 +282,13 @@ mod tests {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
-        let peer_fill = 2;
-        let peer_id = ServerId::new([peer_fill; 16]);
-        let mut peer_map = PeerInfo::mock_as_map(&[peer_fill]);
-        let mut state = RaftState::new(timeout, &peer_map);
+        let server_id = ServerId::new([1; 16]);
+        let peer_id = ServerId::new([2; 16]);
+        let peer_list = PeerInfo::mock_list(&[peer_id]);
+        let mut state = RaftState::new(timeout, &peer_list);
         state.current_term = current_term;
 
         let mut io = MockIo::new();
-        let mut context = Context {
-            server_id: ServerId::new([1; 16]),
-            raft_state: &mut state,
-            peer_map: &mut peer_map,
-        };
         let mut mode = Mode::Candidate(Candidate::default());
 
         // Mock send AppendEntries to Candidate with `term => current_term`
@@ -286,7 +299,14 @@ mod tests {
             Idx::initial(),
             vec![],
         );
-        mode.on_recv(peer_id, append_entries, &mut context, &mut io);
+        mode.on_recv(
+            &server_id,
+            peer_id,
+            append_entries,
+            &peer_list,
+            &mut state,
+            &mut io,
+        );
 
         // expect Mode::Candidate
         assert!(matches!(mode, Mode::Candidate(_)));
