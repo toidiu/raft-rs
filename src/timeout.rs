@@ -5,14 +5,16 @@ use core::{
     time::Duration,
 };
 use pin_project_lite::pin_project;
-use rand::{Rng, RngCore};
+use rand::RngCore;
 use rand_pcg::Pcg32;
+use std::sync::{Arc, Mutex};
 use tokio::time::{sleep_until, Instant, Sleep};
 
 //% Compliance
 //% Election timeout is chosen randomly between 150-300ms
 const MIN_REARM_DURATION: u64 = 150;
 const MAX_REARM_DURATION: u64 = 300;
+const TEST_REARM_DURATION: u64 = 200;
 
 /// A auto-rearming Timeout which can be used to make perpetual progress based on a timeout
 /// duration.
@@ -36,7 +38,7 @@ const MAX_REARM_DURATION: u64 = 300;
 /// pin!(timeout.timeout_ready(&mut prng)).await;
 ///
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Timeout {
     // Randomly generate a timout range.
     prng: Pcg32,
@@ -46,7 +48,7 @@ pub struct Timeout {
     // https://docs.rs/tokio/1.40.0/tokio/time/fn.sleep.html
     // > Sleep operates at millisecond granularity and should not be used for tasks that require
     // > high-resolution timers.
-    sleep: Pin<Box<Sleep>>,
+    sleep: Arc<Mutex<Pin<Box<Sleep>>>>,
 }
 
 impl Timeout {
@@ -55,6 +57,7 @@ impl Timeout {
         let duration = Self::rearm_duration(&mut prng);
         let expire = Instant::now() + duration;
         let sleep = Box::pin(sleep_until(expire));
+        let sleep = Arc::new(Mutex::new(sleep));
 
         Timeout { prng, sleep }
     }
@@ -66,7 +69,8 @@ impl Timeout {
 
     /// Check if the timeout has expired.
     fn poll_ready(&mut self, ctx: &mut Context) -> Poll<()> {
-        self.sleep.as_mut().poll(ctx)
+        let mut sleep = self.sleep.lock().unwrap();
+        sleep.as_mut().poll(ctx)
     }
 
     /// Reset the expiration time.
@@ -77,13 +81,23 @@ impl Timeout {
         let expire = Instant::now() + duration;
 
         // reset the sleep future
-        self.sleep.as_mut().reset(expire);
+        let mut sleep = self.sleep.lock().unwrap();
+        sleep.as_mut().reset(expire);
     }
 
     /// Randomly select a duration for the next timeout.
+    #[allow(unused_variables)]
     fn rearm_duration<R: RngCore>(prng: &mut R) -> Duration {
-        let range = prng.gen_range(MIN_REARM_DURATION..=MAX_REARM_DURATION);
-        Duration::from_millis(range)
+        cfg_if::cfg_if! {
+            if #[cfg(test)] {
+                let range = TEST_REARM_DURATION;
+                Duration::from_millis(range)
+            } else {
+                use rand::Rng;
+                let range = prng.gen_range(MIN_REARM_DURATION..=MAX_REARM_DURATION);
+                Duration::from_millis(range)
+            }
+        }
     }
 }
 
@@ -123,7 +137,8 @@ mod tests {
 
     /// Returns the instant when the timeout will expire.
     fn duration_to_expiration(timeout: &Timeout) -> Duration {
-        let expire_instant = timeout.sleep.deadline();
+        let sleep = timeout.sleep.lock().unwrap();
+        let expire_instant = sleep.deadline();
         expire_instant.duration_since(Instant::now())
     }
 

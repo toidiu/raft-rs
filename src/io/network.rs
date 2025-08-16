@@ -17,12 +17,12 @@ pub struct NetworkIoImpl {
     pub egress_waker: Arc<Mutex<Option<Waker>>>,
 }
 
-pub trait NetRx {
+pub trait NetIngress {
     // Push data to the rx_queue
     fn recv(&mut self, data: Vec<u8>);
 }
 
-pub trait NetTx {
+pub trait NetEgress {
     // Send data over the network
     fn send(&mut self) -> Option<Vec<u8>>;
 
@@ -34,9 +34,9 @@ pub trait NetTx {
     }
 }
 
-impl NetRx for NetworkIoImpl {
+impl NetIngress for NetworkIoImpl {
     fn recv(&mut self, data: Vec<u8>) {
-        dbg!("  network <--- {:?}", &data);
+        // dbg!("  network <--- {}", &data);
 
         self.ingress_queue.lock().unwrap().extend(data);
         if let Some(waker) = self.ingress_waker.lock().unwrap().deref() {
@@ -45,7 +45,7 @@ impl NetRx for NetworkIoImpl {
     }
 }
 
-impl NetTx for NetworkIoImpl {
+impl NetEgress for NetworkIoImpl {
     fn send(&mut self) -> Option<Vec<u8>> {
         let bytes_to_send = self
             .egress_queue
@@ -54,7 +54,7 @@ impl NetTx for NetworkIoImpl {
             .read(&mut self.buf[0..])
             .ok()?;
         if bytes_to_send > 0 {
-            dbg!("  ---> network {:?}", &self.buf[0..bytes_to_send]);
+            // dbg!("  ---> network {}", &self.buf[0..bytes_to_send]);
             Some(self.buf[0..bytes_to_send].to_vec())
         } else {
             None
