@@ -10,6 +10,11 @@ const INITIAL_IDX: Idx = Idx(0);
 pub struct Idx(pub u64);
 
 impl Idx {
+    #[cfg(test)]
+    pub fn new(val: u64) -> Self {
+        Idx(val)
+    }
+
     pub const fn initial() -> Self {
         INITIAL_IDX
     }

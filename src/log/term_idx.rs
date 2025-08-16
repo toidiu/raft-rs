@@ -14,6 +14,14 @@ pub struct TermIdx {
 }
 
 impl TermIdx {
+    #[cfg(test)]
+    pub fn new(term: u64, idx: u64) -> Self {
+        TermIdx {
+            term: Term::new(term),
+            idx: Idx::new(idx),
+        }
+    }
+
     pub fn builder() -> TermIdxWithTermBuilder {
         TermIdxWithTermBuilder
     }

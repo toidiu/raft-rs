@@ -10,6 +10,11 @@ const INITIAL_TERM: Term = Term(0);
 pub struct Term(u64);
 
 impl Term {
+    #[cfg(test)]
+    pub fn new(val: u64) -> Self {
+        Term(val)
+    }
+
     pub const fn initial() -> Self {
         INITIAL_TERM
     }

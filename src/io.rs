@@ -11,7 +11,7 @@ mod server_ingress;
 #[cfg(test)]
 pub mod testing;
 
-pub use network::{NetTx, NetworkIoImpl};
+pub use network::{NetEgress, NetIngress, NetworkIoImpl};
 pub use server_egress::{ServerEgress, ServerEgressImpl};
 pub use server_ingress::{ServerIngress, ServerIngressImpl};
 
@@ -133,7 +133,7 @@ mod tests {
     use super::*;
     use core::task::Context;
     use futures_test::task::{new_count_waker, AwokenCount};
-    use network::NetRx;
+    use network::NetIngress;
     use server_egress::ServerEgress;
 
     fn test_helper_io_setup() -> (

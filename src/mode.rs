@@ -50,6 +50,10 @@ pub enum Mode {
 }
 
 impl Mode {
+    pub fn new() -> Self {
+        Mode::Follower(Follower)
+    }
+
     fn on_timeout<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
