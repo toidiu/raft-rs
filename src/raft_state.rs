@@ -1,5 +1,7 @@
 use crate::{
+    io::ServerEgress,
     log::{Idx, Log, Term, TermIdx},
+    rpc::Rpc,
     server::{PeerInfo, ServerId},
     timeout::Timeout,
 };
@@ -78,6 +80,14 @@ impl RaftState {
             match_idx: match_idx_map,
             election_timer,
         }
+    }
+
+    pub fn on_timeout<E: ServerEgress>(&mut self, _io_egress: &mut E) {
+        todo!()
+    }
+
+    pub fn on_recv<E: ServerEgress>(&mut self, _rpc: Rpc, _io_egress: &mut E) {
+        todo!()
     }
 
     // Calculate the prev TermIdx for the peer
