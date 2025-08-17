@@ -25,7 +25,7 @@ impl Log {
         }
     }
 
-    pub(super) fn prev_idx(&self) -> Idx {
+    pub(super) fn last_idx(&self) -> Idx {
         if self.entries.is_empty() {
             Idx::initial()
         } else {
@@ -33,13 +33,9 @@ impl Log {
         }
     }
 
-    pub fn next_idx(&self) -> Idx {
-        self.prev_idx() + 1
-    }
-
     pub fn last_term_idx(&self) -> TermIdx {
         let last_term = self.entries.last().map_or(Term::initial(), |e| e.term);
-        let last_idx = self.prev_idx();
+        let last_idx = self.last_idx();
         TermIdx::builder().with_term(last_term).with_idx(last_idx)
     }
 

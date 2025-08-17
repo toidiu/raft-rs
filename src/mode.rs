@@ -71,7 +71,7 @@ impl Mode {
                 );
             }
 
-            Mode::Leader(leader) => leader.on_timeout(),
+            Mode::Leader(leader) => leader.on_timeout(server_id, peer_list, raft_state, io_egress),
         }
     }
 
@@ -132,12 +132,12 @@ impl Mode {
         io_egress: &mut E,
     ) {
         match transition {
-            ModeTransition::None => (),
+            ModeTransition::Noop => (),
             ModeTransition::ToFollower => self.on_follower(),
             ModeTransition::ToCandidate => {
                 self.on_candidate(server_id, peer_list, raft_state, io_egress)
             }
-            ModeTransition::ToLeader => self.on_leader(),
+            ModeTransition::ToLeader => self.on_leader(server_id, peer_list, raft_state, io_egress),
         }
     }
 
@@ -158,10 +158,10 @@ impl Mode {
         let candidate = cast_unsafe!(self, Mode::Candidate);
 
         match candidate.on_candidate(server_id, peer_list, raft_state, io_egress) {
-            ModeTransition::None => (),
+            ModeTransition::Noop => (),
             ModeTransition::ToLeader => {
                 // If the quorum size is 1, then a candidate will become leader immediately
-                self.on_leader();
+                self.on_leader(server_id, peer_list, raft_state, io_egress);
             }
             ModeTransition::ToCandidate | ModeTransition::ToFollower => {
                 unreachable!("Invalid mode transition");
@@ -169,10 +169,17 @@ impl Mode {
         }
     }
 
-    fn on_leader(&mut self) {
-        *self = Mode::Leader(Leader);
+    fn on_leader<E: ServerEgress>(
+        &mut self,
+        server_id: &ServerId,
+        peer_list: &[PeerInfo],
+        raft_state: &mut RaftState,
+        io_egress: &mut E,
+    ) {
+        let leader = Leader::new(peer_list, raft_state);
+        *self = Mode::Leader(leader);
         let leader = cast_unsafe!(self, Mode::Leader);
-        leader.on_leader();
+        leader.on_leader(server_id, peer_list, raft_state, io_egress);
     }
 
     fn quorum(peer_list: &[PeerInfo]) -> usize {
@@ -184,7 +191,7 @@ impl Mode {
 
 #[must_use]
 pub enum ModeTransition {
-    None,
+    Noop,
     ToFollower,
     ToCandidate,
     ToLeader,
@@ -237,7 +244,7 @@ mod tests {
         let server_id = ServerId::new([1; 16]);
         let leader_id = ServerId::new([2; 16]);
         let peer_list = PeerInfo::mock_list(&[leader_id]);
-        let mut state = RaftState::new(timeout, &peer_list);
+        let mut state = RaftState::new(timeout);
         let current_term = Term::from(2);
         state.current_term = current_term;
 
@@ -285,7 +292,7 @@ mod tests {
         let server_id = ServerId::new([1; 16]);
         let peer_id = ServerId::new([2; 16]);
         let peer_list = PeerInfo::mock_list(&[peer_id]);
-        let mut state = RaftState::new(timeout, &peer_list);
+        let mut state = RaftState::new(timeout);
         state.current_term = current_term;
 
         let mut io = MockIo::new();
