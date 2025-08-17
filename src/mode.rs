@@ -50,7 +50,11 @@ pub enum Mode {
 }
 
 impl Mode {
-    fn on_timeout<E: ServerEgress>(
+    pub fn new() -> Self {
+        Mode::Follower(Follower)
+    }
+
+    pub fn on_timeout<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
         peer_list: &[PeerInfo],
@@ -75,7 +79,7 @@ impl Mode {
         }
     }
 
-    fn on_recv<E: ServerEgress>(
+    pub fn on_recv<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
         peer_id: ServerId,
@@ -209,8 +213,7 @@ mod tests {
     use crate::{
         io::testing::{helper_inspect_sent_rpc, MockIo},
         log::{Idx, Term, TermIdx},
-        raft_state::RaftState,
-        server::{PeerInfo, ServerId},
+        server::PeerInfo,
         timeout::Timeout,
     };
     use rand::SeedableRng;

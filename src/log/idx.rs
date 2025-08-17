@@ -7,7 +7,7 @@ use std::ops::{Add, AddAssign, Sub};
 const INITIAL_IDX: Idx = Idx(0);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct Idx(pub u64);
+pub struct Idx(u64);
 
 impl Idx {
     pub const fn initial() -> Self {
