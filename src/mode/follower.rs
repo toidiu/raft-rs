@@ -85,7 +85,7 @@ impl Follower {
             //% Append any new entries not already in the log
             let mut entry_idx = append_entries.prev_log_term_idx.idx + 1;
             for entry in append_entries.entries.into_iter() {
-                let _match_outcome = raft_state.log.match_leaders_log(entry, entry_idx);
+                let _match_outcome = raft_state.log.update_to_match_leaders_log(entry, entry_idx);
                 entry_idx += 1;
             }
 

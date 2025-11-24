@@ -25,7 +25,8 @@ impl Log {
         }
     }
 
-    pub(super) fn last_idx(&self) -> Idx {
+    // Return the Idx of the last entry in the Log.
+    pub(crate) fn last_idx(&self) -> Idx {
         if self.entries.is_empty() {
             Idx::initial()
         } else {
@@ -33,20 +34,32 @@ impl Log {
         }
     }
 
-    pub fn last_term_idx(&self) -> TermIdx {
+    // Return the TermIdx of the last entry in the Log.
+    pub(crate) fn last_term_idx(&self) -> TermIdx {
         let last_term = self.entries.last().map_or(Term::initial(), |e| e.term);
         let last_idx = self.last_idx();
         TermIdx::builder().with_term(last_term).with_idx(last_idx)
     }
 
-    pub fn term_at_idx(&self, idx: &Idx) -> Option<Term> {
+    // Return the Term at the given Idx.
+    pub(crate) fn term_at_idx(&self, idx: &Idx) -> Option<Term> {
         assert!(!idx.is_initial(), "log is empty");
         self.find_entry_at(idx).map(|e| e.term)
     }
 
-    // Attempt to match the leader's log.
-    pub fn match_leaders_log(&mut self, entry: Entry, entry_idx: Idx) -> MatchOutcome {
-        assert!(!entry_idx.is_initial());
+    // Update the local Log to match the Leader's Log entry.
+    //
+    // If entry don't match (NoMatch), then update them to equal the Leader entry. If entry does
+    // not exist, then insert the Leader entry.
+    pub(crate) fn update_to_match_leaders_log(
+        &mut self,
+        entry: Entry,
+        entry_idx: Idx,
+    ) -> MatchOutcome {
+        assert!(
+            !entry_idx.is_initial(),
+            "INITIAL_IDX is placeholder value and can't be inserted."
+        );
         let entry_term_idx = TermIdx::builder().with_term(entry.term).with_idx(entry_idx);
 
         match self.entry_matches(entry_term_idx) {
@@ -79,7 +92,7 @@ impl Log {
 
     //% Compliance:
     //% if two entries in different logs have the same index/term, they store the same command
-    pub fn entry_matches(&self, term_idx: TermIdx) -> MatchOutcome {
+    pub(crate) fn entry_matches(&self, term_idx: TermIdx) -> MatchOutcome {
         // TermIdx::initial indicates that both logs are empty
         if term_idx.is_initial() && self.entries.is_empty() {
             return MatchOutcome::Match;
@@ -107,7 +120,7 @@ impl Log {
         self.entries.get(idx.as_log_idx())
     }
 
-    pub fn is_candidate_log_up_to_date(&mut self, rpc_term_idx: &TermIdx) -> bool {
+    pub(crate) fn is_candidate_log_up_to_date(&mut self, rpc_term_idx: &TermIdx) -> bool {
         //% Compliance:
         //% `up-to-date`: a log is considered more up-to-date than another log if:
         //%	- compare the index and term of the last entry of A's and B's log
@@ -129,9 +142,14 @@ impl Log {
 }
 
 #[must_use]
-pub enum MatchOutcome {
+pub(crate) enum MatchOutcome {
+    // Log entry exists at the given index and matches.
     Match,
+
+    // Log entry exists at the given index but doesn't match.
     NoMatch,
+
+    // Log entry for the given index doesn't exist in the local log.
     DoesntExist,
 }
 
@@ -228,7 +246,7 @@ mod tests {
     pub fn match_leaders_log_for_empty_logs() {
         let mut log = Log::new();
 
-        let outcome = log.match_leaders_log(
+        let outcome = log.update_to_match_leaders_log(
             Entry {
                 term: Term::from(1),
                 command: 8,
@@ -237,7 +255,7 @@ mod tests {
         );
         assert!(matches!(outcome, MatchOutcome::DoesntExist));
 
-        let outcome = log.match_leaders_log(
+        let outcome = log.update_to_match_leaders_log(
             Entry {
                 term: Term::from(1),
                 command: 8,
@@ -269,7 +287,7 @@ mod tests {
         ]);
 
         // matches
-        let match_outcome = log.match_leaders_log(
+        let match_outcome = log.update_to_match_leaders_log(
             Entry {
                 term: Term::from(2),
                 command: 8,
@@ -279,7 +297,7 @@ mod tests {
         assert!(matches!(match_outcome, MatchOutcome::Match));
 
         // doesnt match
-        let no_match_outcome = log.match_leaders_log(
+        let no_match_outcome = log.update_to_match_leaders_log(
             Entry {
                 term: Term::from(3),
                 command: 8,
@@ -289,7 +307,7 @@ mod tests {
         assert!(matches!(no_match_outcome, MatchOutcome::NoMatch));
 
         // doesnt exist
-        let doesnt_exist_outcome = log.match_leaders_log(
+        let doesnt_exist_outcome = log.update_to_match_leaders_log(
             Entry {
                 term: Term::from(4),
                 command: 8,

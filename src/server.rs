@@ -14,12 +14,25 @@ pub use id::ServerId;
 pub use peer::PeerInfo;
 
 struct Server {
+    // Unique ServerId for this server process.
     server_id: ServerId,
+
+    // The mode of this server process.
     mode: Mode,
+
+    // Common Raft state for this server process.
     state: RaftState,
+
+    // The list of peers participating in the Raft quorum.
     peer_list: Vec<PeerInfo>,
+
+    // Timeout for making progress.
     timer: Timeout,
+
+    // IO ingress handle.
     io_ingress: ServerIngressImpl,
+
+    // IO egress handle.
     io_egress: ServerEgressImpl,
 }
 
