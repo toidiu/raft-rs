@@ -189,7 +189,7 @@ mod tests {
             };
             let outcome = state
                 .log
-                .match_leaders_log(entry.clone(), Idx::from(i as u64));
+                .update_to_match_leaders_log(entry.clone(), Idx::from(i as u64));
             assert!(matches!(outcome, MatchOutcome::DoesntExist));
         }
 
