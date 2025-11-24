@@ -55,6 +55,24 @@ impl Leader {
         io_egress: &mut E,
     ) {
         //% Compliance:
+        //% "Reinitialized after election"
+        //
+        //% Compliance:
+        //% `nextIndex[]` for each server, index of the next log entry to send to that server
+        //% (initialized to leader last log index + 1)
+        //
+        //% Compliance:
+        //% `matchIndex[]` for each server, index of highest log entry known to be replicated on server
+        //% (initialized to 0, increases monotonically)
+        let leader_last_idx_plus_one = raft_state.log.last_idx() + 1;
+        self.next_idx
+            .iter_mut()
+            .for_each(|(_peer_id, idx)| *idx = leader_last_idx_plus_one);
+        self.match_idx
+            .iter_mut()
+            .for_each(|(_peer_id, idx)| *idx = Idx::initial());
+
+        //% Compliance:
         //% Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat
         //% during idle periods to prevent election timeouts (§5.2)
         self.on_send_append_entry(server_id, peer_list, raft_state, io_egress);
@@ -83,9 +101,9 @@ impl Leader {
                     .with_term(peer_next_term)
                     .with_idx(peer_next_idx)
             } else {
-                // TODO: this is used as a heartbeat but its not clear what to do here
-                //
-                // This should only happen right after a server becomes a Leader
+                // The peer should be theoritically up-to-date so send the latest Leader entry. If
+                // the peer is not up-to-date we will get a failure and will decrement the peer's
+                // nextIndex.
                 last_log_term_idx
             };
 
@@ -193,12 +211,14 @@ mod tests {
             assert!(matches!(outcome, MatchOutcome::DoesntExist));
         }
 
-        // Update next_idx for peer 2 to record that it has received the first entry
-        let peer2_idx = leader.next_idx.get_mut(&peer2_id).unwrap();
-        *peer2_idx += 1;
-
         let mut io = MockIo::new();
         leader.on_leader(&server_id, &peer_list, &mut state, &mut io);
+
+        // FIXME: need to test sending after the initial on_leader switch
+        //
+        // // Update next_idx for peer 2 to record that it has received the first entry
+        // let peer2_idx = leader.next_idx.get_mut(&peer2_id).unwrap();
+        // *peer2_idx += 1;
 
         let expected_peer_term_idx = vec![
             TermIdx {
@@ -207,7 +227,7 @@ mod tests {
             },
             TermIdx {
                 term: current_term,
-                idx: Idx::from(1),
+                idx: Idx::from(2),
             },
         ];
         for exptected_term_idx in expected_peer_term_idx {
@@ -222,7 +242,9 @@ mod tests {
                 Idx::initial(),
                 vec![],
             );
-            assert_eq!(sent_rpc, expected_rpc);
+            assert_eq!(sent_rpc, expected_rpc,);
+
+            // TODO: aslo assert which peer we are sending to once we add peer header info.
         }
     }
 }
