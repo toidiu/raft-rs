@@ -79,6 +79,43 @@ impl Leader {
         self.on_send_append_entry(server_id, peer_list, raft_state, io_egress);
     }
 
+    // TODO: add test
+    pub fn on_timeout<E: ServerEgress>(
+        &mut self,
+        server_id: &ServerId,
+        peer_list: &[PeerInfo],
+        raft_state: &mut RaftState,
+        io_egress: &mut E,
+    ) {
+        //% Compliance:
+        //% Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat
+        //% during idle periods to prevent election timeouts (§5.2)
+        self.on_send_append_entry(server_id, peer_list, raft_state, io_egress);
+    }
+
+    pub fn on_recv<E: ServerEgress>(
+        &mut self,
+        _peer_id: ServerId,
+        rpc: crate::rpc::Rpc,
+        _peer_list: &[PeerInfo],
+        raft_state: &mut RaftState,
+        io_egress: &mut E,
+    ) -> ModeTransition {
+        match rpc {
+            Rpc::RequestVote(_request_vote) => {
+                todo!()
+            }
+            Rpc::RequestVoteResp(_request_vote_resp) => {
+                todo!()
+            }
+            Rpc::AppendEntry(_append_entries) => {
+                todo!()
+            }
+            Rpc::AppendEntryResp(append_entries_resp) => {
+                self.on_recv_append_entry_resp(append_entries_resp, raft_state, io_egress)
+            }
+        }
+    }
     fn on_send_append_entry<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
@@ -120,56 +157,34 @@ impl Leader {
         }
     }
 
-    pub fn on_recv<E: ServerEgress>(
-        &mut self,
-        _peer_id: ServerId,
-        rpc: crate::rpc::Rpc,
-        _peer_list: &[PeerInfo],
-        raft_state: &mut RaftState,
-        io_egress: &mut E,
-    ) -> ModeTransition {
-        match rpc {
-            Rpc::RequestVote(_request_vote) => {
-                todo!()
-            }
-            Rpc::RequestVoteResp(_request_vote_resp) => {
-                todo!()
-            }
-            Rpc::AppendEntry(_append_entries) => {
-                todo!()
-            }
-            Rpc::AppendEntryResp(append_entries_resp) => {
-                self.on_recv_append_entry_resp(append_entries_resp, raft_state, io_egress)
-            }
-        }
-    }
-
     // TODO
     //
-    //% Compliance:
     // - [x] If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log entries starting at nextIndex
-    //   - [ ] If successful: update nextIndex and matchIndex for follower (§5.3)
-    //   - [ ] If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
     fn on_recv_append_entry_resp<E: ServerEgress>(
         &mut self,
-        _append_entries_resp: AppendEntriesResp,
+        append_entries_resp: AppendEntriesResp,
         _raft_state: &mut RaftState,
         _io_egress: &mut E,
     ) -> ModeTransition {
-        todo!()
-    }
+        let AppendEntriesResp { term, success } = append_entries_resp;
+        // TODO get peer id from RPC
+        let peer_id = PeerInfo::new(ServerId::new([0; 16]));
+        todo!("resp should contain peer_id, and other info from the RPC");
 
-    pub fn on_timeout<E: ServerEgress>(
-        &mut self,
-        server_id: &ServerId,
-        peer_list: &[PeerInfo],
-        raft_state: &mut RaftState,
-        io_egress: &mut E,
-    ) {
-        //% Compliance:
-        //% Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat
-        //% during idle periods to prevent election timeouts (§5.2)
-        self.on_send_append_entry(server_id, peer_list, raft_state, io_egress);
+        if success {
+            // TODO: set the term and idx in the Resp
+
+            //% Compliance:
+            //% If successful: update nextIndex and matchIndex for follower (§5.3)
+            self.next_idx.get_mut(&peer_id.id);
+            self.match_idx.get_mut(&peer_id.id);
+        } else {
+            //% Compliance:
+            //% If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
+            self.next_idx.get_mut(&peer_id.id);
+            self.match_idx.get_mut(&peer_id.id);
+        }
+        todo!()
     }
 }
 

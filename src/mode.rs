@@ -122,6 +122,8 @@ impl Mode {
         //
         // An RPC might only be partially processed if it results in a ModeTransition and should be
         // processed again by the new Mode.
+        //
+        // TODO: Can this result in a loop? Prob should assert and panic if we processing multiple times.
         if let Some(rpc) = process_rpc_again {
             self.on_recv(server_id, peer_id, rpc, peer_list, raft_state, io_egress)
         }
