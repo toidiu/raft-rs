@@ -3,10 +3,10 @@ use crate::{
     log::{Idx, TermIdx},
     mode::ModeTransition,
     raft_state::{self, RaftState},
-    rpc::{AppendEntriesResp, Rpc},
+    rpc::{self, AppendEntriesResp, Rpc},
     server::{PeerInfo, ServerId},
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Sub};
 
 #[derive(Debug, Default)]
 pub struct Leader {
@@ -133,7 +133,7 @@ impl Leader {
             //% Compliance:
             //% If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log
             //% entries starting at nextIndex
-            let peer_term_idx = if last_log_term_idx.idx >= peer_next_idx {
+            let peer_prev_log_term_idx = if last_log_term_idx.idx >= peer_next_idx {
                 let peer_next_term = raft_state.log.term_at_idx(&peer_next_idx).unwrap();
                 TermIdx::builder()
                     .with_term(peer_next_term)
@@ -148,7 +148,7 @@ impl Leader {
             let rpc = Rpc::new_append_entry(
                 leader_current_term,
                 *server_id,
-                peer_term_idx,
+                peer_prev_log_term_idx,
                 leader_commit_idx,
                 vec![],
             );
@@ -173,16 +173,27 @@ impl Leader {
 
         if success {
             // TODO: set the term and idx in the Resp
+            let rpc_recp_idx = Idx::initial();
+            todo!("resp should contain peer_id, and other info from the RPC");
 
             //% Compliance:
             //% If successful: update nextIndex and matchIndex for follower (§5.3)
-            self.next_idx.get_mut(&peer_id.id);
-            self.match_idx.get_mut(&peer_id.id);
+            self.next_idx
+                .entry(peer_id.id)
+                .and_modify(|idx| *idx = rpc_recp_idx);
+            self.match_idx
+                .entry(peer_id.id)
+                .and_modify(|idx| *idx = rpc_recp_idx);
         } else {
             //% Compliance:
             //% If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
-            self.next_idx.get_mut(&peer_id.id);
-            self.match_idx.get_mut(&peer_id.id);
+            self.next_idx.entry(peer_id.id).and_modify(|idx| {
+                assert!(
+                    !idx.is_initial(),
+                    "Peer responded false to initial Idx, which is malformed behavior."
+                );
+                *idx = idx.sub(1)
+            });
         }
         todo!()
     }

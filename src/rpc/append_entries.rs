@@ -18,13 +18,23 @@ pub struct AppendEntries {
     //% leaderId: so follower can redirect clients
     pub leader_id: ServerId,
 
+    // The last log index that the peer should have in its log.
+    //
+    // Used to confirm that the peer (follower) is up to date and can accept new entries. If the
+    // last log index matches, then the peer is up to date and should accept this new AppendEntries
+    // RPC.
+    //
     //% Compliance:
     //% prevLogIndex: index of log entry immediately preceding new ones
     //% prevLogTerm: term of prevLogIndex entry
     pub prev_log_term_idx: TermIdx,
+
+    // The index of the highest log entry known to be committed.
+    //
     //% Compliance:
     // leaderCommit: leader’s commitIndex
     pub leader_commit_idx: Idx,
+
     //% Compliance:
     //% entries[]: log entries to store (empty for heartbeat; may send more than one for
     //% efficiency)
