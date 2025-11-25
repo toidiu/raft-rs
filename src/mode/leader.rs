@@ -1,8 +1,9 @@
 use crate::{
     io::ServerEgress,
     log::{Idx, TermIdx},
-    raft_state::RaftState,
-    rpc::Rpc,
+    mode::ModeTransition,
+    raft_state::{self, RaftState},
+    rpc::{AppendEntriesResp, Rpc},
     server::{PeerInfo, ServerId},
 };
 use std::collections::BTreeMap;
@@ -119,41 +120,43 @@ impl Leader {
         }
     }
 
+    pub fn on_recv<E: ServerEgress>(
+        &mut self,
+        _peer_id: ServerId,
+        rpc: crate::rpc::Rpc,
+        _peer_list: &[PeerInfo],
+        raft_state: &mut RaftState,
+        io_egress: &mut E,
+    ) -> ModeTransition {
+        match rpc {
+            Rpc::RequestVote(_request_vote) => {
+                todo!()
+            }
+            Rpc::RequestVoteResp(_request_vote_resp) => {
+                todo!()
+            }
+            Rpc::AppendEntry(_append_entries) => {
+                todo!()
+            }
+            Rpc::AppendEntryResp(append_entries_resp) => {
+                self.on_recv_append_entry_resp(append_entries_resp, raft_state, io_egress)
+            }
+        }
+    }
+
     // TODO
     //
     //% Compliance:
     // - [x] If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log entries starting at nextIndex
     //   - [ ] If successful: update nextIndex and matchIndex for follower (§5.3)
     //   - [ ] If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
-    pub fn on_recv<E: ServerEgress>(
+    fn on_recv_append_entry_resp<E: ServerEgress>(
         &mut self,
-        peer_id: ServerId,
-        rpc: crate::rpc::Rpc,
-        peer_list: &[PeerInfo],
-        raft_state: &mut RaftState,
-        io_egress: &mut E,
-    ) {
-        // match rpc {
-        //     Rpc::RequestVote(request_vote) => {
-        //         request_vote.on_recv(raft_state, io_egress);
-        //         (ModeTransition::Noop, None)
-        //     }
-        //     Rpc::RequestVoteResp(request_vote_resp) => {
-        //         let transition = self.on_recv_request_vote_resp(
-        //             peer_id,
-        //             request_vote_resp,
-        //             peer_list,
-        //             raft_state,
-        //         );
-        //         (transition, None)
-        //     }
-        //     Rpc::AppendEntry(append_entries) => {
-        //         self.on_recv_append_entries(append_entries, raft_state, io_egress)
-        //     }
-        //     Rpc::AppendEntryResp(_) => {
-        //         todo!("it might be possible to get a response from a previous term")
-        //     }
-        // }
+        _append_entries_resp: AppendEntriesResp,
+        _raft_state: &mut RaftState,
+        _io_egress: &mut E,
+    ) -> ModeTransition {
+        todo!()
     }
 
     pub fn on_timeout<E: ServerEgress>(
@@ -167,10 +170,6 @@ impl Leader {
         //% Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat
         //% during idle periods to prevent election timeouts (§5.2)
         self.on_send_append_entry(server_id, peer_list, raft_state, io_egress);
-    }
-
-    pub fn on_recv(&mut self, _rpc: crate::rpc::Rpc) {
-        todo!()
     }
 }
 
