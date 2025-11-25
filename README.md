@@ -4,6 +4,16 @@ A toy implementation to better understand the
 [Raft](https://toidiu.com/reads/In_Search_of_an_Understandable_Consensus_Algorithm_(Extended_Raft).pdf)
 consensus protocol
 
+TODO:
+- [ ] Include peer id in RPC header
+- [ ] Include idx in AppendEntryResp
+- [ ] Add leader test
+    - [ ] on_timeout
+    - [ ] recv AppendEntryResp with success false/true
+    - [ ] leader progression
+- [ ] Handle leader RequestVote
+
+
 ## Design
 **sans I/O design**
 ![io_queues](./queues.jpeg)
