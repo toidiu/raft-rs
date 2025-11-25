@@ -119,6 +119,43 @@ impl Leader {
         }
     }
 
+    // TODO
+    //
+    //% Compliance:
+    // - [x] If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log entries starting at nextIndex
+    //   - [ ] If successful: update nextIndex and matchIndex for follower (§5.3)
+    //   - [ ] If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
+    pub fn on_recv<E: ServerEgress>(
+        &mut self,
+        peer_id: ServerId,
+        rpc: crate::rpc::Rpc,
+        peer_list: &[PeerInfo],
+        raft_state: &mut RaftState,
+        io_egress: &mut E,
+    ) {
+        // match rpc {
+        //     Rpc::RequestVote(request_vote) => {
+        //         request_vote.on_recv(raft_state, io_egress);
+        //         (ModeTransition::Noop, None)
+        //     }
+        //     Rpc::RequestVoteResp(request_vote_resp) => {
+        //         let transition = self.on_recv_request_vote_resp(
+        //             peer_id,
+        //             request_vote_resp,
+        //             peer_list,
+        //             raft_state,
+        //         );
+        //         (transition, None)
+        //     }
+        //     Rpc::AppendEntry(append_entries) => {
+        //         self.on_recv_append_entries(append_entries, raft_state, io_egress)
+        //     }
+        //     Rpc::AppendEntryResp(_) => {
+        //         todo!("it might be possible to get a response from a previous term")
+        //     }
+        // }
+    }
+
     pub fn on_timeout<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
