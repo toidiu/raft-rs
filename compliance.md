@@ -76,7 +76,16 @@
     - [x] and votedFor is null, grant vote (§5.2, §5.4)
     - [x] and votedFor is candidateId, grant vote (§5.2, §5.4)
 
-## 5: The Raft consensus algo
+
+---
+
+## Detailed requirements pulled from the paper
+
+The following are detailed requirements from the paper. Most of the requirements
+seem to match the Figure 2 requirements above. These requiments are primarily
+used for extra clarification at the moment.
+
+### 5: The Raft consensus algo
 - [ ] first elect a leader
 - [ ] leader then responsible for managing the replicated log
 - [ ] leader accepts log entries from clients
