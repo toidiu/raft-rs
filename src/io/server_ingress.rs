@@ -1,6 +1,6 @@
 use crate::{
     io::{RxReady, IO_BUF_LEN},
-    rpc::Rpc,
+    rpc::Packet,
 };
 use core::task::{Context, Poll, Waker};
 use s2n_codec::{DecoderBuffer, DecoderValue};
@@ -87,12 +87,12 @@ impl<'a> RecvRpc<'a> {
 }
 
 impl<'a> Iterator for RecvRpc<'a> {
-    type Item = Rpc;
+    type Item = Packet;
 
     fn next(&mut self) -> Option<Self::Item> {
         let len = self.buf.len();
         if len > 0 {
-            let (rpc, buf) = Rpc::decode(self.buf).expect("should only receive valid RPC bytes");
+            let (rpc, buf) = Packet::decode(self.buf).expect("should only receive valid RPC bytes");
             // update the buffer to point to the next set of bytes
             self.buf = buf;
 

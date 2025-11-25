@@ -12,7 +12,7 @@ impl PeerInfo {
 
     pub fn send_rpc<E: ServerEgress>(&self, rpc: Rpc, io_egress: &mut E) {
         // TODO address to this peer
-        io_egress.send_rpc(rpc);
+        io_egress.send_rpc(rpc, self.id);
     }
 }
 

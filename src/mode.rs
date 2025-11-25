@@ -101,7 +101,7 @@ impl Mode {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
                 //% leader or granting vote to candidate: convert to candidate
-                follower.on_recv(rpc, raft_state, io_egress);
+                follower.on_recv(peer_id, rpc, raft_state, io_egress);
                 None
             }
             Mode::Candidate(candidate) => {
@@ -123,7 +123,7 @@ impl Mode {
         // An RPC might only be partially processed if it results in a ModeTransition and should be
         // processed again by the new Mode.
         if let Some(rpc) = process_rpc_again {
-            self.on_recv(server_id, peer_id, rpc, peer_list, raft_state, io_egress)
+            self.on_recv(server_id, peer_id, &rpc, peer_list, raft_state, io_egress)
         }
     }
 
@@ -261,7 +261,7 @@ mod tests {
             Idx::initial(),
             vec![],
         );
-        let mut leader_io = MockIo::new();
+        let mut leader_io = MockIo::new(server_id);
         mode.on_recv(
             &server_id,
             leader_id,
@@ -275,13 +275,13 @@ mod tests {
         assert!(matches!(mode, Mode::Follower(_)));
 
         // decode the sent RPC
-        let sent_request_vote = helper_inspect_one_sent_rpc(&mut leader_io);
+        let packet = helper_inspect_one_sent_rpc(&mut leader_io);
         assert!(leader_io.send_queue.is_empty());
 
         // expect Follower to send RespAppendEntries acknowledging the leader
         // construct RPC to compare
         let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
-        assert_eq!(expected_rpc, sent_request_vote);
+        assert_eq!(&expected_rpc, packet.rpc());
     }
 
     #[tokio::test]
@@ -298,7 +298,7 @@ mod tests {
         let mut state = RaftState::new(timeout);
         state.current_term = current_term;
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
         let mut mode = Mode::Candidate(Candidate::default());
 
         // Mock send AppendEntries to Candidate with `term => current_term`
@@ -323,10 +323,10 @@ mod tests {
 
         // decode the sent RPC
         assert!(io.send_queue.len() == 1);
-        let sent_request_vote = helper_inspect_one_sent_rpc(&mut io);
+        let packet = helper_inspect_one_sent_rpc(&mut io);
 
         // expect Follower to send RespAppendEntries acknowledging the leader
         let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
-        assert_eq!(expected_rpc, sent_request_vote);
+        assert_eq!(&expected_rpc, packet.rpc());
     }
 }

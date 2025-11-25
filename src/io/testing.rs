@@ -1,19 +1,22 @@
 use crate::{
     io::{ServerEgress, ServerIngress, IO_BUF_LEN},
-    rpc::Rpc,
+    rpc::{Header, Packet, Rpc},
+    server::ServerId,
 };
 use s2n_codec::{DecoderBuffer, EncoderBuffer, EncoderValue};
 use std::{collections::VecDeque, task::Poll};
 
 #[derive(Debug)]
 pub struct MockIo {
+    server_id: ServerId,
     pub send_queue: VecDeque<Vec<u8>>,
     pub recv_queue: VecDeque<Vec<u8>>,
 }
 
 impl MockIo {
-    pub fn new() -> Self {
+    pub fn new(server_id: ServerId) -> Self {
         MockIo {
+            server_id,
             send_queue: VecDeque::new(),
             recv_queue: VecDeque::new(),
         }
@@ -26,10 +29,17 @@ impl ServerEgress for MockIo {
         self.send_queue.push_back(data.to_vec());
     }
 
-    fn send_rpc(&mut self, mut rpc: Rpc) {
+    fn send_rpc(&mut self, rpc: Rpc, to: ServerId) {
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
-        rpc.encode_mut(&mut buf);
+
+        let header = Header {
+            from: self.server_id,
+            to,
+        };
+        let packet = Packet::new(header, rpc);
+        packet.encode(&mut buf);
+
         let data = buf.as_mut_slice();
 
         self.send_raw(data)
@@ -55,18 +65,18 @@ impl ServerIngress for MockIo {
     }
 }
 
-pub fn helper_inspect_one_sent_rpc(peer_io: &mut MockIo) -> Rpc {
+pub fn helper_inspect_one_sent_rpc(peer_io: &mut MockIo) -> Packet {
     let packet = helper_inspect_next_sent_rpc(peer_io);
     assert!(peer_io.send_queue.is_empty());
     packet
 }
 
-pub fn helper_inspect_next_sent_rpc(peer_io: &mut MockIo) -> Rpc {
+pub fn helper_inspect_next_sent_rpc(peer_io: &mut MockIo) -> Packet {
     let rpc_bytes = peer_io.send_queue.pop_front().unwrap();
     // assert!(peer_io.send_queue.is_empty());
 
     let buffer = DecoderBuffer::new(&rpc_bytes);
-    let (packet, _) = buffer.decode::<Rpc>().unwrap();
+    let (packet, _) = buffer.decode::<Packet>().unwrap();
 
     packet
 }

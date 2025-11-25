@@ -163,7 +163,7 @@ mod tests {
         let current_term = state.current_term;
         let mut leader = Leader::new(&peer_list, &mut state);
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
 
         leader.on_leader(&server_id, &peer_list, &mut state, &mut io);
 
@@ -179,7 +179,7 @@ mod tests {
                 Idx::initial(),
                 vec![],
             );
-            assert_eq!(sent_rpc, expected_rpc);
+            assert_eq!(sent_rpc.rpc(), &expected_rpc);
         }
     }
 
@@ -208,7 +208,7 @@ mod tests {
             assert!(matches!(outcome, MatchOutcome::DoesntExist));
         }
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
         leader.on_leader(&server_id, &peer_list, &mut state, &mut io);
 
         // FIXME: need to test sending after the initial on_leader switch
@@ -238,7 +238,7 @@ mod tests {
                 Idx::initial(),
                 vec![],
             );
-            assert_eq!(sent_rpc, expected_rpc,);
+            assert_eq!(sent_rpc.rpc(), &expected_rpc);
 
             // TODO: aslo assert which peer we are sending to once we add peer header info.
         }

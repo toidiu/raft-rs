@@ -53,7 +53,7 @@ impl Candidate {
     ) -> (ModeTransition, Option<&'a Rpc>) {
         match rpc {
             Rpc::RequestVote(request_vote) => {
-                request_vote.on_recv(raft_state, io_egress);
+                request_vote.on_recv(peer_id, raft_state, io_egress);
                 (ModeTransition::Noop, None)
             }
             Rpc::RequestVoteResp(request_vote_resp) => {
@@ -65,8 +65,8 @@ impl Candidate {
                 );
                 (transition, None)
             }
-            rpc @ Rpc::AppendEntry(_append_entries) => {
-                self.on_recv_append_entries(rpc, raft_state, io_egress)
+            message @ Rpc::AppendEntry(_append_entries) => {
+                self.on_recv_append_entries(message, peer_id, raft_state, io_egress)
             }
             Rpc::AppendEntryResp(_) => {
                 todo!("it might be possible to get a response from a previous term")
@@ -77,6 +77,7 @@ impl Candidate {
     fn on_recv_append_entries<'a, E: ServerEgress>(
         &mut self,
         rpc: &'a Rpc,
+        peer_id: ServerId,
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) -> (ModeTransition, Option<&'a Rpc>) {
@@ -108,8 +109,7 @@ impl Candidate {
             //% - reject the RPC and continue in the candidate state
             let term = raft_state.current_term;
             let rpc = Rpc::new_append_entry_resp(term, false);
-            let leader_io = io_egress;
-            leader_io.send_rpc(rpc);
+            io_egress.send_rpc(rpc, peer_id);
             (ModeTransition::Noop, None)
         }
     }
@@ -230,7 +230,7 @@ mod tests {
         let mut state = RaftState::new(timeout);
         assert!(state.current_term.is_initial());
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
         let mut candidate = Candidate::default();
 
         // Trigger election
@@ -246,8 +246,8 @@ mod tests {
         for peer in peer_list.iter_mut() {
             // TODO assert which peer we are sending to
             let PeerInfo { id: _ } = peer;
-            let sent_request_vote = helper_inspect_next_sent_rpc(&mut io);
-            assert_eq!(expected_rpc, sent_request_vote);
+            let packet = helper_inspect_next_sent_rpc(&mut io);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
     }
 
@@ -260,7 +260,7 @@ mod tests {
         let peer_list = PeerInfo::mock_list(&[]);
         let mut state = RaftState::new(timeout);
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
         let mut candidate = Candidate::default();
         assert_eq!(Mode::quorum(&peer_list), 1);
 
@@ -319,7 +319,7 @@ mod tests {
         let term_election = term_current + 1;
         state.current_term = term_current;
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
         assert_eq!(Mode::quorum(&peer_list), 2);
 
         // Initialize Candidate (votes for self)
@@ -372,7 +372,7 @@ mod tests {
         let term_election = term_current + 1;
         state.current_term = term_current;
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
         assert_eq!(Mode::quorum(&peer_list), 3);
 
         // Initialize Candidate (votes for self)
