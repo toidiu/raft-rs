@@ -157,9 +157,6 @@ impl Leader {
         }
     }
 
-    // TODO
-    //
-    // - [x] If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log entries starting at nextIndex
     fn on_recv_append_entry_resp<E: ServerEgress>(
         &mut self,
         append_entries_resp: AppendEntriesResp,
