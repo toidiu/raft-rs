@@ -3,7 +3,7 @@ use crate::{
     log::{Term, TermIdx},
     raft_state::RaftState,
     rpc::Rpc,
-    server::ServerId,
+    server::Id,
 };
 use s2n_codec::{DecoderValue, EncoderValue};
 
@@ -16,7 +16,7 @@ pub struct RequestVote {
 
     //% Compliance:
     //% candidateId: candidate requesting vote
-    pub candidate_id: ServerId,
+    pub candidate_id: Id,
 
     //% Compliance:
     //% lastLogIndex: index of candidate’s last log entry (§5.4)
@@ -48,10 +48,10 @@ impl RequestVote {
             .log
             .is_candidate_log_up_to_date(&self.last_log_term_idx);
 
-        let voted_for_criteria = if let Some(voted_for) = raft_state.voted_for {
+        let voted_for_criteria = if let Some(voted_for) = raft_state.voted_for() {
             //% Compliance:
             //% and votedFor is candidateId, grant vote (§5.2, §5.4)
-            voted_for == self.candidate_id
+            voted_for.eq(&self.candidate_id)
         } else {
             //% Compliance:
             //% and votedFor is null, grant vote (§5.2, §5.4)
@@ -61,7 +61,11 @@ impl RequestVote {
         let grant_vote = term_criteria && log_up_to_date_criteria && voted_for_criteria;
         if grant_vote {
             // set local state to capture granting the vote
-            raft_state.voted_for = Some(self.candidate_id);
+            //
+            // # SAFETY
+            // Receiving the RequestVote RPC means voting for a peer.
+            let vote_for_candidate = unsafe { self.candidate_id.as_peer_id() };
+            raft_state.voted_for_peer(vote_for_candidate);
         }
 
         let rpc = Rpc::new_request_vote_resp(current_term, grant_vote);
@@ -134,7 +138,7 @@ mod tests {
         log::{Entry, Idx, Term, TermIdx},
         macros::cast_unsafe,
         raft_state::RaftState,
-        server::ServerId,
+        server::{PeerId, ServerId},
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -145,7 +149,7 @@ mod tests {
     fn encode_decode_rpc() {
         let rpc = RequestVote {
             term: Term::from(2),
-            candidate_id: ServerId::new([10; 16]),
+            candidate_id: Id::new([21; 16]),
             last_log_term_idx: TermIdx::builder()
                 .with_term(Term::from(3))
                 .with_idx(Idx::from(4)),
@@ -333,7 +337,7 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let candidate_id = ServerId::new([2; 16]);
-        let peer2_id = ServerId::new([3; 16]);
+        let peer2_id = PeerId::new([11; 16]);
         let mut state = RaftState::new(timeout);
 
         let term_current = Term::from(2);
@@ -346,7 +350,7 @@ mod tests {
         // == vote_granted None ==
         // Expect: grant vote
         {
-            state.voted_for = None;
+            assert!(state.voted_for().is_none());
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
@@ -360,7 +364,7 @@ mod tests {
         // == vote_granted Some(candidate_id) ==
         // Expect: grant vote
         {
-            state.voted_for = Some(candidate_id);
+            state.voted_for_self(candidate_id);
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
@@ -374,7 +378,7 @@ mod tests {
         // == vote_granted Some(!candidate_id) ==
         // Expect: NO grant vote
         {
-            state.voted_for = Some(peer2_id);
+            state.voted_for_peer(peer2_id);
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);

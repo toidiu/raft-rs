@@ -3,20 +3,20 @@ use crate::{
     mode::{cast_unsafe, ElectionResult, Mode, ModeTransition},
     raft_state::RaftState,
     rpc::{AppendEntries, RequestVoteResp, Rpc},
-    server::{PeerInfo, ServerId},
+    server::{Id, PeerId, ServerId},
 };
 use std::collections::HashSet;
 
 #[derive(Debug, Default)]
 pub struct Candidate {
-    votes_received: HashSet<ServerId>,
+    votes_received: HashSet<Id>,
 }
 
 impl Candidate {
     pub fn on_candidate<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
-        peer_list: &[PeerInfo],
+        peer_list: &[PeerId],
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) -> ModeTransition {
@@ -28,7 +28,7 @@ impl Candidate {
     pub fn on_timeout<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
-        peer_list: &[PeerInfo],
+        peer_list: &[PeerId],
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) -> ModeTransition {
@@ -45,9 +45,9 @@ impl Candidate {
 
     pub fn on_recv<'a, E: ServerEgress>(
         &mut self,
-        peer_id: ServerId,
+        peer_id: PeerId,
         rpc: &'a Rpc,
-        peer_list: &[PeerInfo],
+        peer_list: &[PeerId],
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) -> (ModeTransition, Option<&'a Rpc>) {
@@ -116,13 +116,13 @@ impl Candidate {
 
     fn on_recv_request_vote_resp(
         &mut self,
-        peer_id: ServerId,
+        peer_id: PeerId,
         request_vote_resp: &RequestVoteResp,
-        peer_list: &[PeerInfo],
+        peer_list: &[PeerId],
         raft_state: &mut RaftState,
     ) -> ModeTransition {
         let RequestVoteResp { term, vote_granted } = request_vote_resp;
-        let term_matches = &raft_state.current_term == term;
+        let term_matches = raft_state.current_term.eq(term);
 
         if term_matches && *vote_granted {
             //% Compliance:
@@ -145,7 +145,7 @@ impl Candidate {
     fn start_election<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
-        peer_list: &[PeerInfo],
+        peer_list: &[PeerId],
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) -> ModeTransition {
@@ -177,25 +177,29 @@ impl Candidate {
         ModeTransition::Noop
     }
 
-    fn on_vote_for_self(&mut self, server_id: &ServerId, peer_list: &[PeerInfo]) -> ElectionResult {
+    fn on_vote_for_self(&mut self, server_id: &ServerId, peer_list: &[PeerId]) -> ElectionResult {
         debug_assert!(
-            !peer_list.iter().any(|&x| x.id == *server_id),
+            !peer_list
+                .iter()
+                .any(|&x| x.as_bytes().eq(server_id.as_bytes())),
             "vote_for_self should not be called with a peer_id"
         );
-        self.votes_received.insert(*server_id);
+        self.votes_received.insert(server_id.into_id());
         self.check_election_result(peer_list)
     }
 
-    fn on_vote_received(&mut self, voter_id: &ServerId, peer_list: &[PeerInfo]) -> ElectionResult {
+    fn on_vote_received(&mut self, peer_id: &PeerId, peer_list: &[PeerId]) -> ElectionResult {
         debug_assert!(
-            peer_list.iter().any(|&x| x.id == *voter_id),
+            peer_list
+                .iter()
+                .any(|x| x.as_bytes().eq(peer_id.as_bytes())),
             "voter id should be a peer"
         );
-        self.votes_received.insert(*voter_id);
+        self.votes_received.insert(peer_id.into_id());
         self.check_election_result(peer_list)
     }
 
-    fn check_election_result(&mut self, peer_list: &[PeerInfo]) -> ElectionResult {
+    fn check_election_result(&mut self, peer_list: &[PeerId]) -> ElectionResult {
         if self.votes_received.len() >= Mode::quorum(peer_list) {
             ElectionResult::Elected
         } else {
@@ -210,9 +214,8 @@ mod tests {
     use crate::{
         io::testing::{helper_inspect_next_sent_rpc, MockIo},
         log::{Term, TermIdx},
-        mode::cast_unsafe,
         raft_state::RaftState,
-        server::PeerInfo,
+        server::PeerId,
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -224,9 +227,9 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let server_id = ServerId::new([1; 16]);
-        let peer_id = ServerId::new([11; 16]);
-        let peer_id_2 = ServerId::new([12; 16]);
-        let mut peer_list = PeerInfo::mock_list(&[peer_id, peer_id_2]);
+        let peer_id = PeerId::new([11; 16]);
+        let peer_id_2 = PeerId::new([12; 16]);
+        let mut peer_list = vec![peer_id, peer_id_2];
         let mut state = RaftState::new(timeout);
         assert!(state.current_term.is_initial());
 
@@ -243,9 +246,8 @@ mod tests {
 
         // Expect RequestVote RPC sent to all peers
         let expected_rpc = Rpc::new_request_vote(state.current_term, server_id, TermIdx::initial());
-        for peer in peer_list.iter_mut() {
-            // TODO assert which peer we are sending to
-            let PeerInfo { id: _ } = peer;
+        // TODO assert which peer we are sending to
+        for _peer in peer_list.iter_mut() {
             let sent_request_vote = helper_inspect_next_sent_rpc(&mut io);
             assert_eq!(expected_rpc, sent_request_vote);
         }
@@ -257,7 +259,7 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let server_id = ServerId::new([6; 16]);
-        let peer_list = PeerInfo::mock_list(&[]);
+        let peer_list = vec![];
         let mut state = RaftState::new(timeout);
 
         let mut io = MockIo::new();
@@ -275,9 +277,9 @@ mod tests {
     #[tokio::test]
     async fn test_vote_received() {
         let self_id = ServerId::new([1; 16]);
-        let peer2_id = ServerId::new([2; 16]);
-        let peer3_id = ServerId::new([3; 16]);
-        let peer_list = PeerInfo::mock_list(&[peer2_id, peer3_id]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
 
         let mut candidate = Candidate::default();
         assert_eq!(Mode::quorum(&peer_list), 2);
@@ -311,8 +313,8 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let server_id = ServerId::new([1; 16]);
-        let peer2_id = ServerId::new([2; 16]);
-        let peer_list = PeerInfo::mock_list(&[peer2_id]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer_list = vec![peer2_id];
         let mut state = RaftState::new(timeout);
 
         let term_current = Term::from(2);
@@ -362,10 +364,10 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let server_id = ServerId::new([1; 16]);
-        let peer2_id = ServerId::new([2; 16]);
-        let peer3_id = ServerId::new([3; 16]);
-        let peer4_id = ServerId::new([4; 16]);
-        let peer_list = PeerInfo::mock_list(&[peer2_id, peer3_id, peer4_id]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer4_id = PeerId::new([13; 16]);
+        let peer_list = vec![peer2_id, peer3_id, peer4_id];
         let mut state = RaftState::new(timeout);
 
         let term_current = Term::from(2);

@@ -1,6 +1,6 @@
 use crate::{
     log::{Entry, Idx, Term, TermIdx},
-    server::ServerId,
+    server::Id,
 };
 use s2n_codec::{DecoderValue, EncoderValue};
 
@@ -16,7 +16,7 @@ pub struct AppendEntries {
 
     //% Compliance:
     //% leaderId: so follower can redirect clients
-    pub leader_id: ServerId,
+    pub leader_id: Id,
 
     //% Compliance:
     //% prevLogIndex: index of log entry immediately preceding new ones
@@ -126,21 +126,22 @@ impl EncoderValue for AppendEntriesResp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::log::Idx;
+    use crate::{log::Idx, macros::cast_unsafe, rpc::Rpc, server::ServerId};
     use s2n_codec::{DecoderBuffer, EncoderBuffer};
 
     // A Raft heartbeat doesn't have entries
     #[test]
     fn encode_decode_heartbeat_rpc() {
-        let rpc = AppendEntries {
-            term: Term::from(2),
-            leader_id: ServerId::new([10; 16]),
-            prev_log_term_idx: TermIdx::builder()
+        let rpc = Rpc::new_append_entry(
+            Term::from(2),
+            ServerId::new([1; 16]),
+            TermIdx::builder()
                 .with_term(Term::from(3))
                 .with_idx(Idx::from(4)),
-            leader_commit_idx: Idx::from(4),
-            entries: vec![],
-        };
+            Idx::from(4),
+            vec![],
+        );
+        let rpc = cast_unsafe!(rpc, Rpc::AppendEntry);
 
         let mut slice = vec![0; 200];
         let mut buf = EncoderBuffer::new(&mut slice);
@@ -154,15 +155,16 @@ mod tests {
 
     #[test]
     fn encode_decode_rpc() {
-        let rpc = AppendEntries {
-            term: Term::from(2),
-            leader_id: ServerId::new([10; 16]),
-            prev_log_term_idx: TermIdx::builder()
+        let rpc = Rpc::new_append_entry(
+            Term::from(2),
+            ServerId::new([1; 16]),
+            TermIdx::builder()
                 .with_term(Term::from(3))
                 .with_idx(Idx::from(4)),
-            leader_commit_idx: Idx::from(4),
-            entries: vec![Entry::new(Term::from(2), 3), Entry::new(Term::from(5), 6)],
-        };
+            Idx::from(4),
+            vec![Entry::new(Term::from(2), 3), Entry::new(Term::from(5), 6)],
+        );
+        let rpc = cast_unsafe!(rpc, Rpc::AppendEntry);
 
         let mut slice = vec![0; 200];
         let mut buf = EncoderBuffer::new(&mut slice);
