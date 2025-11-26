@@ -5,12 +5,13 @@ use crate::{
 use s2n_codec::{DecoderBuffer, DecoderBufferResult, DecoderError, DecoderValue, EncoderValue};
 
 mod append_entries;
+mod packet;
 mod request_vote;
 
 pub use append_entries::{AppendEntries, AppendEntriesResp};
 pub use request_vote::{RequestVote, RequestVoteResp};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 #[allow(clippy::upper_case_acronyms)]
 #[must_use]
 pub enum Rpc {

@@ -8,7 +8,7 @@ use s2n_codec::{DecoderValue, EncoderValue};
 type EntriesLenTypeEncoding = u16;
 
 #[must_use]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct AppendEntries {
     //% Compliance:
     // term: leader’s term
@@ -40,7 +40,7 @@ impl AppendEntries {
 }
 
 #[must_use]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct AppendEntriesResp {
     //% Compliance:
     //% term: currentTerm, for leader to update itself

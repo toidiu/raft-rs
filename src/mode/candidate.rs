@@ -59,7 +59,7 @@ impl Candidate {
             Rpc::RequestVoteResp(request_vote_resp) => {
                 let transition = self.on_recv_request_vote_resp(
                     peer_id,
-                    request_vote_resp,
+                    &request_vote_resp,
                     peer_list,
                     raft_state,
                 );
@@ -117,14 +117,14 @@ impl Candidate {
     fn on_recv_request_vote_resp(
         &mut self,
         peer_id: ServerId,
-        request_vote_resp: RequestVoteResp,
+        request_vote_resp: &RequestVoteResp,
         peer_list: &[PeerInfo],
         raft_state: &mut RaftState,
     ) -> ModeTransition {
         let RequestVoteResp { term, vote_granted } = request_vote_resp;
-        let term_matches = raft_state.current_term == term;
+        let term_matches = &raft_state.current_term == term;
 
-        if term_matches && vote_granted {
+        if term_matches && *vote_granted {
             //% Compliance:
             //% wins election
             //%	- receives majority of votes in cluster (ensures a single winner)
@@ -339,7 +339,7 @@ mod tests {
             Rpc::RequestVoteResp
         );
         let transition =
-            candidate.on_recv_request_vote_resp(peer2_id, prev_term_rpc, &peer_list, &mut state);
+            candidate.on_recv_request_vote_resp(peer2_id, &prev_term_rpc, &peer_list, &mut state);
         assert!(matches!(transition, ModeTransition::Noop));
         assert_eq!(candidate.votes_received.len(), 1);
 
@@ -350,7 +350,7 @@ mod tests {
         );
         let transition = candidate.on_recv_request_vote_resp(
             peer2_id,
-            election_term_rpc,
+            &election_term_rpc,
             &peer_list,
             &mut state,
         );
@@ -395,19 +395,15 @@ mod tests {
         );
 
         // peer 2 DOES grant vote
-        let transition = candidate.on_recv_request_vote_resp(
-            peer2_id,
-            grant_vote_rpc.clone(),
-            &peer_list,
-            &mut state,
-        );
+        let transition =
+            candidate.on_recv_request_vote_resp(peer2_id, &grant_vote_rpc, &peer_list, &mut state);
         assert!(matches!(transition, ModeTransition::Noop));
         assert_eq!(candidate.votes_received.len(), 2);
 
         // peer 3 does NOT grant vote
         let transition = candidate.on_recv_request_vote_resp(
             peer3_id,
-            no_grant_vote_rpc,
+            &no_grant_vote_rpc,
             &peer_list,
             &mut state,
         );
@@ -416,7 +412,7 @@ mod tests {
 
         // peer 3 DOES grant vote
         let transition =
-            candidate.on_recv_request_vote_resp(peer3_id, grant_vote_rpc, &peer_list, &mut state);
+            candidate.on_recv_request_vote_resp(peer3_id, &grant_vote_rpc, &peer_list, &mut state);
         assert!(matches!(transition, ModeTransition::ToLeader));
         assert_eq!(candidate.votes_received.len(), 3);
     }
