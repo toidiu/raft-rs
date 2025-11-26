@@ -59,7 +59,7 @@ impl Candidate {
             Rpc::RequestVoteResp(request_vote_resp) => {
                 let transition = self.on_recv_request_vote_resp(
                     peer_id,
-                    &request_vote_resp,
+                    request_vote_resp,
                     peer_list,
                     raft_state,
                 );
