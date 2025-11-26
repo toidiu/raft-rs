@@ -49,12 +49,24 @@ impl ServerIngress for MockIo {
             Poll::Ready(())
         }
     }
+
+    fn recv_rpc(&mut self) -> Option<super::server_ingress::RecvRpc<'_>> {
+        unimplemented!()
+    }
 }
 
-pub fn helper_inspect_sent_rpc(peer_io: &mut MockIo) -> Rpc {
-    let rpc_bytes = peer_io.send_queue.pop_front().unwrap();
+pub fn helper_inspect_one_sent_rpc(peer_io: &mut MockIo) -> Rpc {
+    let packet = helper_inspect_next_sent_rpc(peer_io);
     assert!(peer_io.send_queue.is_empty());
+    packet
+}
+
+pub fn helper_inspect_next_sent_rpc(peer_io: &mut MockIo) -> Rpc {
+    let rpc_bytes = peer_io.send_queue.pop_front().unwrap();
+    // assert!(peer_io.send_queue.is_empty());
+
     let buffer = DecoderBuffer::new(&rpc_bytes);
-    let (sent_rpc, _) = buffer.decode::<Rpc>().unwrap();
-    sent_rpc
+    let (packet, _) = buffer.decode::<Rpc>().unwrap();
+
+    packet
 }
