@@ -83,7 +83,7 @@ impl Mode {
         &mut self,
         server_id: &ServerId,
         peer_id: ServerId,
-        rpc: Rpc,
+        rpc: &Rpc,
         peer_list: &[PeerInfo],
         raft_state: &mut RaftState,
         io_egress: &mut E,
@@ -106,14 +106,14 @@ impl Mode {
             }
             Mode::Candidate(candidate) => {
                 let (transition, rpc) =
-                    candidate.on_recv(peer_id, rpc, peer_list, raft_state, io_egress);
+                    candidate.on_recv(peer_id, &rpc, peer_list, raft_state, io_egress);
                 self.handle_mode_transition(
                     server_id, peer_list, transition, raft_state, io_egress,
                 );
                 rpc
             }
             Mode::Leader(leader) => {
-                leader.on_recv(rpc);
+                leader.on_recv(&rpc);
                 None
             }
         };
@@ -123,7 +123,7 @@ impl Mode {
         // An RPC might only be partially processed if it results in a ModeTransition and should be
         // processed again by the new Mode.
         if let Some(rpc) = process_rpc_again {
-            self.on_recv(server_id, peer_id, rpc, peer_list, raft_state, io_egress)
+            self.on_recv(server_id, peer_id, &rpc, peer_list, raft_state, io_egress)
         }
     }
 
@@ -211,7 +211,7 @@ pub enum ElectionResult {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::{helper_inspect_sent_rpc, MockIo},
+        io::testing::{helper_inspect_one_sent_rpc, MockIo},
         log::{Idx, Term, TermIdx},
         server::PeerInfo,
         timeout::Timeout,
@@ -265,7 +265,7 @@ mod tests {
         mode.on_recv(
             &server_id,
             leader_id,
-            append_entries,
+            &append_entries,
             &peer_list,
             &mut state,
             &mut leader_io,
@@ -275,7 +275,7 @@ mod tests {
         assert!(matches!(mode, Mode::Follower(_)));
 
         // decode the sent RPC
-        let sent_request_vote = helper_inspect_sent_rpc(&mut leader_io);
+        let sent_request_vote = helper_inspect_one_sent_rpc(&mut leader_io);
         assert!(leader_io.send_queue.is_empty());
 
         // expect Follower to send RespAppendEntries acknowledging the leader
@@ -312,7 +312,7 @@ mod tests {
         mode.on_recv(
             &server_id,
             peer_id,
-            append_entries,
+            &append_entries,
             &peer_list,
             &mut state,
             &mut io,
@@ -323,7 +323,7 @@ mod tests {
 
         // decode the sent RPC
         assert!(io.send_queue.len() == 1);
-        let sent_request_vote = helper_inspect_sent_rpc(&mut io);
+        let sent_request_vote = helper_inspect_one_sent_rpc(&mut io);
 
         // expect Follower to send RespAppendEntries acknowledging the leader
         let expected_rpc = Rpc::new_append_entry_resp(current_term, false);

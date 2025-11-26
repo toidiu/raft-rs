@@ -1,6 +1,6 @@
 use crate::{
     io::ServerEgress,
-    mode::{ElectionResult, Mode, ModeTransition},
+    mode::{cast_unsafe, ElectionResult, Mode, ModeTransition},
     raft_state::RaftState,
     rpc::{AppendEntries, RequestVoteResp, Rpc},
     server::{PeerInfo, ServerId},
@@ -43,14 +43,14 @@ impl Candidate {
         self.start_election(server_id, peer_list, raft_state, io_egress)
     }
 
-    pub fn on_recv<E: ServerEgress>(
+    pub fn on_recv<'a, E: ServerEgress>(
         &mut self,
         peer_id: ServerId,
-        rpc: crate::rpc::Rpc,
+        rpc: &'a Rpc,
         peer_list: &[PeerInfo],
         raft_state: &mut RaftState,
         io_egress: &mut E,
-    ) -> (ModeTransition, Option<Rpc>) {
+    ) -> (ModeTransition, Option<&'a Rpc>) {
         match rpc {
             Rpc::RequestVote(request_vote) => {
                 request_vote.on_recv(raft_state, io_egress);
@@ -65,8 +65,8 @@ impl Candidate {
                 );
                 (transition, None)
             }
-            Rpc::AppendEntry(append_entries) => {
-                self.on_recv_append_entries(append_entries, raft_state, io_egress)
+            rpc @ Rpc::AppendEntry(_append_entries) => {
+                self.on_recv_append_entries(rpc, raft_state, io_egress)
             }
             Rpc::AppendEntryResp(_) => {
                 todo!("it might be possible to get a response from a previous term")
@@ -74,12 +74,13 @@ impl Candidate {
         }
     }
 
-    fn on_recv_append_entries<E: ServerEgress>(
+    fn on_recv_append_entries<'a, E: ServerEgress>(
         &mut self,
-        append_entries: AppendEntries,
+        rpc: &'a Rpc,
         raft_state: &mut RaftState,
         io_egress: &mut E,
-    ) -> (ModeTransition, Option<Rpc>) {
+    ) -> (ModeTransition, Option<&'a Rpc>) {
+        let append_entries = cast_unsafe!(rpc, Rpc::AppendEntry);
         let AppendEntries {
             term,
             leader_id: _,
@@ -90,7 +91,7 @@ impl Candidate {
         //% Compliance:
         //% another server establishes itself as a leader
         //% - a candidate receives AppendEntries from another server claiming to be a leader
-        if term >= raft_state.current_term {
+        if term >= &raft_state.current_term {
             //% Compliance:
             //% if that leader's current term is >= the candidate's
             //% - recognize the server as the new leader
@@ -100,7 +101,6 @@ impl Candidate {
             //% If AppendEntries RPC received from new leader: convert to follower
 
             // Convert to Follower and process/respond to the RPC
-            let rpc = Rpc::AppendEntry(append_entries);
             (ModeTransition::ToFollower, Some(rpc))
         } else {
             //% Compliance:
@@ -208,7 +208,7 @@ impl Candidate {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::MockIo,
+        io::testing::{helper_inspect_next_sent_rpc, MockIo},
         log::{Term, TermIdx},
         mode::cast_unsafe,
         raft_state::RaftState,
@@ -217,7 +217,6 @@ mod tests {
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
-    use s2n_codec::DecoderBuffer;
 
     #[tokio::test]
     async fn test_start_election() {
@@ -245,10 +244,9 @@ mod tests {
         // Expect RequestVote RPC sent to all peers
         let expected_rpc = Rpc::new_request_vote(state.current_term, server_id, TermIdx::initial());
         for peer in peer_list.iter_mut() {
+            // TODO assert which peer we are sending to
             let PeerInfo { id: _ } = peer;
-            let rpc_bytes = io.send_queue.pop_front().unwrap();
-            let buffer = DecoderBuffer::new(&rpc_bytes);
-            let (sent_request_vote, _) = buffer.decode::<Rpc>().unwrap();
+            let sent_request_vote = helper_inspect_next_sent_rpc(&mut io);
             assert_eq!(expected_rpc, sent_request_vote);
         }
     }

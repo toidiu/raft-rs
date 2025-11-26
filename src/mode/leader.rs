@@ -132,7 +132,7 @@ impl Leader {
         self.on_send_append_entry(server_id, peer_list, raft_state, io_egress);
     }
 
-    pub fn on_recv(&mut self, _rpc: crate::rpc::Rpc) {
+    pub fn on_recv(&mut self, _rpc: &Rpc) {
         todo!()
     }
 }
@@ -141,7 +141,7 @@ impl Leader {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::MockIo,
+        io::testing::{helper_inspect_next_sent_rpc, MockIo},
         log::MatchOutcome,
         raft_state::RaftState,
         server::{PeerInfo, ServerId},
@@ -149,7 +149,6 @@ mod tests {
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
-    use s2n_codec::DecoderBuffer;
 
     #[tokio::test]
     async fn on_leader() {
@@ -170,9 +169,7 @@ mod tests {
 
         // Expect append_entry is sent to both peers
         for _ in 0..2 {
-            let rpc_bytes = io.send_queue.pop_front().unwrap();
-            let buffer = DecoderBuffer::new(&rpc_bytes);
-            let (sent_rpc, _buffer) = buffer.decode::<Rpc>().unwrap();
+            let sent_rpc = helper_inspect_next_sent_rpc(&mut io);
 
             // log is empty so expect to recieve a RPC with initial term and idx
             let expected_rpc = Rpc::new_append_entry(
@@ -232,9 +229,8 @@ mod tests {
         ];
         for exptected_term_idx in expected_peer_term_idx {
             // Expect append_entry is sent to both peers
-            let rpc_bytes = io.send_queue.pop_front().unwrap();
-            let buffer = DecoderBuffer::new(&rpc_bytes);
-            let (sent_rpc, _buffer) = buffer.decode::<Rpc>().unwrap();
+            let sent_rpc = helper_inspect_next_sent_rpc(&mut io);
+
             let expected_rpc = Rpc::new_append_entry(
                 current_term,
                 server_id,

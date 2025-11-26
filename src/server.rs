@@ -74,7 +74,7 @@ impl Server {
                 self.mode.on_recv(
                     &self.server_id,
                     peer_id,
-                    rpc,
+                    &rpc,
                     &self.peer_list,
                     &mut self.state,
                     &mut self.io_egress,

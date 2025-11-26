@@ -22,9 +22,7 @@ pub trait ServerIngress {
     #[cfg(test)]
     fn recv_raw(&mut self) -> Option<Vec<u8>>;
 
-    fn recv_rpc(&mut self) -> Option<RecvRpc<'_>> {
-        todo!()
-    }
+    fn recv_rpc(&mut self) -> Option<RecvRpc<'_>>;
 
     fn poll_ingress_queue_ready(&mut self, cx: &mut Context) -> Poll<()>;
 

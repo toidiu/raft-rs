@@ -27,7 +27,7 @@ pub struct RequestVote {
 impl RequestVote {
     pub const TAG: u8 = 1;
 
-    pub fn on_recv<E: ServerEgress>(self, raft_state: &mut RaftState, io_egress: &mut E) {
+    pub fn on_recv<E: ServerEgress>(&self, raft_state: &mut RaftState, io_egress: &mut E) {
         let current_term = raft_state.current_term;
 
         //% Compliance:
@@ -130,7 +130,7 @@ impl EncoderValue for RequestVoteResp {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::{helper_inspect_sent_rpc, MockIo},
+        io::testing::{helper_inspect_one_sent_rpc, MockIo},
         log::{Entry, Idx, Term, TermIdx},
         macros::cast_unsafe,
         raft_state::RaftState,
@@ -198,7 +198,7 @@ mod tests {
             let recv_rpc = Rpc::new_request_vote(current_term, candidate_id, rpc_term_idx_initial);
             cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(current_term, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -213,7 +213,7 @@ mod tests {
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(current_term, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -253,7 +253,7 @@ mod tests {
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -270,7 +270,7 @@ mod tests {
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
             assert_eq!(expected_rpc, rpc);
         }
@@ -287,7 +287,7 @@ mod tests {
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -304,7 +304,7 @@ mod tests {
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
             assert_eq!(expected_rpc, rpc);
         }
@@ -321,7 +321,7 @@ mod tests {
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -352,7 +352,7 @@ mod tests {
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -366,7 +366,7 @@ mod tests {
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -380,7 +380,7 @@ mod tests {
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
             assert_eq!(expected_rpc, rpc);
         }
@@ -412,7 +412,7 @@ mod tests {
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -426,7 +426,7 @@ mod tests {
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
             assert_eq!(expected_rpc, rpc);
         }
@@ -440,7 +440,7 @@ mod tests {
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
             cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
             assert_eq!(expected_rpc, rpc);
         }

@@ -32,7 +32,7 @@ impl Follower {
 
     pub fn on_recv<E: ServerEgress>(
         &mut self,
-        rpc: crate::rpc::Rpc,
+        rpc: &Rpc,
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
@@ -51,7 +51,7 @@ impl Follower {
 
     fn on_recv_append_entries<E: ServerEgress>(
         &mut self,
-        append_entries: AppendEntries,
+        append_entries: &AppendEntries,
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
@@ -84,8 +84,10 @@ impl Follower {
             //% Compliance:
             //% Append any new entries not already in the log
             let mut entry_idx = append_entries.prev_log_term_idx.idx + 1;
-            for entry in append_entries.entries.into_iter() {
-                let _match_outcome = raft_state.log.update_to_match_leaders_log(entry, entry_idx);
+            for entry in append_entries.entries.iter() {
+                let _match_outcome = raft_state
+                    .log
+                    .update_to_match_leaders_log(entry.clone(), entry_idx);
                 entry_idx += 1;
             }
 
@@ -112,7 +114,7 @@ impl Follower {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::{helper_inspect_sent_rpc, MockIo},
+        io::testing::{helper_inspect_one_sent_rpc, MockIo},
         log::{Entry, Idx, Term, TermIdx},
         raft_state::RaftState,
         server::ServerId,
@@ -148,9 +150,9 @@ mod tests {
                 leader_commit_idx,
                 vec![],
             );
-            follower.on_recv(recv_rpc, &mut state, &mut io);
+            follower.on_recv(&recv_rpc, &mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
             assert_eq!(expected_rpc, rpc);
             assert!(state.log.entries.is_empty());
@@ -168,9 +170,9 @@ mod tests {
                 vec![Entry::new(current_term, 3), Entry::new(current_term, 6)],
             );
             // on_recv AppendEntries
-            follower.on_recv(recv_rpc, &mut state, &mut io);
+            follower.on_recv(&recv_rpc, &mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
             assert_eq!(expected_rpc, rpc);
             assert!(state.log.entries.is_empty());
@@ -190,9 +192,9 @@ mod tests {
                 vec![Entry::new(current_term, 3), Entry::new(current_term, 6)],
             );
             // on_recv AppendEntries
-            follower.on_recv(recv_rpc, &mut state, &mut io);
+            follower.on_recv(&recv_rpc, &mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
             assert_eq!(expected_rpc, rpc);
             assert!(state.log.entries.is_empty());
@@ -214,9 +216,9 @@ mod tests {
                 leader_commit_idx,
                 vec![Entry::new(current_term, 3), Entry::new(current_term, 6)],
             );
-            follower.on_recv(recv_rpc, &mut state, &mut io);
+            follower.on_recv(&recv_rpc, &mut state, &mut io);
 
-            let rpc = helper_inspect_sent_rpc(&mut io);
+            let rpc = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
             assert_eq!(expected_rpc, rpc);
 
