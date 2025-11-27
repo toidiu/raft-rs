@@ -1,3 +1,4 @@
+use crate::{io::ServerEgress, rpc::Rpc};
 use s2n_codec::{DecoderValue, EncoderValue};
 
 macro_rules! id {
@@ -8,6 +9,10 @@ macro_rules! id {
         impl $name {
             pub fn new(id: [u8; 16]) -> Self {
                 $name(id)
+            }
+
+            pub fn as_bytes(&self) -> &[u8; 16] {
+                &self.0
             }
         }
 
@@ -32,9 +37,43 @@ macro_rules! id {
     };
 }
 
+macro_rules! into_id {
+    ($name: ident) => {
+        impl $name {
+            pub fn into_id(self) -> Id {
+                Id(self.0)
+            }
+        }
+    };
+}
+
+// Un-typed Id for common usecases.
+id!(Id);
+
+// Id used for addressing the current server process.
 id!(ServerId);
-// TODO: add PeerId for type safety
-// id!(PeerId);
+into_id!(ServerId);
+
+// Id used for addressing peer process.
+id!(PeerId);
+into_id!(PeerId);
+
+// Placeholder.. replace with actual PeerId when its parsed from the packet.
+pub const TODO_PEER: PeerId = PeerId([100; 16]);
+
+impl PeerId {
+    pub fn send_rpc<E: ServerEgress>(&self, rpc: Rpc, io_egress: &mut E) {
+        // TODO address to this peer
+        io_egress.send_rpc(rpc);
+    }
+}
+
+impl Id {
+    // Caller is responsible for checking that conversion to a PeerId type is appropriate.
+    pub unsafe fn as_peer_id(self) -> PeerId {
+        PeerId(self.0)
+    }
+}
 
 #[cfg(test)]
 mod tests {

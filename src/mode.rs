@@ -36,7 +36,7 @@ use crate::{
     mode::{candidate::Candidate, follower::Follower, leader::Leader},
     raft_state::RaftState,
     rpc::Rpc,
-    server::{PeerInfo, ServerId},
+    server::{PeerId, ServerId},
 };
 
 mod candidate;
@@ -57,7 +57,7 @@ impl Mode {
     pub fn on_timeout<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
-        peer_list: &[PeerInfo],
+        peer_list: &[PeerId],
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
@@ -82,9 +82,9 @@ impl Mode {
     pub fn on_recv<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
-        peer_id: ServerId,
+        peer_id: PeerId,
         rpc: &Rpc,
-        peer_list: &[PeerInfo],
+        peer_list: &[PeerId],
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
@@ -130,7 +130,7 @@ impl Mode {
     fn handle_mode_transition<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
-        peer_list: &[PeerInfo],
+        peer_list: &[PeerId],
         transition: ModeTransition,
         raft_state: &mut RaftState,
         io_egress: &mut E,
@@ -154,7 +154,7 @@ impl Mode {
     fn on_candidate<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
-        peer_list: &[PeerInfo],
+        peer_list: &[PeerId],
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
@@ -176,7 +176,7 @@ impl Mode {
     fn on_leader<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
-        peer_list: &[PeerInfo],
+        peer_list: &[PeerId],
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
@@ -186,7 +186,7 @@ impl Mode {
         leader.on_leader(server_id, peer_list, raft_state, io_egress);
     }
 
-    fn quorum(peer_list: &[PeerInfo]) -> usize {
+    fn quorum(peer_list: &[PeerId]) -> usize {
         let peer_plus_self = peer_list.len() + 1;
         let half = peer_plus_self / 2;
         half + 1
@@ -213,7 +213,7 @@ mod tests {
     use crate::{
         io::testing::{helper_inspect_one_sent_rpc, MockIo},
         log::{Idx, Term, TermIdx},
-        server::PeerInfo,
+        server::PeerId,
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -221,20 +221,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_quorum() {
-        let peer2_id = ServerId::new([2; 16]);
-        let peer3_id = ServerId::new([3; 16]);
-        let peer4_id = ServerId::new([4; 16]);
+        let peer2_id = PeerId::new([2; 16]);
+        let peer3_id = PeerId::new([3; 16]);
+        let peer4_id = PeerId::new([4; 16]);
 
-        let peer_list = PeerInfo::mock_list(&[]);
+        let peer_list = vec![];
         assert_eq!(Mode::quorum(&peer_list), 1);
 
-        let peer_list = PeerInfo::mock_list(&[peer2_id]);
+        let peer_list = vec![peer2_id];
         assert_eq!(Mode::quorum(&peer_list), 2);
 
-        let peer_list = PeerInfo::mock_list(&[peer2_id, peer3_id]);
+        let peer_list = vec![peer2_id, peer3_id];
         assert_eq!(Mode::quorum(&peer_list), 2);
 
-        let peer_list = PeerInfo::mock_list(&[peer2_id, peer3_id, peer4_id]);
+        let peer_list = vec![peer2_id, peer3_id, peer4_id];
         assert_eq!(Mode::quorum(&peer_list), 3);
     }
 
@@ -245,8 +245,8 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let server_id = ServerId::new([1; 16]);
-        let leader_id = ServerId::new([2; 16]);
-        let peer_list = PeerInfo::mock_list(&[leader_id]);
+        let peer_id = PeerId::new([10; 16]);
+        let peer_list = vec![peer_id];
         let mut state = RaftState::new(timeout);
         let current_term = Term::from(2);
         state.current_term = current_term;
@@ -254,9 +254,9 @@ mod tests {
         let mut mode = Mode::Candidate(Candidate::default());
 
         // Mock send AppendEntries to Candidate with `term => current_term`
-        let append_entries = Rpc::new_append_entry(
+        let append_entries = Rpc::test_recv_new_append_entry(
             current_term,
-            leader_id,
+            peer_id,
             TermIdx::initial(),
             Idx::initial(),
             vec![],
@@ -264,7 +264,7 @@ mod tests {
         let mut leader_io = MockIo::new();
         mode.on_recv(
             &server_id,
-            leader_id,
+            peer_id,
             &append_entries,
             &peer_list,
             &mut state,
@@ -293,8 +293,8 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let server_id = ServerId::new([1; 16]);
-        let peer_id = ServerId::new([2; 16]);
-        let peer_list = PeerInfo::mock_list(&[peer_id]);
+        let peer_id = PeerId::new([11; 16]);
+        let peer_list = vec![peer_id];
         let mut state = RaftState::new(timeout);
         state.current_term = current_term;
 
@@ -302,7 +302,7 @@ mod tests {
         let mut mode = Mode::Candidate(Candidate::default());
 
         // Mock send AppendEntries to Candidate with `term => current_term`
-        let append_entries = Rpc::new_append_entry(
+        let append_entries = Rpc::test_recv_new_append_entry(
             Term::from(1),
             peer_id,
             TermIdx::initial(),

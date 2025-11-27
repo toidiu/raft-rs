@@ -3,7 +3,7 @@ use crate::{
     log::{Idx, TermIdx},
     raft_state::RaftState,
     rpc::Rpc,
-    server::{PeerInfo, ServerId},
+    server::{PeerId, ServerId},
 };
 use std::collections::BTreeMap;
 
@@ -13,16 +13,16 @@ pub struct Leader {
     //% Compliance:
     //% `nextIndex[]` for each server, index of the next log entry to send to that server
     //% (initialized to leader last log index + 1)
-    pub next_idx: BTreeMap<ServerId, Idx>,
+    pub next_idx: BTreeMap<PeerId, Idx>,
 
     //% Compliance:
     //% `matchIndex[]` for each server, index of highest log entry known to be replicated on server
     //% (initialized to 0, increases monotonically)
-    pub match_idx: BTreeMap<ServerId, Idx>,
+    pub match_idx: BTreeMap<PeerId, Idx>,
 }
 
 impl Leader {
-    pub fn new(peer_list: &[PeerInfo], raft_state: &mut RaftState) -> Self {
+    pub fn new(peer_list: &[PeerId], raft_state: &mut RaftState) -> Self {
         let mut next_idx = BTreeMap::new();
         let mut match_idx = BTreeMap::new();
 
@@ -37,8 +37,8 @@ impl Leader {
         let initial_idx = Idx::initial();
 
         for peer in peer_list.iter() {
-            next_idx.insert(peer.id, next_log_idx);
-            match_idx.insert(peer.id, initial_idx);
+            next_idx.insert(*peer, next_log_idx);
+            match_idx.insert(*peer, initial_idx);
         }
 
         Leader {
@@ -50,7 +50,7 @@ impl Leader {
     pub fn on_leader<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
-        peer_list: &[PeerInfo],
+        peer_list: &[PeerId],
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
@@ -81,7 +81,7 @@ impl Leader {
     fn on_send_append_entry<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
-        peer_list: &[PeerInfo],
+        peer_list: &[PeerId],
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
@@ -90,7 +90,7 @@ impl Leader {
 
         for peer in peer_list.iter() {
             let last_log_term_idx = raft_state.log.last_term_idx();
-            let peer_next_idx = *self.next_idx.get(&peer.id).unwrap();
+            let peer_next_idx = *self.next_idx.get(peer).unwrap();
 
             //% Compliance:
             //% If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log
@@ -122,7 +122,7 @@ impl Leader {
     pub fn on_timeout<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
-        peer_list: &[PeerInfo],
+        peer_list: &[PeerId],
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
@@ -144,7 +144,7 @@ mod tests {
         io::testing::{helper_inspect_next_sent_rpc, MockIo},
         log::MatchOutcome,
         raft_state::RaftState,
-        server::{PeerInfo, ServerId},
+        server::{PeerId, ServerId},
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -156,9 +156,9 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let server_id = ServerId::new([1; 16]);
-        let peer2_id = ServerId::new([2; 16]);
-        let peer3_id = ServerId::new([3; 16]);
-        let peer_list = PeerInfo::mock_list(&[peer2_id, peer3_id]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
         let mut state = RaftState::new(timeout);
         let current_term = state.current_term;
         let mut leader = Leader::new(&peer_list, &mut state);
@@ -189,9 +189,9 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let server_id = ServerId::new([1; 16]);
-        let peer2_id = ServerId::new([2; 16]);
-        let peer3_id = ServerId::new([3; 16]);
-        let peer_list = PeerInfo::mock_list(&[peer2_id, peer3_id]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
         let mut state = RaftState::new(timeout);
         let current_term = state.current_term;
         let mut leader = Leader::new(&peer_list, &mut state);

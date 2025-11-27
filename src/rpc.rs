@@ -11,6 +11,9 @@ mod request_vote;
 pub use append_entries::{AppendEntries, AppendEntriesResp};
 pub use request_vote::{RequestVote, RequestVoteResp};
 
+#[cfg(test)]
+use crate::server::PeerId;
+
 #[derive(Debug, PartialEq, Eq)]
 #[allow(clippy::upper_case_acronyms)]
 #[must_use]
@@ -25,7 +28,7 @@ impl Rpc {
     pub fn new_request_vote(term: Term, candidate_id: ServerId, last_log_term_idx: TermIdx) -> Rpc {
         Rpc::RequestVote(RequestVote {
             term,
-            candidate_id,
+            candidate_id: candidate_id.into_id(),
             last_log_term_idx,
         })
     }
@@ -43,7 +46,7 @@ impl Rpc {
     ) -> Rpc {
         Rpc::AppendEntry(AppendEntries {
             term,
-            leader_id,
+            leader_id: leader_id.into_id(),
             prev_log_term_idx,
             leader_commit_idx,
             entries,
@@ -61,6 +64,36 @@ impl Rpc {
             Rpc::AppendEntry(AppendEntries { term, .. }) => term,
             Rpc::AppendEntryResp(AppendEntriesResp { term, .. }) => term,
         }
+    }
+
+    #[cfg(test)]
+    pub fn test_recv_new_append_entry(
+        term: Term,
+        leader_id: PeerId,
+        prev_log_term_idx: TermIdx,
+        leader_commit_idx: Idx,
+        entries: Vec<Entry>,
+    ) -> Rpc {
+        Rpc::AppendEntry(AppendEntries {
+            term,
+            leader_id: leader_id.into_id(),
+            prev_log_term_idx,
+            leader_commit_idx,
+            entries,
+        })
+    }
+
+    #[cfg(test)]
+    pub fn test_recv_new_request_vote(
+        term: Term,
+        candidate_id: PeerId,
+        last_log_term_idx: TermIdx,
+    ) -> Rpc {
+        Rpc::RequestVote(RequestVote {
+            term,
+            candidate_id: candidate_id.into_id(),
+            last_log_term_idx,
+        })
     }
 }
 

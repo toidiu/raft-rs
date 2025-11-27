@@ -1,6 +1,6 @@
 use crate::{
     log::{Idx, Log, Term, TermIdx},
-    server::ServerId,
+    server::{Id, PeerId, ServerId},
     timeout::Timeout,
 };
 
@@ -13,7 +13,7 @@ pub struct RaftState {
 
     //% Compliance:
     //% `votedFor` `candidateId` that received vote in current term (or null if none)
-    pub voted_for: Option<ServerId>,
+    voted_for: Option<Id>,
 
     //% Compliance:
     //% `log[]` log entries; each entry contains command for state machine, and term when entry was
@@ -59,6 +59,18 @@ impl RaftState {
         self.current_term.increment();
 
         last_log_term_idx
+    }
+
+    pub fn voted_for(&self) -> &Option<Id> {
+        &self.voted_for
+    }
+
+    pub fn voted_for_self(&mut self, server_id: ServerId) {
+        self.voted_for = Some(server_id.into_id())
+    }
+
+    pub fn voted_for_peer(&mut self, peer_id: PeerId) {
+        self.voted_for = Some(peer_id.into_id())
     }
 }
 

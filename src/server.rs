@@ -2,16 +2,15 @@ use crate::{
     io::{BufferIo, NetworkIoImpl, ServerEgressImpl, ServerIngress, ServerIngressImpl},
     mode::Mode,
     raft_state::RaftState,
+    server::id::TODO_PEER,
     timeout::Timeout,
 };
 use pin_project_lite::pin_project;
 use std::{future::Future, task::Poll};
 
 mod id;
-mod peer;
 
-pub use id::ServerId;
-pub use peer::PeerInfo;
+pub use id::{Id, PeerId, ServerId};
 
 struct Server {
     // Unique ServerId for this server process.
@@ -24,7 +23,7 @@ struct Server {
     state: RaftState,
 
     // The list of peers participating in the Raft quorum.
-    peer_list: Vec<PeerInfo>,
+    peer_list: Vec<PeerId>,
 
     // Timeout for making progress.
     timer: Timeout,
@@ -39,7 +38,7 @@ struct Server {
 impl Server {
     fn new(
         server_id: ServerId,
-        peer_list: Vec<PeerInfo>,
+        peer_list: Vec<PeerId>,
         election_timeout: Timeout,
     ) -> (Server, NetworkIoImpl) {
         let (server_io_ingress, server_io_egress, network_io) = BufferIo::split();
@@ -70,7 +69,7 @@ impl Server {
     pub fn recv(&mut self) {
         if let Some(recv_rpc) = self.io_ingress.recv_rpc() {
             for rpc in recv_rpc {
-                let peer_id = ServerId::new([42; 16]);
+                let peer_id = TODO_PEER;
                 self.mode.on_recv(
                     &self.server_id,
                     peer_id,
@@ -177,8 +176,7 @@ mod tests {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng);
         let server_id = ServerId::new([1; 16]);
-        let peer_list = vec![ServerId::new([2; 16]), ServerId::new([3; 16])];
-        let peer_list: Vec<PeerInfo> = peer_list.into_iter().map(PeerInfo::new).collect();
+        let peer_list = vec![PeerId::new([11; 16]), PeerId::new([12; 16])];
         let (mut server, mut rx_network_io) = Server::new(server_id, peer_list.clone(), timeout);
         let mut tx_network_io = rx_network_io.clone();
 
@@ -194,7 +192,7 @@ mod tests {
         let last_log_term_idx = TermIdx::builder()
             .with_term(Term::from(8))
             .with_idx(Idx::from(1));
-        Rpc::new_request_vote(term_one, peer_list[0].id, last_log_term_idx).encode(&mut buf);
+        Rpc::test_recv_new_request_vote(term_one, peer_list[0], last_log_term_idx).encode(&mut buf);
         let (written, buf) = buf.split_mut();
         rx_network_io.recv(written.to_vec());
 
@@ -241,8 +239,7 @@ mod tests {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng);
         let server_id = ServerId::new([1; 16]);
-        let peer_list = vec![ServerId::new([2; 16]), ServerId::new([3; 16])];
-        let peer_list: Vec<PeerInfo> = peer_list.into_iter().map(PeerInfo::new).collect();
+        let peer_list = vec![PeerId::new([11; 16]), PeerId::new([12; 16])];
         let (mut server, mut rx_network_io) = Server::new(server_id, peer_list.clone(), timeout);
         let mut tx_network_io = rx_network_io.clone();
 
@@ -281,15 +278,15 @@ mod tests {
                 let last_log_term_idx = TermIdx::builder()
                     .with_term(Term::from(8))
                     .with_idx(Idx::from(1));
-                Rpc::new_request_vote(Term::from(term), peer_list[0].id, last_log_term_idx)
+                Rpc::test_recv_new_request_vote(Term::from(term), peer_list[0], last_log_term_idx)
                     .encode(&mut buf);
                 let (written, buf) = buf.split_mut();
                 rx_network_io.recv(written.to_vec());
 
                 let mut buf = EncoderBuffer::new(buf);
-                Rpc::new_append_entry(
+                Rpc::test_recv_new_append_entry(
                     Term::from(term),
-                    peer_list[0].id,
+                    peer_list[0],
                     TermIdx::builder()
                         .with_term(Term::from(3))
                         .with_idx(Idx::from(1)),
