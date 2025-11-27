@@ -2,7 +2,6 @@ use crate::{
     io::{BufferIo, NetworkIoImpl, ServerEgressImpl, ServerIngress, ServerIngressImpl},
     mode::Mode,
     raft_state::RaftState,
-    server::id::TODO_PEER,
     timeout::Timeout,
 };
 use pin_project_lite::pin_project;
@@ -10,6 +9,7 @@ use std::{future::Future, task::Poll};
 
 mod id;
 
+pub use crate::server::id::{TODO_PEER, TODO_SERVER};
 pub use id::{Id, PeerId, ServerId};
 
 struct Server {

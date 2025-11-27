@@ -1,4 +1,8 @@
-use crate::{io::IO_BUF_LEN, rpc::Rpc, server::ServerId};
+use crate::{
+    io::IO_BUF_LEN,
+    rpc::Rpc,
+    server::{PeerId, ServerId},
+};
 use core::task::Waker;
 use s2n_codec::{EncoderBuffer, EncoderValue};
 use std::{
@@ -21,7 +25,7 @@ pub trait ServerEgress {
     // Push data to the egress_queue
     fn send_raw(&mut self, data: &[u8]);
 
-    fn send_rpc(&mut self, _rpc: Rpc);
+    fn send_rpc(&mut self, to: PeerId, rpc: Rpc);
 }
 
 impl ServerEgress for ServerEgressImpl {
@@ -36,9 +40,9 @@ impl ServerEgress for ServerEgressImpl {
         }
     }
 
-    fn send_rpc(&mut self, mut rpc: Rpc) {
+    fn send_rpc(&mut self, to: PeerId, rpc: Rpc) {
         let mut buf = EncoderBuffer::new(&mut self.buf);
-        rpc.encode_mut(&mut buf);
+        rpc.encode(&mut buf);
         let data = buf.as_mut_slice();
 
         self.egress_queue.lock().unwrap().extend(data.iter());

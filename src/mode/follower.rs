@@ -4,6 +4,7 @@ use crate::{
     mode::ModeTransition,
     raft_state::RaftState,
     rpc::{AppendEntries, Rpc},
+    server::TODO_PEER,
 };
 use std::cmp::min;
 
@@ -106,7 +107,7 @@ impl Follower {
 
         let leader_io = io_egress;
         let rpc = Rpc::new_append_entry_resp(current_term, response);
-        leader_io.send_rpc(rpc);
+        leader_io.send_rpc(TODO_PEER, rpc);
     }
 }
 

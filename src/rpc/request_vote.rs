@@ -3,7 +3,7 @@ use crate::{
     log::{Term, TermIdx},
     raft_state::RaftState,
     rpc::Rpc,
-    server::Id,
+    server::{Id, TODO_PEER},
 };
 use s2n_codec::{DecoderValue, EncoderValue};
 
@@ -69,7 +69,7 @@ impl RequestVote {
         }
 
         let rpc = Rpc::new_request_vote_resp(current_term, grant_vote);
-        io_egress.send_rpc(rpc);
+        io_egress.send_rpc(TODO_PEER, rpc);
     }
 }
 

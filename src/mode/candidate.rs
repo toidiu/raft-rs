@@ -3,7 +3,7 @@ use crate::{
     mode::{cast_unsafe, ElectionResult, Mode, ModeTransition},
     raft_state::RaftState,
     rpc::{AppendEntries, RequestVoteResp, Rpc},
-    server::{Id, PeerId, ServerId},
+    server::{Id, PeerId, ServerId, TODO_PEER},
 };
 use std::collections::HashSet;
 
@@ -109,7 +109,7 @@ impl Candidate {
             let term = raft_state.current_term;
             let rpc = Rpc::new_append_entry_resp(term, false);
             let leader_io = io_egress;
-            leader_io.send_rpc(rpc);
+            leader_io.send_rpc(TODO_PEER, rpc);
             (ModeTransition::Noop, None)
         }
     }
