@@ -1,6 +1,6 @@
 use crate::{
     io::IO_BUF_LEN,
-    rpc::Rpc,
+    rpc::{Packet, Rpc},
     server::{PeerId, ServerId},
 };
 use core::task::Waker;
@@ -42,7 +42,9 @@ impl ServerEgress for ServerEgressImpl {
 
     fn send_rpc(&mut self, to: PeerId, rpc: Rpc) {
         let mut buf = EncoderBuffer::new(&mut self.buf);
-        rpc.encode(&mut buf);
+        let packet = Packet::new_send(self.server_id, to, rpc);
+        packet.encode(&mut buf);
+
         let data = buf.as_mut_slice();
 
         self.egress_queue.lock().unwrap().extend(data.iter());
