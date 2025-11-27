@@ -1,4 +1,4 @@
-use crate::{io::IO_BUF_LEN, rpc::Rpc};
+use crate::{io::IO_BUF_LEN, rpc::Rpc, server::ServerId};
 use core::task::Waker;
 use s2n_codec::{EncoderBuffer, EncoderValue};
 use std::{
@@ -10,6 +10,7 @@ use std::{
 /// A handle held by the Raft server task.
 #[derive(Debug)]
 pub struct ServerEgressImpl {
+    pub server_id: ServerId,
     pub buf: [u8; IO_BUF_LEN],
     pub egress_queue: Arc<Mutex<VecDeque<u8>>>,
     pub egress_waker: Arc<Mutex<Option<Waker>>>,

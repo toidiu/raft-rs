@@ -41,7 +41,7 @@ impl Server {
         peer_list: Vec<PeerId>,
         election_timeout: Timeout,
     ) -> (Server, NetworkIoImpl) {
-        let (server_io_ingress, server_io_egress, network_io) = BufferIo::split();
+        let (server_io_ingress, server_io_egress, network_io) = BufferIo::split(server_id);
         let mode = Mode::new();
         let state = RaftState::new(election_timeout.clone());
         let server = Server {
