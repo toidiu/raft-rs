@@ -1,4 +1,7 @@
-use crate::{rpc::Rpc, server::ServerId};
+use crate::{
+    rpc::Rpc,
+    server::{Id, PeerId, ServerId},
+};
 use s2n_codec::{DecoderBuffer, DecoderBufferResult, DecoderValue, EncoderValue};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -8,7 +11,11 @@ pub struct Packet {
 }
 
 impl Packet {
-    pub fn new(header: Header, rpc: Rpc) -> Packet {
+    pub fn new_send(from: ServerId, to: PeerId, rpc: Rpc) -> Packet {
+        let header = Header {
+            from: from.into_id(),
+            to: to.into_id(),
+        };
         Packet { header, rpc }
     }
 
@@ -16,11 +23,11 @@ impl Packet {
         &self.rpc
     }
 
-    pub fn from(&self) -> ServerId {
+    pub fn from(&self) -> Id {
         self.header.from
     }
 
-    pub fn to(&self) -> ServerId {
+    pub fn to(&self) -> Id {
         self.header.to
     }
 }
@@ -43,8 +50,8 @@ impl EncoderValue for Packet {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Header {
-    pub(crate) from: ServerId,
-    pub(crate) to: ServerId,
+    from: Id,
+    to: Id,
 }
 
 impl<'a> DecoderValue<'a> for Header {
