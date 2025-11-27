@@ -233,7 +233,7 @@ mod tests {
         let mut state = RaftState::new(timeout);
         assert!(state.current_term.is_initial());
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
         let mut candidate = Candidate::default();
 
         // Trigger election
@@ -262,7 +262,7 @@ mod tests {
         let peer_list = vec![];
         let mut state = RaftState::new(timeout);
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
         let mut candidate = Candidate::default();
         assert_eq!(Mode::quorum(&peer_list), 1);
 
@@ -321,7 +321,7 @@ mod tests {
         let term_election = term_current + 1;
         state.current_term = term_current;
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
         assert_eq!(Mode::quorum(&peer_list), 2);
 
         // Initialize Candidate (votes for self)
@@ -374,7 +374,7 @@ mod tests {
         let term_election = term_current + 1;
         state.current_term = term_current;
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
         assert_eq!(Mode::quorum(&peer_list), 3);
 
         // Initialize Candidate (votes for self)

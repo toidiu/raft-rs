@@ -163,7 +163,7 @@ mod tests {
         let current_term = state.current_term;
         let mut leader = Leader::new(&peer_list, &mut state);
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
 
         leader.on_leader(&server_id, &peer_list, &mut state, &mut io);
 
@@ -208,7 +208,7 @@ mod tests {
             assert!(matches!(outcome, MatchOutcome::DoesntExist));
         }
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
         leader.on_leader(&server_id, &peer_list, &mut state, &mut io);
 
         // FIXME: need to test sending after the initial on_leader switch

@@ -193,7 +193,7 @@ mod tests {
         state.current_term = current_term;
         assert!(state.log.entries.is_empty());
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(candidate_id);
         let rpc_term_idx_initial = TermIdx::initial();
 
         // Expect grant_vote: empty Log, TermIdx initial
@@ -244,7 +244,7 @@ mod tests {
             .log
             .push(vec![Entry::new(term_prev, 3), Entry::new(term_current, 6)]);
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(candidate_id);
 
         // == Equal TermIdx ==
         // Expect: grant vote
@@ -343,7 +343,7 @@ mod tests {
         let term_current = Term::from(2);
         state.current_term = term_current;
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(candidate_id);
 
         let rpc_term = term_current;
         let rpc_last_log_term_idx = TermIdx::initial();
@@ -403,7 +403,7 @@ mod tests {
         let term_ahead = Term::from(3);
         state.current_term = term_current;
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(candidate_id);
 
         let rpc_last_log_term_idx = TermIdx::initial();
 

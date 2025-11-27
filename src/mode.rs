@@ -261,7 +261,7 @@ mod tests {
             Idx::initial(),
             vec![],
         );
-        let mut leader_io = MockIo::new();
+        let mut leader_io = MockIo::new(server_id);
         mode.on_recv(
             &server_id,
             peer_id,
@@ -298,7 +298,7 @@ mod tests {
         let mut state = RaftState::new(timeout);
         state.current_term = current_term;
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
         let mut mode = Mode::Candidate(Candidate::default());
 
         // Mock send AppendEntries to Candidate with `term => current_term`

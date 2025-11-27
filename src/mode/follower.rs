@@ -138,7 +138,7 @@ mod tests {
         let leader_commit_idx = Idx::initial();
         let prev_log_term_idx = TermIdx::initial();
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(leader_id);
 
         // Expect response true
         // - but no entries are sent

@@ -1,20 +1,22 @@
 use crate::{
     io::{ServerEgress, ServerIngress, IO_BUF_LEN},
     rpc::Rpc,
-    server::PeerId,
+    server::{PeerId, ServerId},
 };
 use s2n_codec::{DecoderBuffer, EncoderBuffer, EncoderValue};
 use std::{collections::VecDeque, task::Poll};
 
 #[derive(Debug)]
 pub struct MockIo {
+    server_id: ServerId,
     pub send_queue: VecDeque<Vec<u8>>,
     pub recv_queue: VecDeque<Vec<u8>>,
 }
 
 impl MockIo {
-    pub fn new() -> Self {
+    pub fn new(server_id: ServerId) -> Self {
         MockIo {
+            server_id,
             send_queue: VecDeque::new(),
             recv_queue: VecDeque::new(),
         }
