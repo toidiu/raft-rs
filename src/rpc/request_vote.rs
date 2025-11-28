@@ -62,8 +62,7 @@ impl RequestVote {
         if grant_vote {
             // set local state to capture granting the vote
             //
-            // # SAFETY
-            // Receiving the RequestVote RPC means voting for a peer.
+            // SAFETY: Receiving the RequestVote RPC means voting for a peer.
             let vote_for_candidate = unsafe { self.candidate_id.as_peer_id() };
             raft_state.voted_for_peer(vote_for_candidate);
         }

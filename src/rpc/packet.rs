@@ -30,6 +30,15 @@ impl Packet {
     pub fn to(&self) -> Id {
         self.header.to
     }
+
+    #[cfg(test)]
+    pub fn test_recv_new(from: PeerId, to: ServerId, rpc: Rpc) -> Packet {
+        let header = Header {
+            from: from.into_id(),
+            to: to.into_id(),
+        };
+        Packet { header, rpc }
+    }
 }
 
 impl<'a> DecoderValue<'a> for Packet {
