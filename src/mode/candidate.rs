@@ -3,7 +3,7 @@ use crate::{
     mode::{cast_unsafe, ElectionResult, Mode, ModeTransition},
     raft_state::RaftState,
     rpc::{AppendEntries, RequestVoteResp, Rpc},
-    server::{Id, PeerId, ServerId, TODO_PEER},
+    server::{Id, PeerId, ServerId},
 };
 use std::collections::HashSet;
 
@@ -66,7 +66,7 @@ impl Candidate {
                 (transition, None)
             }
             rpc @ Rpc::AppendEntry(_append_entries) => {
-                self.on_recv_append_entries(rpc, raft_state, io_egress)
+                self.on_recv_append_entries(peer_id, rpc, raft_state, io_egress)
             }
             Rpc::AppendEntryResp(_) => {
                 todo!("it might be possible to get a response from a previous term")
@@ -76,6 +76,7 @@ impl Candidate {
 
     fn on_recv_append_entries<'a, E: ServerEgress>(
         &mut self,
+        peer_id: PeerId,
         rpc: &'a Rpc,
         raft_state: &mut RaftState,
         io_egress: &mut E,
@@ -109,7 +110,7 @@ impl Candidate {
             let term = raft_state.current_term;
             let rpc = Rpc::new_append_entry_resp(term, false);
             let leader_io = io_egress;
-            leader_io.send_rpc(TODO_PEER, rpc);
+            leader_io.send_rpc(peer_id, rpc);
             (ModeTransition::Noop, None)
         }
     }
@@ -248,8 +249,8 @@ mod tests {
         let expected_rpc = Rpc::new_request_vote(state.current_term, server_id, TermIdx::initial());
         // TODO assert which peer we are sending to
         for _peer in peer_list.iter_mut() {
-            let sent_request_vote = helper_inspect_next_sent_rpc(&mut io);
-            assert_eq!(expected_rpc, sent_request_vote);
+            let packet = helper_inspect_next_sent_rpc(&mut io);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
     }
 
