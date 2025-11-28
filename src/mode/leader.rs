@@ -132,7 +132,7 @@ impl Leader {
         self.on_send_append_entry(server_id, peer_list, raft_state, io_egress);
     }
 
-    pub fn on_recv(&mut self, _rpc: &Rpc) {
+    pub fn on_recv(&mut self, _peer_id: PeerId, _rpc: &Rpc) {
         todo!()
     }
 }
@@ -163,13 +163,13 @@ mod tests {
         let current_term = state.current_term;
         let mut leader = Leader::new(&peer_list, &mut state);
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
 
         leader.on_leader(&server_id, &peer_list, &mut state, &mut io);
 
         // Expect append_entry is sent to both peers
         for _ in 0..2 {
-            let sent_rpc = helper_inspect_next_sent_rpc(&mut io);
+            let packet = helper_inspect_next_sent_rpc(&mut io);
 
             // log is empty so expect to recieve a RPC with initial term and idx
             let expected_rpc = Rpc::new_append_entry(
@@ -179,7 +179,7 @@ mod tests {
                 Idx::initial(),
                 vec![],
             );
-            assert_eq!(sent_rpc, expected_rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
     }
 
@@ -208,7 +208,7 @@ mod tests {
             assert!(matches!(outcome, MatchOutcome::DoesntExist));
         }
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(server_id);
         leader.on_leader(&server_id, &peer_list, &mut state, &mut io);
 
         // FIXME: need to test sending after the initial on_leader switch
@@ -229,7 +229,7 @@ mod tests {
         ];
         for exptected_term_idx in expected_peer_term_idx {
             // Expect append_entry is sent to both peers
-            let sent_rpc = helper_inspect_next_sent_rpc(&mut io);
+            let packet = helper_inspect_next_sent_rpc(&mut io);
 
             let expected_rpc = Rpc::new_append_entry(
                 current_term,
@@ -238,7 +238,7 @@ mod tests {
                 Idx::initial(),
                 vec![],
             );
-            assert_eq!(sent_rpc, expected_rpc,);
+            assert_eq!(&expected_rpc, packet.rpc());
 
             // TODO: aslo assert which peer we are sending to once we add peer header info.
         }

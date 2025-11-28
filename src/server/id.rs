@@ -60,11 +60,12 @@ into_id!(PeerId);
 
 // Placeholder.. replace with actual PeerId when its parsed from the packet.
 pub const TODO_PEER: PeerId = PeerId([100; 16]);
+pub const TODO_SERVER: ServerId = ServerId([10; 16]);
 
 impl PeerId {
     pub fn send_rpc<E: ServerEgress>(&self, rpc: Rpc, io_egress: &mut E) {
         // TODO address to this peer
-        io_egress.send_rpc(rpc);
+        io_egress.send_rpc(*self, rpc);
     }
 }
 

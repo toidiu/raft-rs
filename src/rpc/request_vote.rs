@@ -3,7 +3,7 @@ use crate::{
     log::{Term, TermIdx},
     raft_state::RaftState,
     rpc::Rpc,
-    server::Id,
+    server::{Id, PeerId},
 };
 use s2n_codec::{DecoderValue, EncoderValue};
 
@@ -27,7 +27,12 @@ pub struct RequestVote {
 impl RequestVote {
     pub const TAG: u8 = 1;
 
-    pub fn on_recv<E: ServerEgress>(&self, raft_state: &mut RaftState, io_egress: &mut E) {
+    pub fn on_recv<E: ServerEgress>(
+        &self,
+        peer_id: PeerId,
+        raft_state: &mut RaftState,
+        io_egress: &mut E,
+    ) {
         let current_term = raft_state.current_term;
 
         //% Compliance:
@@ -62,14 +67,13 @@ impl RequestVote {
         if grant_vote {
             // set local state to capture granting the vote
             //
-            // # SAFETY
-            // Receiving the RequestVote RPC means voting for a peer.
+            // SAFETY: Receiving the RequestVote RPC means voting for a peer.
             let vote_for_candidate = unsafe { self.candidate_id.as_peer_id() };
             raft_state.voted_for_peer(vote_for_candidate);
         }
 
         let rpc = Rpc::new_request_vote_resp(current_term, grant_vote);
-        io_egress.send_rpc(rpc);
+        io_egress.send_rpc(peer_id, rpc);
     }
 }
 
@@ -188,23 +192,24 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let candidate_id = ServerId::new([2; 16]);
+        let peer_id = PeerId::new([11; 16]);
         let mut state = RaftState::new(timeout);
         let current_term = Term::initial();
         state.current_term = current_term;
         assert!(state.log.entries.is_empty());
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(candidate_id);
         let rpc_term_idx_initial = TermIdx::initial();
 
         // Expect grant_vote: empty Log, TermIdx initial
         {
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(current_term, candidate_id, rpc_term_idx_initial);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(peer_id, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(current_term, true);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
 
         // Expect grant_vote: empty Log, TermIdx > initial
@@ -215,11 +220,11 @@ mod tests {
                 .with_idx(Idx::from(1));
             let rpc_term = Term::from(1);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(peer_id, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(current_term, true);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
     }
 
@@ -229,6 +234,7 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let candidate_id = ServerId::new([2; 16]);
+        let peer_id = PeerId::new([11; 16]);
         let mut state = RaftState::new(timeout);
 
         let idx_lt = Idx::from(1);
@@ -244,7 +250,7 @@ mod tests {
             .log
             .push(vec![Entry::new(term_prev, 3), Entry::new(term_current, 6)]);
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(candidate_id);
 
         // == Equal TermIdx ==
         // Expect: grant vote
@@ -255,11 +261,11 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(peer_id, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
 
         // == Different Term ==
@@ -272,11 +278,11 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(peer_id, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
 
         // == Different Term ==
@@ -289,11 +295,11 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(peer_id, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
 
         // == Same Term ==
@@ -306,11 +312,11 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(peer_id, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
 
         // == Same Term ==
@@ -323,11 +329,11 @@ mod tests {
             // construct RPC to recv
             let rpc_last_log_term_idx = TermIdx::builder().with_term(rpc_term).with_idx(rpc_idx);
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(peer_id, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
     }
 
@@ -337,13 +343,13 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let candidate_id = ServerId::new([2; 16]);
-        let peer2_id = PeerId::new([11; 16]);
+        let peer_id = PeerId::new([11; 16]);
         let mut state = RaftState::new(timeout);
 
         let term_current = Term::from(2);
         state.current_term = term_current;
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(candidate_id);
 
         let rpc_term = term_current;
         let rpc_last_log_term_idx = TermIdx::initial();
@@ -354,11 +360,11 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(peer_id, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
 
         // == vote_granted Some(candidate_id) ==
@@ -368,25 +374,25 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(peer_id, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
 
         // == vote_granted Some(!candidate_id) ==
         // Expect: NO grant vote
         {
-            state.voted_for_peer(peer2_id);
+            state.voted_for_peer(peer_id);
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(peer_id, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
     }
 
@@ -396,6 +402,7 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let candidate_id = ServerId::new([2; 16]);
+        let peer_id = PeerId::new([11; 16]);
         let mut state = RaftState::new(timeout);
 
         let term_prev = Term::from(1);
@@ -403,7 +410,7 @@ mod tests {
         let term_ahead = Term::from(3);
         state.current_term = term_current;
 
-        let mut io = MockIo::new();
+        let mut io = MockIo::new(candidate_id);
 
         let rpc_last_log_term_idx = TermIdx::initial();
 
@@ -414,11 +421,11 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(peer_id, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
 
         // == rpc_term > current_term ==
@@ -428,11 +435,11 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(peer_id, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, true);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
 
         // == rpc_term < current_term ==
@@ -442,11 +449,11 @@ mod tests {
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_request_vote(rpc_term, candidate_id, rpc_last_log_term_idx);
-            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(&mut state, &mut io);
+            cast_unsafe!(recv_rpc, Rpc::RequestVote).on_recv(peer_id, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_request_vote_resp(term_current, false);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
     }
 }

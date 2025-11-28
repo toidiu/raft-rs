@@ -9,6 +9,7 @@ mod packet;
 mod request_vote;
 
 pub use append_entries::{AppendEntries, AppendEntriesResp};
+pub use packet::Packet;
 pub use request_vote::{RequestVote, RequestVoteResp};
 
 #[cfg(test)]

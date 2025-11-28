@@ -1,3 +1,4 @@
+use crate::server::ServerId;
 use core::future::Future;
 use std::{
     collections::VecDeque,
@@ -71,7 +72,7 @@ const IO_BUF_LEN: usize = 1024;
 pub struct BufferIo;
 
 impl BufferIo {
-    pub fn split() -> (ServerIngressImpl, ServerEgressImpl, NetworkIoImpl) {
+    pub fn split(server_id: ServerId) -> (ServerIngressImpl, ServerEgressImpl, NetworkIoImpl) {
         let ingress_queue = Arc::new(Mutex::new(VecDeque::with_capacity(IO_BUF_LEN)));
         let ingress_waker = Arc::new(Mutex::new(None));
 
@@ -92,6 +93,7 @@ impl BufferIo {
             ingress_waker,
         };
         let server_egress_handle = ServerEgressImpl {
+            server_id,
             buf: [0; IO_BUF_LEN],
             egress_queue,
             egress_waker,
@@ -146,7 +148,8 @@ mod tests {
         AwokenCount,
         AwokenCount,
     ) {
-        let (mut server_ingress, server_egress, mut network_io) = BufferIo::split();
+        let server_id = ServerId::new([1; 16]);
+        let (mut server_ingress, server_egress, mut network_io) = BufferIo::split(server_id);
 
         let (ingress_waker, ingress_cnt) = new_count_waker();
         let mut ctx = Context::from_waker(&ingress_waker);
