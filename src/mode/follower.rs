@@ -41,7 +41,7 @@ impl Follower {
         //% Compliance:
         //% Respond to RPCs from candidates and leaders
         match rpc {
-            Rpc::RequestVote(request_vote) => request_vote.on_recv(raft_state, io_egress),
+            Rpc::RequestVote(request_vote) => request_vote.on_recv(peer_id, raft_state, io_egress),
             Rpc::AppendEntry(append_entries) => {
                 self.on_recv_append_entries(peer_id, append_entries, raft_state, io_egress)
             }

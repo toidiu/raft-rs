@@ -53,7 +53,7 @@ impl Candidate {
     ) -> (ModeTransition, Option<&'a Rpc>) {
         match rpc {
             Rpc::RequestVote(request_vote) => {
-                request_vote.on_recv(raft_state, io_egress);
+                request_vote.on_recv(peer_id, raft_state, io_egress);
                 (ModeTransition::Noop, None)
             }
             Rpc::RequestVoteResp(request_vote_resp) => {

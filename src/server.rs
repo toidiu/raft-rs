@@ -9,7 +9,6 @@ use std::{future::Future, task::Poll};
 
 mod id;
 
-pub use crate::server::id::TODO_PEER;
 pub use id::{Id, PeerId, ServerId};
 
 struct Server {
