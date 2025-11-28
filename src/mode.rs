@@ -101,7 +101,7 @@ impl Mode {
                 //% Compliance:
                 //% If election timeout elapses without receiving AppendEntries RPC from current
                 //% leader or granting vote to candidate: convert to candidate
-                follower.on_recv(rpc, raft_state, io_egress);
+                follower.on_recv(peer_id, rpc, raft_state, io_egress);
                 None
             }
             Mode::Candidate(candidate) => {
@@ -113,7 +113,7 @@ impl Mode {
                 rpc
             }
             Mode::Leader(leader) => {
-                leader.on_recv(rpc);
+                leader.on_recv(peer_id, rpc);
                 None
             }
         };
@@ -275,13 +275,13 @@ mod tests {
         assert!(matches!(mode, Mode::Follower(_)));
 
         // decode the sent RPC
-        let sent_request_vote = helper_inspect_one_sent_rpc(&mut leader_io);
+        let packet = helper_inspect_one_sent_rpc(&mut leader_io);
         assert!(leader_io.send_queue.is_empty());
 
         // expect Follower to send RespAppendEntries acknowledging the leader
         // construct RPC to compare
         let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
-        assert_eq!(expected_rpc, sent_request_vote);
+        assert_eq!(&expected_rpc, packet.rpc());
     }
 
     #[tokio::test]
@@ -323,10 +323,10 @@ mod tests {
 
         // decode the sent RPC
         assert!(io.send_queue.len() == 1);
-        let sent_request_vote = helper_inspect_one_sent_rpc(&mut io);
+        let packet = helper_inspect_one_sent_rpc(&mut io);
 
         // expect Follower to send RespAppendEntries acknowledging the leader
         let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
-        assert_eq!(expected_rpc, sent_request_vote);
+        assert_eq!(&expected_rpc, packet.rpc());
     }
 }

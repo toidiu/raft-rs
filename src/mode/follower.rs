@@ -4,7 +4,7 @@ use crate::{
     mode::ModeTransition,
     raft_state::RaftState,
     rpc::{AppendEntries, Rpc},
-    server::TODO_PEER,
+    server::PeerId,
 };
 use std::cmp::min;
 
@@ -33,6 +33,7 @@ impl Follower {
 
     pub fn on_recv<E: ServerEgress>(
         &mut self,
+        peer_id: PeerId,
         rpc: &Rpc,
         raft_state: &mut RaftState,
         io_egress: &mut E,
@@ -42,7 +43,7 @@ impl Follower {
         match rpc {
             Rpc::RequestVote(request_vote) => request_vote.on_recv(raft_state, io_egress),
             Rpc::AppendEntry(append_entries) => {
-                self.on_recv_append_entries(append_entries, raft_state, io_egress)
+                self.on_recv_append_entries(peer_id, append_entries, raft_state, io_egress)
             }
             Rpc::RequestVoteResp(_) | Rpc::AppendEntryResp(_) => {
                 todo!("it might be possible to get a response from a previous term")
@@ -52,6 +53,7 @@ impl Follower {
 
     fn on_recv_append_entries<E: ServerEgress>(
         &mut self,
+        peer_id: PeerId,
         append_entries: &AppendEntries,
         raft_state: &mut RaftState,
         io_egress: &mut E,
@@ -107,7 +109,7 @@ impl Follower {
 
         let leader_io = io_egress;
         let rpc = Rpc::new_append_entry_resp(current_term, response);
-        leader_io.send_rpc(TODO_PEER, rpc);
+        leader_io.send_rpc(peer_id, rpc);
     }
 }
 
@@ -130,6 +132,7 @@ mod tests {
         let timeout = Timeout::new(prng.clone());
 
         let leader_id = ServerId::new([2; 16]);
+        let peer_id = PeerId::new([10; 16]);
         let mut state = RaftState::new(timeout);
         let current_term = Term::from(2);
         state.current_term = current_term;
@@ -151,11 +154,11 @@ mod tests {
                 leader_commit_idx,
                 vec![],
             );
-            follower.on_recv(&recv_rpc, &mut state, &mut io);
+            follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
             assert!(state.log.entries.is_empty());
         }
 
@@ -171,11 +174,11 @@ mod tests {
                 vec![Entry::new(current_term, 3), Entry::new(current_term, 6)],
             );
             // on_recv AppendEntries
-            follower.on_recv(&recv_rpc, &mut state, &mut io);
+            follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
             assert!(state.log.entries.is_empty());
         }
 
@@ -193,11 +196,11 @@ mod tests {
                 vec![Entry::new(current_term, 3), Entry::new(current_term, 6)],
             );
             // on_recv AppendEntries
-            follower.on_recv(&recv_rpc, &mut state, &mut io);
+            follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
             assert!(state.log.entries.is_empty());
         }
 
@@ -217,11 +220,11 @@ mod tests {
                 leader_commit_idx,
                 vec![Entry::new(current_term, 3), Entry::new(current_term, 6)],
             );
-            follower.on_recv(&recv_rpc, &mut state, &mut io);
+            follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
-            let rpc = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_rpc(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
-            assert_eq!(expected_rpc, rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
 
             // expect received entries to be in the log
             assert!(state.log.entries.len() == 2);

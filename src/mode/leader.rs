@@ -132,7 +132,7 @@ impl Leader {
         self.on_send_append_entry(server_id, peer_list, raft_state, io_egress);
     }
 
-    pub fn on_recv(&mut self, _rpc: &Rpc) {
+    pub fn on_recv(&mut self, _peer_id: PeerId, _rpc: &Rpc) {
         todo!()
     }
 }
