@@ -211,7 +211,7 @@ pub enum ElectionResult {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::{helper_inspect_one_sent_rpc, MockIo},
+        io::testing::{helper_inspect_one_sent_packet, MockIo},
         log::{Idx, Term, TermIdx},
         server::PeerId,
         timeout::Timeout,
@@ -275,7 +275,7 @@ mod tests {
         assert!(matches!(mode, Mode::Follower(_)));
 
         // decode the sent RPC
-        let packet = helper_inspect_one_sent_rpc(&mut leader_io);
+        let packet = helper_inspect_one_sent_packet(&mut leader_io);
         assert!(leader_io.send_queue.is_empty());
 
         // expect Follower to send RespAppendEntries acknowledging the leader
@@ -323,7 +323,7 @@ mod tests {
 
         // decode the sent RPC
         assert!(io.send_queue.len() == 1);
-        let packet = helper_inspect_one_sent_rpc(&mut io);
+        let packet = helper_inspect_one_sent_packet(&mut io);
 
         // expect Follower to send RespAppendEntries acknowledging the leader
         let expected_rpc = Rpc::new_append_entry_resp(current_term, false);

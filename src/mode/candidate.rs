@@ -110,7 +110,7 @@ impl Candidate {
             let term = raft_state.current_term;
             let rpc = Rpc::new_append_entry_resp(term, false);
             let leader_io = io_egress;
-            leader_io.send_rpc(peer_id, rpc);
+            leader_io.send_packet(peer_id, rpc);
             (ModeTransition::Noop, None)
         }
     }
@@ -213,7 +213,7 @@ impl Candidate {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::{helper_inspect_next_sent_rpc, MockIo},
+        io::testing::{helper_inspect_next_sent_packet, MockIo},
         log::{Term, TermIdx},
         raft_state::RaftState,
         server::PeerId,
@@ -249,7 +249,7 @@ mod tests {
         let expected_rpc = Rpc::new_request_vote(state.current_term, server_id, TermIdx::initial());
         // TODO assert which peer we are sending to
         for _peer in peer_list.iter_mut() {
-            let packet = helper_inspect_next_sent_rpc(&mut io);
+            let packet = helper_inspect_next_sent_packet(&mut io);
             assert_eq!(&expected_rpc, packet.rpc());
         }
     }

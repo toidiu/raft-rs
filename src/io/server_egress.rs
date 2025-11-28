@@ -25,7 +25,7 @@ pub trait ServerEgress {
     // Push data to the egress_queue
     fn send_raw(&mut self, data: &[u8]);
 
-    fn send_rpc(&mut self, to: PeerId, rpc: Rpc);
+    fn send_packet(&mut self, to: PeerId, rpc: Rpc);
 }
 
 impl ServerEgress for ServerEgressImpl {
@@ -40,7 +40,7 @@ impl ServerEgress for ServerEgressImpl {
         }
     }
 
-    fn send_rpc(&mut self, to: PeerId, rpc: Rpc) {
+    fn send_packet(&mut self, to: PeerId, rpc: Rpc) {
         let mut buf = EncoderBuffer::new(&mut self.buf);
         let packet = Packet::new_send(self.server_id, to, rpc);
         packet.encode(&mut buf);

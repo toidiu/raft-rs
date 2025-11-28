@@ -65,7 +65,7 @@ pub const TODO_SERVER: ServerId = ServerId([10; 16]);
 impl PeerId {
     pub fn send_rpc<E: ServerEgress>(&self, rpc: Rpc, io_egress: &mut E) {
         // TODO address to this peer
-        io_egress.send_rpc(*self, rpc);
+        io_egress.send_packet(*self, rpc);
     }
 }
 
