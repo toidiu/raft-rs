@@ -1,4 +1,4 @@
-use crate::{io::ServerEgress, rpc::Rpc};
+use crate::{io::ServerEgress, packet::Rpc};
 use s2n_codec::{DecoderValue, EncoderValue};
 
 macro_rules! id {

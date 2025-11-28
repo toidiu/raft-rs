@@ -1,6 +1,6 @@
 use crate::{
     io::{RxReady, IO_BUF_LEN},
-    rpc::Packet,
+    packet::Packet,
 };
 use core::task::{Context, Poll, Waker};
 use s2n_codec::{DecoderBuffer, DecoderValue};

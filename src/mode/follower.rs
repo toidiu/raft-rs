@@ -2,8 +2,8 @@ use crate::{
     io::ServerEgress,
     log::MatchOutcome,
     mode::ModeTransition,
+    packet::{AppendEntries, Rpc},
     raft_state::RaftState,
-    rpc::{AppendEntries, Rpc},
     server::PeerId,
 };
 use std::cmp::min;

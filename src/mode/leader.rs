@@ -1,8 +1,8 @@
 use crate::{
     io::ServerEgress,
     log::{Idx, TermIdx},
+    packet::Rpc,
     raft_state::RaftState,
-    rpc::Rpc,
     server::{PeerId, ServerId},
 };
 use std::collections::BTreeMap;

@@ -34,8 +34,8 @@ use crate::{
     io::ServerEgress,
     macros::cast_unsafe,
     mode::{candidate::Candidate, follower::Follower, leader::Leader},
+    packet::Rpc,
     raft_state::RaftState,
-    rpc::Rpc,
     server::{PeerId, ServerId},
 };
 

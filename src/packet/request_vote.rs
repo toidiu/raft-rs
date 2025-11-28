@@ -1,8 +1,8 @@
 use crate::{
     io::ServerEgress,
     log::{Term, TermIdx},
+    packet::Rpc,
     raft_state::RaftState,
-    rpc::Rpc,
     server::{Id, PeerId},
 };
 use s2n_codec::{DecoderValue, EncoderValue};

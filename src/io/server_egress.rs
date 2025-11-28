@@ -1,6 +1,6 @@
 use crate::{
     io::IO_BUF_LEN,
-    rpc::{Packet, Rpc},
+    packet::{Packet, Rpc},
     server::{PeerId, ServerId},
 };
 use core::task::Waker;

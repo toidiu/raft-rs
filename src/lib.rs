@@ -5,8 +5,8 @@ mod io;
 mod log;
 mod macros;
 mod mode;
+mod packet;
 mod raft_state;
-mod rpc;
 mod server;
 mod timeout;
 

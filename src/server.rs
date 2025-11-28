@@ -159,7 +159,7 @@ mod tests {
         io::{NetEgress, NetIngress},
         log::{Idx, Term, TermIdx},
         macros::cast_unsafe,
-        rpc::{Packet, Rpc},
+        packet::{Packet, Rpc},
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;

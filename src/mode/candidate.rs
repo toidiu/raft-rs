@@ -1,8 +1,8 @@
 use crate::{
     io::ServerEgress,
     mode::{cast_unsafe, ElectionResult, Mode, ModeTransition},
+    packet::{AppendEntries, RequestVoteResp, Rpc},
     raft_state::RaftState,
-    rpc::{AppendEntries, RequestVoteResp, Rpc},
     server::{Id, PeerId, ServerId},
 };
 use std::collections::HashSet;
