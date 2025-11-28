@@ -169,7 +169,7 @@ mod tests {
 
         // Expect append_entry is sent to both peers
         for _ in 0..2 {
-            let sent_rpc = helper_inspect_next_sent_rpc(&mut io);
+            let packet = helper_inspect_next_sent_rpc(&mut io);
 
             // log is empty so expect to recieve a RPC with initial term and idx
             let expected_rpc = Rpc::new_append_entry(
@@ -179,7 +179,7 @@ mod tests {
                 Idx::initial(),
                 vec![],
             );
-            assert_eq!(sent_rpc, expected_rpc);
+            assert_eq!(&expected_rpc, packet.rpc());
         }
     }
 
@@ -229,7 +229,7 @@ mod tests {
         ];
         for exptected_term_idx in expected_peer_term_idx {
             // Expect append_entry is sent to both peers
-            let sent_rpc = helper_inspect_next_sent_rpc(&mut io);
+            let packet = helper_inspect_next_sent_rpc(&mut io);
 
             let expected_rpc = Rpc::new_append_entry(
                 current_term,
@@ -238,7 +238,7 @@ mod tests {
                 Idx::initial(),
                 vec![],
             );
-            assert_eq!(sent_rpc, expected_rpc,);
+            assert_eq!(&expected_rpc, packet.rpc());
 
             // TODO: aslo assert which peer we are sending to once we add peer header info.
         }
