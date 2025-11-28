@@ -68,7 +68,7 @@ impl Server {
     pub fn recv(&mut self) {
         if let Some(recv_packets) = self.io_ingress.recv_rpc() {
             for packet in recv_packets {
-                // SAFETY: Receiving RPC means the id is a PeerId.
+                // SAFETY: Receiving RPC means that `from` is a PeerId.
                 let peer_id = unsafe { packet.from().as_peer_id() };
                 self.mode.on_recv(
                     &self.server_id,
