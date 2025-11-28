@@ -66,7 +66,7 @@ impl Server {
     }
 
     pub fn recv(&mut self) {
-        if let Some(recv_packets) = self.io_ingress.recv_rpc() {
+        if let Some(recv_packets) = self.io_ingress.recv_packet() {
             for packet in recv_packets {
                 // SAFETY: Receiving RPC means that `from` is a PeerId.
                 let peer_id = unsafe { packet.from().as_peer_id() };
@@ -159,7 +159,7 @@ mod tests {
         io::{NetEgress, NetIngress},
         log::{Idx, Term, TermIdx},
         macros::cast_unsafe,
-        rpc::{Packet, Rpc},
+        packet::{Packet, Rpc},
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;

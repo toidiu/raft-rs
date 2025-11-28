@@ -1,6 +1,6 @@
 use crate::{
     io::{RxReady, IO_BUF_LEN},
-    rpc::Packet,
+    packet::Packet,
 };
 use core::task::{Context, Poll, Waker};
 use s2n_codec::{DecoderBuffer, DecoderValue};
@@ -22,7 +22,7 @@ pub trait ServerIngress {
     #[cfg(test)]
     fn recv_raw(&mut self) -> Option<Vec<u8>>;
 
-    fn recv_rpc(&mut self) -> Option<RecvRpc<'_>>;
+    fn recv_packet(&mut self) -> Option<RecvPacket<'_>>;
 
     fn poll_ingress_queue_ready(&mut self, cx: &mut Context) -> Poll<()>;
 
@@ -50,7 +50,7 @@ impl ServerIngress for ServerIngressImpl {
         }
     }
 
-    fn recv_rpc(&mut self) -> Option<RecvRpc<'_>> {
+    fn recv_packet(&mut self) -> Option<RecvPacket<'_>> {
         let len = self
             .ingress_queue
             .lock()
@@ -58,7 +58,7 @@ impl ServerIngress for ServerIngressImpl {
             .read(&mut self.buf)
             .ok()?;
 
-        Some(RecvRpc::new(&self.buf[0..len]))
+        Some(RecvPacket::new(&self.buf[0..len]))
     }
 
     fn poll_ingress_queue_ready(&mut self, cx: &mut Context) -> Poll<()> {
@@ -74,19 +74,19 @@ impl ServerIngress for ServerIngressImpl {
     }
 }
 
-pub struct RecvRpc<'a> {
+pub struct RecvPacket<'a> {
     // buf: &'a [u8],
     buf: DecoderBuffer<'a>,
 }
 
-impl<'a> RecvRpc<'a> {
+impl<'a> RecvPacket<'a> {
     fn new(buf: &'a [u8]) -> Self {
         let buf = DecoderBuffer::new(buf);
-        RecvRpc { buf }
+        RecvPacket { buf }
     }
 }
 
-impl<'a> Iterator for RecvRpc<'a> {
+impl<'a> Iterator for RecvPacket<'a> {
     type Item = Packet;
 
     fn next(&mut self) -> Option<Self::Item> {

@@ -1,8 +1,8 @@
 use crate::{
     io::ServerEgress,
     log::{Idx, TermIdx},
+    packet::Rpc,
     raft_state::RaftState,
-    rpc::Rpc,
     server::{PeerId, ServerId},
 };
 use std::collections::BTreeMap;
@@ -141,7 +141,7 @@ impl Leader {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::{helper_inspect_next_sent_rpc, MockIo},
+        io::testing::{helper_inspect_next_sent_packet, MockIo},
         log::MatchOutcome,
         raft_state::RaftState,
         server::{PeerId, ServerId},
@@ -169,7 +169,7 @@ mod tests {
 
         // Expect append_entry is sent to both peers
         for _ in 0..2 {
-            let packet = helper_inspect_next_sent_rpc(&mut io);
+            let packet = helper_inspect_next_sent_packet(&mut io);
 
             // log is empty so expect to recieve a RPC with initial term and idx
             let expected_rpc = Rpc::new_append_entry(
@@ -229,7 +229,7 @@ mod tests {
         ];
         for exptected_term_idx in expected_peer_term_idx {
             // Expect append_entry is sent to both peers
-            let packet = helper_inspect_next_sent_rpc(&mut io);
+            let packet = helper_inspect_next_sent_packet(&mut io);
 
             let expected_rpc = Rpc::new_append_entry(
                 current_term,

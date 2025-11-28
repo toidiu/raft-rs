@@ -2,8 +2,8 @@ use crate::{
     io::ServerEgress,
     log::MatchOutcome,
     mode::ModeTransition,
+    packet::{AppendEntries, Rpc},
     raft_state::RaftState,
-    rpc::{AppendEntries, Rpc},
     server::PeerId,
 };
 use std::cmp::min;
@@ -109,7 +109,7 @@ impl Follower {
 
         let leader_io = io_egress;
         let rpc = Rpc::new_append_entry_resp(current_term, response);
-        leader_io.send_rpc(peer_id, rpc);
+        leader_io.send_packet(peer_id, rpc);
     }
 }
 
@@ -117,7 +117,7 @@ impl Follower {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::{helper_inspect_one_sent_rpc, MockIo},
+        io::testing::{helper_inspect_one_sent_packet, MockIo},
         log::{Entry, Idx, Term, TermIdx},
         raft_state::RaftState,
         server::ServerId,
@@ -156,7 +156,7 @@ mod tests {
             );
             follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
-            let packet = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_packet(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
             assert_eq!(&expected_rpc, packet.rpc());
             assert!(state.log.entries.is_empty());
@@ -176,7 +176,7 @@ mod tests {
             // on_recv AppendEntries
             follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
-            let packet = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_packet(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
             assert_eq!(&expected_rpc, packet.rpc());
             assert!(state.log.entries.is_empty());
@@ -198,7 +198,7 @@ mod tests {
             // on_recv AppendEntries
             follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
-            let packet = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_packet(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
             assert_eq!(&expected_rpc, packet.rpc());
             assert!(state.log.entries.is_empty());
@@ -222,7 +222,7 @@ mod tests {
             );
             follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
-            let packet = helper_inspect_one_sent_rpc(&mut io);
+            let packet = helper_inspect_one_sent_packet(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
             assert_eq!(&expected_rpc, packet.rpc());
 

@@ -1,16 +1,9 @@
 use crate::{
     log::{Entry, Idx, Term, TermIdx},
+    packet::{AppendEntries, AppendEntriesResp, RequestVote, RequestVoteResp},
     server::ServerId,
 };
 use s2n_codec::{DecoderBuffer, DecoderBufferResult, DecoderError, DecoderValue, EncoderValue};
-
-mod append_entries;
-mod packet;
-mod request_vote;
-
-pub use append_entries::{AppendEntries, AppendEntriesResp};
-pub use packet::Packet;
-pub use request_vote::{RequestVote, RequestVoteResp};
 
 #[cfg(test)]
 use crate::server::PeerId;

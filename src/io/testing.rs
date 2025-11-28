@@ -1,6 +1,6 @@
 use crate::{
     io::{ServerEgress, ServerIngress, IO_BUF_LEN},
-    rpc::{Packet, Rpc},
+    packet::{Packet, Rpc},
     server::{PeerId, ServerId},
 };
 use s2n_codec::{DecoderBuffer, EncoderBuffer, EncoderValue};
@@ -29,7 +29,7 @@ impl ServerEgress for MockIo {
         self.send_queue.push_back(data.to_vec());
     }
 
-    fn send_rpc(&mut self, to: PeerId, rpc: Rpc) {
+    fn send_packet(&mut self, to: PeerId, rpc: Rpc) {
         let mut slice = vec![0; IO_BUF_LEN];
         let mut buf = EncoderBuffer::new(&mut slice);
 
@@ -55,18 +55,18 @@ impl ServerIngress for MockIo {
         }
     }
 
-    fn recv_rpc(&mut self) -> Option<super::server_ingress::RecvRpc<'_>> {
+    fn recv_packet(&mut self) -> Option<super::server_ingress::RecvPacket<'_>> {
         unimplemented!()
     }
 }
 
-pub fn helper_inspect_one_sent_rpc(peer_io: &mut MockIo) -> Packet {
-    let packet = helper_inspect_next_sent_rpc(peer_io);
+pub fn helper_inspect_one_sent_packet(peer_io: &mut MockIo) -> Packet {
+    let packet = helper_inspect_next_sent_packet(peer_io);
     assert!(peer_io.send_queue.is_empty());
     packet
 }
 
-pub fn helper_inspect_next_sent_rpc(peer_io: &mut MockIo) -> Packet {
+pub fn helper_inspect_next_sent_packet(peer_io: &mut MockIo) -> Packet {
     let rpc_bytes = peer_io.send_queue.pop_front().unwrap();
     // assert!(peer_io.send_queue.is_empty());
 
