@@ -118,6 +118,18 @@ impl Mode {
             }
         };
 
+        // `commitIndex` is only updated upon receiving an AppendEntry RPC
+        if matches!(rpc, Rpc::AppendEntry(_)) {
+            while raft_state.commit_idx() > raft_state.last_applied() {
+                //% Compliance:
+                //% If commitIndex > lastApplied: increment lastApplied
+                //% If commitIndex > lastApplied: apply log[lastApplied] to state machine (§5.3)
+                raft_state.increment_last_applied();
+
+                // TODO: implement state machine
+            }
+        }
+
         // Attempt to process the RPC again.
         //
         // An RPC might only be partially processed if it results in a ModeTransition and should be

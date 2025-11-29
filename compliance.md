@@ -20,7 +20,7 @@
 
 ### Rules for Servers
 #### All Servers
-- [ ] If commitIndex > lastApplied: increment lastApplied
+- [x] If commitIndex > lastApplied: increment lastApplied
 - [ ] If commitIndex > lastApplied: apply log[lastApplied] to state machine (§5.3)
 - [x] If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
 #### Followers (§5.2)
