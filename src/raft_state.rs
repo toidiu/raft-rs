@@ -29,7 +29,7 @@ pub struct RaftState {
     //% Compliance:
     //% lastApplied: index of highest log entry applied to state machine (initialized to 0,
     //% increases monotonically)
-    pub last_applied: Idx,
+    last_applied: Idx,
 
     pub election_timer: Timeout,
 }
@@ -56,11 +56,12 @@ impl RaftState {
         self.commit_idx = idx;
     }
 
-    // Retrieve the last TermIdx applied on self and increment the currentTerm
+    // Retrieve the last log TermIdx and increment the currentTerm
     pub fn on_start_election(&mut self) -> TermIdx {
-        let last_log_term_idx = TermIdx::builder()
-            .with_term(self.current_term)
-            .with_idx(self.last_applied);
+        //% Compliance:
+        //% lastLogIndex: index of candidate’s last log entry (§5.4)
+        //% lastLogTerm: term of candidate’s last log entry (§5.4)
+        let last_log_term_idx = self.log.last_term_idx();
 
         //% Compliance:
         //% Increment currentTerm
@@ -85,6 +86,7 @@ impl RaftState {
 #[cfg(test)]
 mod tests {
     use crate::{
+        log::Entry,
         raft_state::{Idx, RaftState, Term, TermIdx},
         timeout::Timeout,
     };
@@ -96,23 +98,33 @@ mod tests {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
 
+        // Initialize state
         let mut state = RaftState::new(timeout);
+        let current_term = Term::from(100);
+        state.current_term = current_term;
 
-        // set current term and idx
-        let apply_term = Term::from(4);
-        let apply_idx = Idx::from(2);
-        state.current_term = apply_term;
-        state.last_applied = apply_idx;
-        assert_eq!(state.current_term, apply_term);
-        assert_eq!(state.last_applied, apply_idx);
-
-        // on_start_election should increment the currentTerm and return the previous TermIdx
-        let prev_term_idx = state.on_start_election();
-
+        // Insert 2 entries for Term 1
+        let t1 = Term::from(1);
+        state.log.push(vec![Entry::new(t1, 8)]);
+        state.log.push(vec![Entry::new(t1, 8)]);
+        // on_start_election should increment the currentTerm and return the last log TermIdx
+        let last_log_term_idx = state.on_start_election();
         assert_eq!(
-            prev_term_idx,
-            TermIdx::builder().with_term(apply_term).with_idx(apply_idx)
+            last_log_term_idx,
+            TermIdx::builder().with_term(t1).with_idx(Idx::from(2))
         );
-        assert_eq!(state.current_term, Term::from(5));
+        assert_eq!(state.current_term, current_term + 1);
+
+        // Insert 2 entries for Term 2
+        let t2 = Term::from(2);
+        state.log.push(vec![Entry::new(t2, 8)]);
+        state.log.push(vec![Entry::new(t2, 8)]);
+        // on_start_election should increment the currentTerm and return the last log TermIdx
+        let last_log_term_idx = state.on_start_election();
+        assert_eq!(
+            last_log_term_idx,
+            TermIdx::builder().with_term(t2).with_idx(Idx::from(4))
+        );
+        assert_eq!(state.current_term, current_term + 2);
     }
 }
