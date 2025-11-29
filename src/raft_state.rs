@@ -48,11 +48,34 @@ impl RaftState {
         }
     }
 
+    pub fn last_applied(&self) -> &Idx {
+        &self.last_applied
+    }
+
+    //% Compliance:
+    //% lastApplied: index of highest log entry applied to state machine (initialized to 0,
+    //% increases monotonically)
+    //
+    // TODO: apply to state machine
+    pub fn increment_last_applied(&mut self) {
+        self.last_applied += 1;
+    }
+
     pub fn commit_idx(&self) -> &Idx {
         &self.commit_idx
     }
 
     pub fn set_commit_idx(&mut self, idx: Idx) {
+        assert!(
+            idx >= self.commit_idx,
+            "commitIdx is monotonically increasing"
+        );
+        if idx > self.commit_idx {
+            assert!(
+                idx == self.commit_idx + 1,
+                "we expect commitIdx should increase by 1 so each entry is captured in the log"
+            );
+        }
         self.commit_idx = idx;
     }
 
