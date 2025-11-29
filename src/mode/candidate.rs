@@ -85,7 +85,7 @@ impl Candidate {
         let AppendEntries {
             term,
             leader_id: _,
-            prev_log_term_idx: _,
+            prev_log_term_idx,
             leader_commit_idx: _,
             entries: _,
         } = append_entries;
@@ -108,7 +108,7 @@ impl Candidate {
             //% if the leader's current term is < the candidate's
             //% - reject the RPC and continue in the candidate state
             let term = raft_state.current_term;
-            let rpc = Rpc::new_append_entry_resp(term, false);
+            let rpc = Rpc::new_append_entry_resp(term, false, *prev_log_term_idx);
             let leader_io = io_egress;
             leader_io.send_packet(peer_id, rpc);
             (ModeTransition::Noop, None)

@@ -18,13 +18,23 @@ pub struct AppendEntries {
     //% leaderId: so follower can redirect clients
     pub leader_id: Id,
 
+    // The last log index that the peer should have in its log.
+    //
+    // Used to confirm that the peer (follower) is up to date and can accept new entries. If the
+    // last log index matches, then the peer is up to date and should accept this new AppendEntries
+    // RPC.
+    //
     //% Compliance:
     //% prevLogIndex: index of log entry immediately preceding new ones
     //% prevLogTerm: term of prevLogIndex entry
     pub prev_log_term_idx: TermIdx,
+
+    // The index of the highest log entry known to be committed.
+    //
     //% Compliance:
     // leaderCommit: leader’s commitIndex
     pub leader_commit_idx: Idx,
+
     //% Compliance:
     //% entries[]: log entries to store (empty for heartbeat; may send more than one for
     //% efficiency)
@@ -49,6 +59,12 @@ pub struct AppendEntriesResp {
     //% Compliance:
     //% success: true if follower contained entry matching prevLogIndex and prevLogTerm
     pub success: bool,
+
+    // The last log index that the peer send in the [AppendEntries] RPC.
+    //
+    // This is used to match the Response to the original RPC since it is possible to have multiple
+    // RPCs in-flight due to retries.
+    pub echo_prev_log_term_idx: TermIdx,
 }
 
 impl AppendEntriesResp {
@@ -110,8 +126,13 @@ impl<'a> DecoderValue<'a> for AppendEntriesResp {
         let (term, buffer) = buffer.decode()?;
         let (success, buffer): (u8, _) = buffer.decode()?;
         let success = success != 0;
+        let (echo_prev_log_term_idx, buffer) = buffer.decode()?;
 
-        let rpc = AppendEntriesResp { term, success };
+        let rpc = AppendEntriesResp {
+            term,
+            success,
+            echo_prev_log_term_idx,
+        };
         Ok((rpc, buffer))
     }
 }
@@ -120,6 +141,7 @@ impl EncoderValue for AppendEntriesResp {
     fn encode<E: s2n_codec::Encoder>(&self, encoder: &mut E) {
         encoder.encode(&self.term);
         encoder.write_slice(&(self.success as u8).to_be_bytes());
+        encoder.encode(&self.echo_prev_log_term_idx);
     }
 }
 
@@ -181,6 +203,9 @@ mod tests {
         let rpc = AppendEntriesResp {
             term: Term::from(2),
             success: true,
+            echo_prev_log_term_idx: TermIdx::builder()
+                .with_term(Term::from(2))
+                .with_idx(Idx::from(1)),
         };
 
         let mut slice = vec![0; 30];

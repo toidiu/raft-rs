@@ -47,8 +47,16 @@ impl Rpc {
         })
     }
 
-    pub fn new_append_entry_resp(term: Term, success: bool) -> Rpc {
-        Rpc::AppendEntryResp(AppendEntriesResp { term, success })
+    pub fn new_append_entry_resp(
+        term: Term,
+        success: bool,
+        echo_prev_log_term_idx: TermIdx,
+    ) -> Rpc {
+        Rpc::AppendEntryResp(AppendEntriesResp {
+            term,
+            success,
+            echo_prev_log_term_idx,
+        })
     }
 
     pub fn term(&self) -> &Term {
@@ -203,7 +211,13 @@ mod tests {
 
     #[test]
     fn encode_decode_append_entry_resp() {
-        let rpc = Rpc::new_append_entry_resp(Term::from(1), true);
+        let rpc = Rpc::new_append_entry_resp(
+            Term::from(1),
+            true,
+            TermIdx::builder()
+                .with_term(Term::from(2))
+                .with_idx(Idx::from(1)),
+        );
 
         let mut slice = vec![0; 50];
         let mut buf = EncoderBuffer::new(&mut slice);
