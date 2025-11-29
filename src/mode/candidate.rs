@@ -69,7 +69,7 @@ impl Candidate {
                 self.on_recv_append_entries(peer_id, rpc, raft_state, io_egress)
             }
             Rpc::AppendEntryResp(_) => {
-                todo!("it might be possible to get a response from a previous term")
+                todo!("")
             }
         }
     }

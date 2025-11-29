@@ -1,11 +1,11 @@
 use crate::{
     io::ServerEgress,
     log::{Idx, TermIdx},
-    packet::Rpc,
+    packet::{AppendEntriesResp, Rpc},
     raft_state::RaftState,
     server::{PeerId, ServerId},
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Sub};
 
 #[derive(Debug, Default)]
 pub struct Leader {
@@ -75,48 +75,61 @@ impl Leader {
         //% Compliance:
         //% Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat
         //% during idle periods to prevent election timeouts (§5.2)
-        self.on_send_append_entry(server_id, peer_list, raft_state, io_egress);
+        self.on_broadcast_send_append_entries(server_id, peer_list, raft_state, io_egress);
     }
 
-    fn on_send_append_entry<E: ServerEgress>(
+    fn on_broadcast_send_append_entries<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
         peer_list: &[PeerId],
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
+        for peer_id in peer_list.iter() {
+            self.on_send_append_entry(server_id, peer_id, raft_state, io_egress);
+        }
+    }
+
+    fn on_send_append_entry<E: ServerEgress>(
+        &mut self,
+        server_id: &ServerId,
+        peer_id: &PeerId,
+        raft_state: &mut RaftState,
+        io_egress: &mut E,
+    ) {
         let leader_current_term = raft_state.current_term;
         let leader_commit_idx = raft_state.commit_idx;
 
-        for peer in peer_list.iter() {
-            let last_log_term_idx = raft_state.log.last_term_idx();
-            let peer_next_idx = *self.next_idx.get(peer).unwrap();
+        let last_log_term_idx = raft_state.log.last_term_idx();
+        let peer_next_idx = *self
+            .next_idx
+            .get(peer_id)
+            .expect("peer should have next_idx state");
 
-            //% Compliance:
-            //% If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log
-            //% entries starting at nextIndex
-            let peer_term_idx = if last_log_term_idx.idx >= peer_next_idx {
-                let peer_next_term = raft_state.log.term_at_idx(&peer_next_idx).unwrap();
-                TermIdx::builder()
-                    .with_term(peer_next_term)
-                    .with_idx(peer_next_idx)
-            } else {
-                // The peer should be theoritically up-to-date so send the latest Leader entry. If
-                // the peer is not up-to-date we will get a failure and will decrement the peer's
-                // nextIndex.
-                last_log_term_idx
-            };
+        //% Compliance:
+        //% If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log
+        //% entries starting at nextIndex
+        let peer_term_idx = if last_log_term_idx.idx >= peer_next_idx {
+            let peer_next_term = raft_state.log.term_at_idx(&peer_next_idx).unwrap();
+            TermIdx::builder()
+                .with_term(peer_next_term)
+                .with_idx(peer_next_idx)
+        } else {
+            // The peer should be theoritically up-to-date so send the latest Leader entry. If
+            // the peer is not up-to-date we will get a failure and will decrement the peer's
+            // nextIndex.
+            last_log_term_idx
+        };
 
-            let rpc = Rpc::new_append_entry(
-                leader_current_term,
-                *server_id,
-                peer_term_idx,
-                leader_commit_idx,
-                vec![],
-            );
+        let rpc = Rpc::new_append_entry(
+            leader_current_term,
+            *server_id,
+            peer_term_idx,
+            leader_commit_idx,
+            vec![],
+        );
 
-            peer.send_rpc(rpc, io_egress);
-        }
+        peer_id.send_rpc(rpc, io_egress);
     }
 
     pub fn on_timeout<E: ServerEgress>(
@@ -129,11 +142,89 @@ impl Leader {
         //% Compliance:
         //% Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat
         //% during idle periods to prevent election timeouts (§5.2)
-        self.on_send_append_entry(server_id, peer_list, raft_state, io_egress);
+        self.on_broadcast_send_append_entries(server_id, peer_list, raft_state, io_egress);
     }
 
-    pub fn on_recv(&mut self, _peer_id: PeerId, _rpc: &Rpc) {
-        todo!()
+    pub fn on_recv<E: ServerEgress>(
+        &mut self,
+        server_id: &ServerId,
+        peer_id: PeerId,
+        rpc: &Rpc,
+        raft_state: &mut RaftState,
+        io_egress: &mut E,
+    ) {
+        match rpc {
+            Rpc::RequestVote(_request_vote) => {
+                todo!()
+            }
+            Rpc::RequestVoteResp(_request_vote_resp) => {
+                todo!()
+            }
+            Rpc::AppendEntry(_append_entries) => {
+                todo!()
+            }
+            Rpc::AppendEntryResp(append_entries_resp) => self.on_recv_append_entry_resp(
+                server_id,
+                peer_id,
+                append_entries_resp,
+                raft_state,
+                io_egress,
+            ),
+        }
+    }
+
+    fn on_recv_append_entry_resp<E: ServerEgress>(
+        &mut self,
+        server_id: &ServerId,
+        peer_id: PeerId,
+        append_entries_resp: &AppendEntriesResp,
+        raft_state: &mut RaftState,
+        io_egress: &mut E,
+    ) {
+        let AppendEntriesResp {
+            term: _,
+            success,
+            echo_prev_log_term_idx,
+        } = append_entries_resp;
+
+        let current_next_idx = *self
+            .next_idx
+            .get(&peer_id)
+            .expect("peer should have next_idx state");
+
+        // Only process the response if the RPC matches the current next_idx for the peer. The RPC
+        // can be out-of-order due to timeout and re-transmission.
+        if current_next_idx.eq(&echo_prev_log_term_idx.idx) {
+            if *success {
+                // TODO: include the idx in the Resp rpc rather than assuming next_idx to make the
+                // protocol more resilient.
+                let rpc_sent_idx = *self
+                    .next_idx
+                    .get(&peer_id)
+                    .expect("peer should have next_idx state");
+
+                //% Compliance:
+                //% If successful: update nextIndex and matchIndex for follower (§5.3)
+                self.next_idx
+                    .entry(peer_id)
+                    .and_modify(|idx| *idx = rpc_sent_idx);
+                self.match_idx
+                    .entry(peer_id)
+                    .and_modify(|idx| *idx = rpc_sent_idx);
+            } else {
+                //% Compliance:
+                //% If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
+                self.next_idx.entry(peer_id).and_modify(|idx| {
+                    assert!(
+                        !idx.is_initial(),
+                        "Peer responded false to initial Idx, which is malformed behavior."
+                    );
+                    *idx = idx.sub(1)
+                });
+
+                self.on_send_append_entry(server_id, &peer_id, raft_state, io_egress);
+            }
+        }
     }
 }
 
