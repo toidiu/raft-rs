@@ -58,18 +58,24 @@ impl Follower {
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
+        let AppendEntries {
+            term,
+            leader_id: _,
+            prev_log_term_idx,
+            leader_commit_idx,
+            entries,
+        } = append_entries;
+
         let current_term = raft_state.current_term;
 
         //% Compliance:
         //% Reply false if term < currentTerm (§5.1)
-        let rpc_term_lt_current_term = append_entries.term < current_term;
+        let rpc_term_lt_current_term = term < &current_term;
         //% Compliance:
         //% Reply false if log doesn’t contain an entry at prevLogIndex whose term
         //% matches prevLogTerm (§5.3)
         let log_contains_matching_prev_entry = matches!(
-            raft_state
-                .log
-                .entry_matches(append_entries.prev_log_term_idx),
+            raft_state.log.entry_matches(*prev_log_term_idx),
             MatchOutcome::Match
         );
         #[allow(clippy::needless_bool)]
@@ -86,8 +92,8 @@ impl Follower {
             //
             //% Compliance:
             //% Append any new entries not already in the log
-            let mut entry_idx = append_entries.prev_log_term_idx.idx + 1;
-            for entry in append_entries.entries.iter() {
+            let mut entry_idx = prev_log_term_idx.idx + 1;
+            for entry in entries.iter() {
                 let _match_outcome = raft_state
                     .log
                     .update_to_match_leaders_log(entry.clone(), entry_idx);
@@ -98,17 +104,16 @@ impl Follower {
             //% If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of
             //% last new entry)
             assert!(
-                append_entries.leader_commit_idx <= raft_state.log.last_idx(),
+                leader_commit_idx <= &raft_state.log.last_idx(),
                 "leader_commit_idx should not be greater than the number of enties in the log"
             );
-            if append_entries.leader_commit_idx > raft_state.commit_idx {
-                raft_state.commit_idx =
-                    min(append_entries.leader_commit_idx, raft_state.log.last_idx());
+            if leader_commit_idx > &raft_state.commit_idx {
+                raft_state.commit_idx = min(*leader_commit_idx, raft_state.log.last_idx());
             }
         }
 
         let leader_io = io_egress;
-        let rpc = Rpc::new_append_entry_resp(current_term, response);
+        let rpc = Rpc::new_append_entry_resp(current_term, response, *prev_log_term_idx);
         leader_io.send_packet(peer_id, rpc);
     }
 }
@@ -157,7 +162,7 @@ mod tests {
             follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
             let packet = helper_inspect_one_sent_packet(&mut io);
-            let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
+            let expected_rpc = Rpc::new_append_entry_resp(current_term, true, TermIdx::initial());
             assert_eq!(&expected_rpc, packet.rpc());
             assert!(state.log.entries.is_empty());
         }
@@ -177,7 +182,7 @@ mod tests {
             follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
             let packet = helper_inspect_one_sent_packet(&mut io);
-            let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
+            let expected_rpc = Rpc::new_append_entry_resp(current_term, false, TermIdx::initial());
             assert_eq!(&expected_rpc, packet.rpc());
             assert!(state.log.entries.is_empty());
         }
@@ -199,7 +204,13 @@ mod tests {
             follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
             let packet = helper_inspect_one_sent_packet(&mut io);
-            let expected_rpc = Rpc::new_append_entry_resp(current_term, false);
+            let expected_rpc = Rpc::new_append_entry_resp(
+                current_term,
+                false,
+                TermIdx::builder()
+                    .with_term(Term::from(1))
+                    .with_idx(Idx::from(1)),
+            );
             assert_eq!(&expected_rpc, packet.rpc());
             assert!(state.log.entries.is_empty());
         }
@@ -223,7 +234,7 @@ mod tests {
             follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
             let packet = helper_inspect_one_sent_packet(&mut io);
-            let expected_rpc = Rpc::new_append_entry_resp(current_term, true);
+            let expected_rpc = Rpc::new_append_entry_resp(current_term, true, TermIdx::initial());
             assert_eq!(&expected_rpc, packet.rpc());
 
             // expect received entries to be in the log
