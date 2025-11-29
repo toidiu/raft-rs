@@ -69,7 +69,9 @@ impl Candidate {
                 self.on_recv_append_entries(peer_id, rpc, raft_state, io_egress)
             }
             Rpc::AppendEntryResp(_) => {
-                todo!("")
+                // Ignore since a Candidate doesn't send AppendEntry
+                debug_assert!(false);
+                (ModeTransition::Noop, None)
             }
         }
     }
@@ -100,7 +102,7 @@ impl Candidate {
             //
             //% Compliance:
             //% If AppendEntries RPC received from new leader: convert to follower
-
+            //
             // Convert to Follower and process/respond to the RPC
             (ModeTransition::ToFollower, Some(rpc))
         } else {

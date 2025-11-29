@@ -11,8 +11,8 @@ TODO:
     - [ ] on_timeout
     - [ ] leader progression
 - [ ] Handle on_recv in leader
-- [ ] Handle on_recv in follower
-- [ ] Handle on_recv in candidate
+- [x] Handle on_recv in follower
+- [x] Handle on_recv in candidate
 - [ ] Tests for Leader on_recv_append_entry_resp
 
 ## Design
