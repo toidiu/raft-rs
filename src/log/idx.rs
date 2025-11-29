@@ -37,8 +37,9 @@ impl Sub<u64> for Idx {
     type Output = Self;
 
     fn sub(self, rhs: u64) -> Self::Output {
-        assert!(self.0 > 0, "value overflowed on subtraction");
-        Idx(self.0 - rhs)
+        debug_assert!(self.0 > 0, "value overflowed on subtraction");
+        let idx_sub_one = self.0.saturating_sub(rhs);
+        Idx(idx_sub_one)
     }
 }
 

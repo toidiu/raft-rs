@@ -108,8 +108,9 @@ impl Follower {
                 leader_commit_idx <= &raft_state.log.last_idx(),
                 "leader_commit_idx should not be greater than the number of enties in the log"
             );
-            if leader_commit_idx > &raft_state.commit_idx {
-                raft_state.commit_idx = min(*leader_commit_idx, raft_state.log.last_idx());
+            if leader_commit_idx > raft_state.commit_idx() {
+                let min_idx = min(*leader_commit_idx, raft_state.log.last_idx());
+                raft_state.set_commit_idx(min_idx);
             }
         }
 
@@ -222,7 +223,7 @@ mod tests {
         let leader_commit_idx = Idx::from(1);
         {
             assert!(state.log.entries.is_empty());
-            assert_eq!(state.commit_idx, Idx::initial());
+            assert_eq!(state.commit_idx(), &Idx::initial());
 
             // construct RPC to recv
             let recv_rpc = Rpc::new_append_entry(
@@ -244,7 +245,7 @@ mod tests {
             assert_eq!(state.log.entries[1], Entry::new(current_term, 6));
 
             // commit_idx should be updated
-            assert_eq!(state.commit_idx, leader_commit_idx);
+            assert_eq!(state.commit_idx(), &leader_commit_idx);
         }
     }
 }

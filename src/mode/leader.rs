@@ -1,6 +1,7 @@
 use crate::{
     io::ServerEgress,
     log::{Idx, TermIdx},
+    mode::Mode,
     packet::{AppendEntriesResp, Rpc},
     raft_state::RaftState,
     server::{PeerId, ServerId},
@@ -98,7 +99,7 @@ impl Leader {
         io_egress: &mut E,
     ) {
         let leader_current_term = raft_state.current_term;
-        let leader_commit_idx = raft_state.commit_idx;
+        let leader_commit_idx = *raft_state.commit_idx();
 
         let last_log_term_idx = raft_state.log.last_term_idx();
         let peer_next_idx = *self
@@ -149,6 +150,7 @@ impl Leader {
         &mut self,
         server_id: &ServerId,
         peer_id: PeerId,
+        peer_list: &[PeerId],
         rpc: &Rpc,
         raft_state: &mut RaftState,
         io_egress: &mut E,
@@ -165,13 +167,60 @@ impl Leader {
                 // Raft guarantees that there can only be one elected Leader per term.
                 debug_assert!(rpc.term() != &raft_state.current_term);
             }
-            Rpc::AppendEntryResp(append_entries_resp) => self.on_recv_append_entry_resp(
-                server_id,
-                peer_id,
-                append_entries_resp,
-                raft_state,
-                io_egress,
-            ),
+            Rpc::AppendEntryResp(append_entries_resp) => {
+                if let Some(check_match_idx) = self.on_recv_append_entry_resp(
+                    server_id,
+                    peer_id,
+                    append_entries_resp,
+                    raft_state,
+                    io_egress,
+                ) {
+                    self.update_commit_idx(check_match_idx, peer_list, raft_state);
+                }
+            }
+        }
+    }
+
+    //% Compliance:
+    //% If there exists an N such that N > commitIndex, a majority of matchIndex[i] ≥ N,
+    //% and log[N].term == currentTerm: set commitIndex = N (§5.3, §5.4).
+    fn update_commit_idx(
+        &mut self,
+        newly_inserted_match_idx: Idx,
+        peer_list: &[PeerId],
+        raft_state: &mut RaftState,
+    ) {
+        //% Compliance:
+        //% N > commitIndex
+        let larger_than_current_commit_idx = &newly_inserted_match_idx > raft_state.commit_idx();
+
+        let new_idx_larger_than_majority = {
+            let larger_match_idx_count = self
+                .match_idx
+                .iter()
+                .filter(|(_peer_id, peer_match_idx)| {
+                    //% Compliance:
+                    //% matchIndex[i] ≥ N
+                    peer_match_idx >= &&newly_inserted_match_idx
+                })
+                .count();
+            //% Compliance:
+            //% majority
+            larger_match_idx_count >= Mode::quorum(peer_list)
+        };
+
+        //% Compliance:
+        //% log[N].term == currentTerm
+        let matches_current_term = raft_state
+            .log
+            .term_at_idx(&newly_inserted_match_idx)
+            .map(|term| term.eq(&raft_state.current_term))
+            .is_some_and(|matches| matches);
+
+        if larger_than_current_commit_idx && new_idx_larger_than_majority && matches_current_term {
+            //% Compliance:
+            //% set commitIndex = N (§5.3, §5.4).
+            raft_state.set_commit_idx(newly_inserted_match_idx);
         }
     }
 
@@ -182,7 +231,7 @@ impl Leader {
         append_entries_resp: &AppendEntriesResp,
         raft_state: &mut RaftState,
         io_egress: &mut E,
-    ) {
+    ) -> Option<Idx> {
         let AppendEntriesResp {
             term: _,
             success,
@@ -198,7 +247,7 @@ impl Leader {
         // can be out-of-order due to timeout and re-transmission.
         if current_next_idx.eq(&echo_prev_log_term_idx.idx) {
             if *success {
-                // TODO: include the idx in the Resp rpc rather than assuming next_idx to make the
+                // Check the TermIdx in the Resp rpc rather than assuming next_idx to make the
                 // protocol more resilient.
                 let rpc_sent_idx = *self
                     .next_idx
@@ -213,6 +262,7 @@ impl Leader {
                 self.match_idx
                     .entry(peer_id)
                     .and_modify(|idx| *idx = rpc_sent_idx);
+                return Some(rpc_sent_idx);
             } else {
                 //% Compliance:
                 //% If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
@@ -227,6 +277,8 @@ impl Leader {
                 self.on_send_append_entry(server_id, &peer_id, raft_state, io_egress);
             }
         }
+
+        None
     }
 }
 

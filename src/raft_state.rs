@@ -24,7 +24,7 @@ pub struct RaftState {
     //% Compliance:
     //% `commitIndex` index of highest log entry known to be committed (initialized to 0, increases
     //% monotonically)
-    pub commit_idx: Idx,
+    commit_idx: Idx,
 
     //% Compliance:
     //% lastApplied: index of highest log entry applied to state machine (initialized to 0,
@@ -46,6 +46,14 @@ impl RaftState {
             last_applied: Idx::initial(),
             election_timer,
         }
+    }
+
+    pub fn commit_idx(&self) -> &Idx {
+        &self.commit_idx
+    }
+
+    pub fn set_commit_idx(&mut self, idx: Idx) {
+        self.commit_idx = idx;
     }
 
     // Retrieve the last TermIdx applied on self and increment the currentTerm

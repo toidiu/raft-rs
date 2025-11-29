@@ -10,6 +10,7 @@ TODO:
 - [ ] Add leader test
     - [ ] on_timeout
     - [ ] leader progression
+    - [ ] update_commit_idx
 - [ ] Handle on_recv in leader
 - [x] Handle on_recv in follower
 - [x] Handle on_recv in candidate

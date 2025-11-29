@@ -113,7 +113,7 @@ impl Mode {
                 rpc
             }
             Mode::Leader(leader) => {
-                leader.on_recv(server_id, peer_id, rpc, raft_state, io_egress);
+                leader.on_recv(server_id, peer_id, peer_list, rpc, raft_state, io_egress);
                 None
             }
         };
