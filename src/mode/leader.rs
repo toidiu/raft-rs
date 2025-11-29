@@ -154,14 +154,16 @@ impl Leader {
         io_egress: &mut E,
     ) {
         match rpc {
-            Rpc::RequestVote(_request_vote) => {
-                todo!()
-            }
+            Rpc::RequestVote(request_vote) => request_vote.on_recv(peer_id, raft_state, io_egress),
             Rpc::RequestVoteResp(_request_vote_resp) => {
-                todo!()
+                // Ignore since a Leader doesn't send RequestVote
+                debug_assert!(false);
             }
             Rpc::AppendEntry(_append_entries) => {
-                todo!()
+                // Conversion to Follower is already handled so this is simple a sanity check.
+                //
+                // Raft guarantees that there can only be one elected Leader per term.
+                debug_assert!(rpc.term() != &raft_state.current_term);
             }
             Rpc::AppendEntryResp(append_entries_resp) => self.on_recv_append_entry_resp(
                 server_id,
