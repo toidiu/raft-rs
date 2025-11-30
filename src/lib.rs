@@ -8,6 +8,7 @@ mod mode;
 mod packet;
 mod raft_state;
 mod server;
+mod state_machine;
 mod timeout;
 
 fn start() {}

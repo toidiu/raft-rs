@@ -5,6 +5,7 @@ use crate::{
     packet::{AppendEntries, Rpc},
     raft_state::RaftState,
     server::PeerId,
+    state_machine::CurrentMode,
 };
 use std::cmp::min;
 
@@ -110,7 +111,7 @@ impl Follower {
             );
             if leader_commit_idx > raft_state.commit_idx() {
                 let min_idx = min(*leader_commit_idx, raft_state.log.last_idx());
-                raft_state.set_commit_idx(min_idx);
+                raft_state.set_commit_idx(min_idx, peer_id, CurrentMode::Follower);
             }
         }
 
@@ -166,7 +167,7 @@ mod tests {
             let packet = helper_inspect_one_sent_packet(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, true, TermIdx::initial());
             assert_eq!(&expected_rpc, packet.rpc());
-            assert!(state.log.entries.is_empty());
+            assert!(state.log.is_empty());
         }
 
         // Expect response false
@@ -186,7 +187,7 @@ mod tests {
             let packet = helper_inspect_one_sent_packet(&mut io);
             let expected_rpc = Rpc::new_append_entry_resp(current_term, false, TermIdx::initial());
             assert_eq!(&expected_rpc, packet.rpc());
-            assert!(state.log.entries.is_empty());
+            assert!(state.log.is_empty());
         }
 
         // Expect response false
@@ -214,7 +215,7 @@ mod tests {
                     .with_idx(Idx::from(1)),
             );
             assert_eq!(&expected_rpc, packet.rpc());
-            assert!(state.log.entries.is_empty());
+            assert!(state.log.is_empty());
         }
 
         // Expect response true
@@ -222,7 +223,7 @@ mod tests {
         //  - update commit_idx
         let leader_commit_idx = Idx::from(1);
         {
-            assert!(state.log.entries.is_empty());
+            assert!(state.log.is_empty());
             assert_eq!(state.commit_idx(), &Idx::initial());
 
             // construct RPC to recv
@@ -240,9 +241,9 @@ mod tests {
             assert_eq!(&expected_rpc, packet.rpc());
 
             // expect received entries to be in the log
-            assert!(state.log.entries.len() == 2);
-            assert_eq!(state.log.entries[0], Entry::new(current_term, 3));
-            assert_eq!(state.log.entries[1], Entry::new(current_term, 6));
+            assert!(state.log.test_len() == 2);
+            assert_eq!(state.log.test_get_unchecked(1), Entry::new(current_term, 3));
+            assert_eq!(state.log.test_get_unchecked(2), Entry::new(current_term, 6));
 
             // commit_idx should be updated
             assert_eq!(state.commit_idx(), &leader_commit_idx);

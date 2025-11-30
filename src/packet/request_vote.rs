@@ -196,7 +196,7 @@ mod tests {
         let mut state = RaftState::new(timeout);
         let current_term = Term::initial();
         state.current_term = current_term;
-        assert!(state.log.entries.is_empty());
+        assert!(state.log.is_empty());
 
         let mut io = MockIo::new(candidate_id);
         let rpc_term_idx_initial = TermIdx::initial();

@@ -5,6 +5,7 @@ use crate::{
     packet::{AppendEntriesResp, Rpc},
     raft_state::RaftState,
     server::{PeerId, ServerId},
+    state_machine::CurrentMode,
 };
 use std::{collections::BTreeMap, ops::Sub};
 
@@ -175,7 +176,7 @@ impl Leader {
                     raft_state,
                     io_egress,
                 ) {
-                    self.update_commit_idx(check_match_idx, peer_list, raft_state);
+                    self.update_commit_idx(check_match_idx, peer_list, raft_state, peer_id);
                 }
             }
         }
@@ -189,6 +190,7 @@ impl Leader {
         newly_inserted_match_idx: Idx,
         peer_list: &[PeerId],
         raft_state: &mut RaftState,
+        peer_id: PeerId,
     ) {
         //% Compliance:
         //% N > commitIndex
@@ -220,7 +222,7 @@ impl Leader {
         if larger_than_current_commit_idx && new_idx_larger_than_majority && matches_current_term {
             //% Compliance:
             //% set commitIndex = N (§5.3, §5.4).
-            raft_state.set_commit_idx(newly_inserted_match_idx);
+            raft_state.set_commit_idx(newly_inserted_match_idx, peer_id, CurrentMode::Leader);
         }
     }
 

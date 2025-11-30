@@ -1,6 +1,7 @@
 use crate::{
     log::{Idx, Log, Term, TermIdx},
     server::{Id, PeerId, ServerId},
+    state_machine::{CommitEntry, CurrentMode, StateMachine},
     timeout::Timeout,
 };
 
@@ -32,11 +33,14 @@ pub struct RaftState {
     last_applied: Idx,
 
     pub election_timer: Timeout,
+
+    state_machine: StateMachine,
 }
 
 impl RaftState {
     pub fn new(election_timer: Timeout) -> Self {
         let log = Log::new();
+        let state_machine = StateMachine::new();
 
         RaftState {
             current_term: Term::initial(),
@@ -45,6 +49,7 @@ impl RaftState {
             commit_idx: Idx::initial(),
             last_applied: Idx::initial(),
             election_timer,
+            state_machine,
         }
     }
 
@@ -52,20 +57,11 @@ impl RaftState {
         &self.last_applied
     }
 
-    //% Compliance:
-    //% lastApplied: index of highest log entry applied to state machine (initialized to 0,
-    //% increases monotonically)
-    //
-    // TODO: apply to state machine
-    pub fn increment_last_applied(&mut self) {
-        self.last_applied += 1;
-    }
-
     pub fn commit_idx(&self) -> &Idx {
         &self.commit_idx
     }
 
-    pub fn set_commit_idx(&mut self, idx: Idx) {
+    pub fn set_commit_idx(&mut self, idx: Idx, peer_id: PeerId, mode: CurrentMode) {
         assert!(
             idx >= self.commit_idx,
             "commitIdx is monotonically increasing"
@@ -77,6 +73,26 @@ impl RaftState {
             );
         }
         self.commit_idx = idx;
+
+        while self.commit_idx() > self.last_applied() {
+            //% Compliance:
+            //% If commitIndex > lastApplied: increment lastApplied
+            self.last_applied += 1;
+
+            //% Compliance:
+            //% If commitIndex > lastApplied: apply log[lastApplied] to state machine (§5.3)
+            let entry_at_last_applied = self
+                .log
+                .find_entry_at(self.last_applied())
+                .expect("should have an entry at index lastApplied");
+            let commit_entry = CommitEntry {
+                entry: entry_at_last_applied.clone(),
+                log_last_applied_idx: *self.last_applied(),
+                peer_id,
+                mode,
+            };
+            self.state_machine.apply(commit_entry);
+        }
     }
 
     // Retrieve the last log TermIdx and increment the currentTerm

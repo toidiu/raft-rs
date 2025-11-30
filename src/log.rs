@@ -11,7 +11,7 @@ mod term_idx;
 
 #[derive(Debug)]
 pub struct Log {
-    pub entries: Vec<Entry>,
+    entries: Vec<Entry>,
 }
 
 impl Log {
@@ -110,7 +110,7 @@ impl Log {
         // entry.is_some_and(|entry| entry.term == term_idx.term)
     }
 
-    fn find_entry_at(&self, idx: &Idx) -> Option<&Entry> {
+    pub fn find_entry_at(&self, idx: &Idx) -> Option<&Entry> {
         //% Compliance:
         //% `log[]` log entries; each entry contains command for state machine, and term when entry
         //% was received by leader (first index is 1)
@@ -138,6 +138,22 @@ impl Log {
             (Ordering::Equal, Ordering::Equal) => true,
             (Ordering::Equal, Ordering::Greater) => true,
         }
+    }
+
+    #[cfg(test)]
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    #[cfg(test)]
+    pub fn test_get_unchecked(&self, idx: u64) -> Entry {
+        let idx = Idx::from(idx);
+        self.entries.get(idx.as_log_idx()).unwrap().clone()
+    }
+
+    #[cfg(test)]
+    pub fn test_len(&self) -> usize {
+        self.entries.len()
     }
 }
 

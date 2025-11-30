@@ -5,16 +5,17 @@ A toy implementation to better understand the
 consensus protocol
 
 TODO:
-- [x] Include peer id in RPC header
-- [x] Include idx in AppendEntryResp
 - [ ] Add leader test
     - [ ] on_timeout
     - [ ] leader progression
     - [ ] update_commit_idx
-- [ ] Handle on_recv in leader
+    - [ ] on_recv_append_entry_resp
+- [ ] Add state machine test
+- [x] Include peer id in RPC header
+- [x] Include idx in AppendEntryResp
+- [x] Handle on_recv in leader
 - [x] Handle on_recv in follower
 - [x] Handle on_recv in candidate
-- [ ] Tests for Leader on_recv_append_entry_resp
 
 ## Design
 **sans I/O design**
