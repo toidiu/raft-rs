@@ -5,7 +5,11 @@ use crate::{
     timeout::Timeout,
 };
 use pin_project_lite::pin_project;
-use std::{future::Future, task::Poll};
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{ready, Poll},
+};
 
 mod id;
 
@@ -56,7 +60,7 @@ impl Server {
         (server, network_io)
     }
 
-    pub fn on_timeout(&mut self) {
+    fn on_timeout(&mut self) {
         self.mode.on_timeout(
             &self.server_id,
             &self.peer_list,
@@ -65,7 +69,7 @@ impl Server {
         );
     }
 
-    pub fn recv(&mut self) {
+    fn recv(&mut self) {
         if let Some(recv_packets) = self.io_ingress.recv_packet() {
             for packet in recv_packets {
                 // SAFETY: Receiving RPC means that `from` is a PeerId.
@@ -82,7 +86,8 @@ impl Server {
         }
     }
 
-    async fn poll(&mut self) {
+    // Async function that awaits the recv and timeout future and makes progress.
+    async fn process_next(&mut self) {
         let fut = ServerFut {
             timeout: &mut self.timer.timeout_ready(),
             recv: self.io_ingress.ingress_queue_ready(),
@@ -108,6 +113,22 @@ impl Server {
         }
         if recv_rdy {
             self.recv();
+        }
+    }
+
+    // Polls the recv and timeout future to see if progress can be made.
+    pub fn poll(&mut self, cx: &mut std::task::Context<'_>) -> Poll<Result<Outcome, ()>> {
+        let mut fut = ServerFut {
+            timeout: &mut self.timer.timeout_ready(),
+            recv: self.io_ingress.ingress_queue_ready(),
+        };
+
+        let mut fut = Pin::new(&mut fut);
+        let poll = ready!(fut.as_mut().poll(cx));
+
+        match poll {
+            Ok(outcome) => Poll::Ready(Ok(outcome)),
+            Err(_) => Poll::Ready(Err(())),
         }
     }
 }
@@ -334,7 +355,7 @@ mod tests {
         // trigger the server task. receives data from network + queue data to send
         for _ in 1..=NUMER_OF_SENDS {
             sleep(Duration::from_millis(10)).await;
-            server.poll().await;
+            server.process_next().await;
         }
 
         assert_eq!(server.state.current_term, Term::from(5));
