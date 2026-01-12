@@ -77,10 +77,10 @@ impl Leader {
         //% Compliance:
         //% Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat
         //% during idle periods to prevent election timeouts (§5.2)
-        self.on_broadcast_send_append_entries(server_id, peer_list, raft_state, io_egress);
+        self.broadcast_send_append_entries(server_id, peer_list, raft_state, io_egress);
     }
 
-    fn on_broadcast_send_append_entries<E: ServerEgress>(
+    fn broadcast_send_append_entries<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
         peer_list: &[PeerId],
@@ -144,7 +144,7 @@ impl Leader {
         //% Compliance:
         //% Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat
         //% during idle periods to prevent election timeouts (§5.2)
-        self.on_broadcast_send_append_entries(server_id, peer_list, raft_state, io_egress);
+        self.broadcast_send_append_entries(server_id, peer_list, raft_state, io_egress);
     }
 
     pub fn on_recv<E: ServerEgress>(
@@ -226,6 +226,10 @@ impl Leader {
         }
     }
 
+    // Echoed Idx from the received AppendEntriesResp.
+    //
+    // Returns None if the RPC was not successful or if the RPC was received out of order (didn't
+    // match the peer's next_idx).
     fn on_recv_append_entry_resp<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
@@ -264,7 +268,7 @@ impl Leader {
                 self.match_idx
                     .entry(peer_id)
                     .and_modify(|idx| *idx = rpc_sent_idx);
-                return Some(rpc_sent_idx);
+                Some(rpc_sent_idx)
             } else {
                 //% Compliance:
                 //% If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
@@ -277,10 +281,14 @@ impl Leader {
                 });
 
                 self.on_send_append_entry(server_id, &peer_id, raft_state, io_egress);
-            }
-        }
 
-        None
+                // RPC was not successful.
+                None
+            }
+        } else {
+            // RPC was received out of order and didn't match the peer's next_idx.
+            None
+        }
     }
 }
 
@@ -289,7 +297,7 @@ mod tests {
     use super::*;
     use crate::{
         io::testing::{helper_inspect_next_sent_packet, MockIo},
-        log::MatchOutcome,
+        log::{MatchOutcome, Term},
         raft_state::RaftState,
         server::{PeerId, ServerId},
         timeout::Timeout,
@@ -309,6 +317,8 @@ mod tests {
         let mut state = RaftState::new(timeout);
         let current_term = state.current_term;
         let mut leader = Leader::new(&peer_list, &mut state);
+        assert_eq!(leader.next_idx.get(&peer2_id).unwrap(), &Idx::from(1));
+        assert_eq!(leader.next_idx.get(&peer3_id).unwrap(), &Idx::from(1));
 
         let mut io = MockIo::new(server_id);
 
@@ -342,6 +352,8 @@ mod tests {
         let mut state = RaftState::new(timeout);
         let current_term = state.current_term;
         let mut leader = Leader::new(&peer_list, &mut state);
+        assert_eq!(leader.next_idx.get(&peer2_id).unwrap(), &Idx::from(1));
+        assert_eq!(leader.next_idx.get(&peer3_id).unwrap(), &Idx::from(1));
 
         // Insert two entries into log
         for i in 1..=2 {
@@ -356,6 +368,7 @@ mod tests {
         }
 
         let mut io = MockIo::new(server_id);
+
         leader.on_leader(&server_id, &peer_list, &mut state, &mut io);
 
         // FIXME: need to test sending after the initial on_leader switch
@@ -387,7 +400,94 @@ mod tests {
             );
             assert_eq!(&expected_rpc, packet.rpc());
 
-            // TODO: aslo assert which peer we are sending to once we add peer header info.
+            // TODO: also assert which peer we are sending to once we add peer header info.
+        }
+    }
+
+    #[tokio::test]
+    async fn test_on_recv_append_entry_resp() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+
+        // Mock sending two AppendEntries (insert two entries into log)
+        for i in 1..=2 {
+            let entry = crate::log::Entry {
+                term: current_term,
+                command: i,
+            };
+            let outcome = state
+                .log
+                .update_to_match_leaders_log(entry.clone(), Idx::from(i as u64));
+            assert!(matches!(outcome, MatchOutcome::DoesntExist));
+        }
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+        assert_eq!(leader.next_idx.get(&peer2_id).unwrap(), &Idx::from(3));
+        assert_eq!(leader.next_idx.get(&peer3_id).unwrap(), &Idx::from(3));
+        let mut io = MockIo::new(server_id);
+
+        // RPC where echo idx doesn't match the peer next_idx
+        {
+            let append_entries_resp = AppendEntriesResp {
+                term: current_term,
+                success: true,
+                echo_prev_log_term_idx: TermIdx::builder()
+                    .with_term(Term::from(2))
+                    .with_idx(Idx::from(1)),
+            };
+            let idx = leader.on_recv_append_entry_resp(
+                &server_id,
+                peer2_id,
+                &append_entries_resp,
+                &mut state,
+                &mut io,
+            );
+            assert!(idx.is_none());
+        }
+
+        // RPC success
+        {
+            let append_entries_resp = AppendEntriesResp {
+                term: current_term,
+                success: true,
+                echo_prev_log_term_idx: TermIdx::builder()
+                    .with_term(Term::from(2))
+                    .with_idx(Idx::from(3)),
+            };
+            let idx = leader.on_recv_append_entry_resp(
+                &server_id,
+                peer2_id,
+                &append_entries_resp,
+                &mut state,
+                &mut io,
+            );
+            assert_eq!(idx.unwrap(), Idx::from(3));
+        }
+
+        // RPC failure
+        {
+            let append_entries_resp = AppendEntriesResp {
+                term: current_term,
+                success: false,
+                echo_prev_log_term_idx: TermIdx::builder()
+                    .with_term(Term::from(2))
+                    .with_idx(Idx::from(3)),
+            };
+            let idx = leader.on_recv_append_entry_resp(
+                &server_id,
+                peer2_id,
+                &append_entries_resp,
+                &mut state,
+                &mut io,
+            );
+            assert!(idx.is_none());
         }
     }
 }
