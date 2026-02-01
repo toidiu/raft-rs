@@ -17,18 +17,22 @@ pub struct NetworkIoImpl {
     pub egress_waker: Arc<Mutex<Option<Waker>>>,
 }
 
+/// Functionality to queue bytes that were received over a socket onto the `ingress_queue`.
 pub trait NetIngress {
-    // Push data to the rx_queue
+    /// Push data to the `ingress_queue`.
     fn recv(&mut self, data: Vec<u8>);
 }
 
+/// Functionality to de-queue bytes from the `egress_queue` so that they can be sent over the
+/// network.
 pub trait NetEgress {
-    // Send data over the network
+    /// Send data over the network
     fn send(&mut self) -> Option<Vec<u8>>;
 
+    /// Check if there are bytes available in the egress queue for that can be sent on the network.
     fn poll_egress_queue_ready(&mut self, cx: &mut Context) -> Poll<()>;
 
-    // A Future which can be polled to check for new messages in the queue
+    /// A Future which can be polled to check for new messages in the queue
     fn tx_ready(&mut self) -> TxReady<'_, Self> {
         TxReady(self)
     }
