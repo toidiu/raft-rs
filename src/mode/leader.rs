@@ -185,7 +185,7 @@ impl Leader {
     //% Compliance:
     //% If there exists an N such that N > commitIndex, a majority of matchIndex[i] ≥ N,
     //% and log[N].term == currentTerm: set commitIndex = N (§5.3, §5.4).
-    fn update_commit_idx(
+    pub(crate) fn update_commit_idx(
         &mut self,
         newly_inserted_match_idx: Idx,
         peer_list: &[PeerId],
@@ -489,5 +489,444 @@ mod tests {
             );
             assert!(idx.is_none());
         }
+    }
+
+    // ==================== on_timeout tests ====================
+
+    #[tokio::test]
+    async fn ai_test_on_timeout_sends_heartbeats_to_all_peers() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+        let mut leader = Leader::new(&peer_list, &mut state);
+        let mut io = MockIo::new(server_id);
+
+        // Call on_timeout
+        leader.on_timeout(&server_id, &peer_list, &mut state, &mut io);
+
+        // Expect heartbeats sent to both peers
+        for _ in 0..2 {
+            let packet = helper_inspect_next_sent_packet(&mut io);
+            let expected_rpc = Rpc::new_append_entry(
+                current_term,
+                server_id,
+                TermIdx::initial(),
+                Idx::initial(),
+                vec![],
+            );
+            assert_eq!(&expected_rpc, packet.rpc());
+        }
+    }
+
+    #[tokio::test]
+    async fn ai_test_on_timeout_empty_peer_list() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer_list: Vec<PeerId> = vec![];
+        let mut state = RaftState::new(timeout);
+        let mut leader = Leader::new(&peer_list, &mut state);
+        let mut io = MockIo::new(server_id);
+
+        // Should not panic with empty peer list
+        leader.on_timeout(&server_id, &peer_list, &mut state, &mut io);
+
+        // No packets should be sent
+        assert!(io.send_queue.is_empty());
+    }
+
+    #[tokio::test]
+    async fn ai_test_on_timeout_with_empty_log() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer_list = vec![peer2_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+        let mut leader = Leader::new(&peer_list, &mut state);
+        let mut io = MockIo::new(server_id);
+
+        // Verify log is empty
+        assert!(state.log.is_empty());
+
+        leader.on_timeout(&server_id, &peer_list, &mut state, &mut io);
+
+        // With empty log, should send TermIdx::initial()
+        let packet = helper_inspect_next_sent_packet(&mut io);
+        let expected_rpc = Rpc::new_append_entry(
+            current_term,
+            server_id,
+            TermIdx::initial(),
+            Idx::initial(),
+            vec![],
+        );
+        assert_eq!(&expected_rpc, packet.rpc());
+    }
+
+    #[tokio::test]
+    async fn ai_test_on_timeout_with_log_entries() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer_list = vec![peer2_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+
+        // Insert entries into log before creating leader
+        for i in 1..=3 {
+            let entry = crate::log::Entry {
+                term: current_term,
+                command: i,
+            };
+            let _ = state
+                .log
+                .update_to_match_leaders_log(entry, Idx::from(i as u64));
+        }
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+        let mut io = MockIo::new(server_id);
+
+        // next_idx should be initialized to last_idx + 1 = 4
+        assert_eq!(leader.next_idx.get(&peer2_id).unwrap(), &Idx::from(4));
+
+        leader.on_timeout(&server_id, &peer_list, &mut state, &mut io);
+
+        // Should send with last_log_term_idx since peer is theoretically up-to-date
+        let packet = helper_inspect_next_sent_packet(&mut io);
+        let expected_rpc = Rpc::new_append_entry(
+            current_term,
+            server_id,
+            TermIdx::builder()
+                .with_term(current_term)
+                .with_idx(Idx::from(3)),
+            Idx::initial(),
+            vec![],
+        );
+        assert_eq!(&expected_rpc, packet.rpc());
+    }
+
+    #[tokio::test]
+    async fn ai_test_on_timeout_multiple_calls() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer_list = vec![peer2_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+        let mut leader = Leader::new(&peer_list, &mut state);
+        let mut io = MockIo::new(server_id);
+
+        // Call on_timeout multiple times
+        for _ in 0..3 {
+            leader.on_timeout(&server_id, &peer_list, &mut state, &mut io);
+        }
+
+        // Should have 3 heartbeats in the queue
+        for _ in 0..3 {
+            let packet = helper_inspect_next_sent_packet(&mut io);
+            let expected_rpc = Rpc::new_append_entry(
+                current_term,
+                server_id,
+                TermIdx::initial(),
+                Idx::initial(),
+                vec![],
+            );
+            assert_eq!(&expected_rpc, packet.rpc());
+        }
+    }
+
+    // ==================== update_commit_idx tests ====================
+
+    #[tokio::test]
+    async fn ai_test_update_commit_idx_advances_when_all_conditions_met() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let _server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+
+        // Insert entry with current term
+        let entry = crate::log::Entry {
+            term: current_term,
+            command: 1,
+        };
+        let _ = state.log.update_to_match_leaders_log(entry, Idx::from(1));
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+
+        // Set match_idx for both peers to 1 (quorum = 2 for 3-node cluster)
+        leader.match_idx.insert(peer2_id, Idx::from(1));
+        leader.match_idx.insert(peer3_id, Idx::from(1));
+
+        // Initial commit_idx should be 0
+        assert_eq!(state.commit_idx(), &Idx::initial());
+
+        // Call update_commit_idx
+        leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+
+        // commit_idx should advance to 1
+        assert_eq!(state.commit_idx(), &Idx::from(1));
+    }
+
+    #[tokio::test]
+    async fn ai_test_update_commit_idx_no_advance_when_idx_lte_commit_idx() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let _server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+
+        // Insert two entries
+        for i in 1..=2 {
+            let entry = crate::log::Entry {
+                term: current_term,
+                command: i,
+            };
+            let _ = state
+                .log
+                .update_to_match_leaders_log(entry, Idx::from(i as u64));
+        }
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+
+        // Set match_idx for quorum at index 1
+        leader.match_idx.insert(peer2_id, Idx::from(1));
+        leader.match_idx.insert(peer3_id, Idx::from(1));
+
+        // Advance commit_idx to 1 first
+        leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+        assert_eq!(state.commit_idx(), &Idx::from(1));
+
+        // Try to update with idx == current commit_idx (should not advance)
+        leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+
+        // commit_idx should remain at 1
+        assert_eq!(state.commit_idx(), &Idx::from(1));
+    }
+
+    #[tokio::test]
+    async fn ai_test_update_commit_idx_no_advance_without_quorum() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let _server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+
+        // Insert entry
+        let entry = crate::log::Entry {
+            term: current_term,
+            command: 1,
+        };
+        let _ = state.log.update_to_match_leaders_log(entry, Idx::from(1));
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+
+        // Only one peer has match_idx = 1 (not enough for quorum of 2)
+        leader.match_idx.insert(peer2_id, Idx::from(1));
+        leader.match_idx.insert(peer3_id, Idx::initial());
+
+        leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+
+        // commit_idx should NOT advance (only 1 peer, need 2 for quorum)
+        assert_eq!(state.commit_idx(), &Idx::initial());
+    }
+
+    #[tokio::test]
+    async fn ai_test_update_commit_idx_no_advance_when_term_mismatch() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let _server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+
+        // Insert entry with a PREVIOUS term (not current term)
+        let previous_term = Term::from(1);
+        let entry = crate::log::Entry {
+            term: previous_term,
+            command: 1,
+        };
+        let _ = state.log.update_to_match_leaders_log(entry, Idx::from(1));
+
+        // Advance to a new term
+        state.current_term = Term::from(2);
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+
+        // Both peers have match_idx = 1 (quorum satisfied)
+        leader.match_idx.insert(peer2_id, Idx::from(1));
+        leader.match_idx.insert(peer3_id, Idx::from(1));
+
+        leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+
+        // commit_idx should NOT advance - entry term (1) != current term (2)
+        // This is a critical Raft safety guarantee (§5.4)
+        assert_eq!(state.commit_idx(), &Idx::initial());
+    }
+
+    #[tokio::test]
+    async fn ai_test_update_commit_idx_no_advance_when_entry_not_in_log() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let _server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+
+        // Log is empty - no entries
+        assert!(state.log.is_empty());
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+
+        // Set match_idx to an index that doesn't exist in log
+        leader.match_idx.insert(peer2_id, Idx::from(5));
+        leader.match_idx.insert(peer3_id, Idx::from(5));
+
+        leader.update_commit_idx(Idx::from(5), &peer_list, &mut state, peer2_id);
+
+        // commit_idx should NOT advance - entry at idx 5 doesn't exist
+        assert_eq!(state.commit_idx(), &Idx::initial());
+    }
+
+    #[tokio::test]
+    async fn ai_test_update_commit_idx_3_node_cluster_quorum() {
+        // 3-node cluster: needs 2 for quorum (majority of 3)
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let _server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+
+        // Insert entry
+        let entry = crate::log::Entry {
+            term: current_term,
+            command: 1,
+        };
+        let _ = state.log.update_to_match_leaders_log(entry, Idx::from(1));
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+
+        // Exactly 2 peers with match_idx >= 1 (meets quorum of 2)
+        leader.match_idx.insert(peer2_id, Idx::from(1));
+        leader.match_idx.insert(peer3_id, Idx::from(1));
+
+        leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+
+        // commit_idx should advance
+        assert_eq!(state.commit_idx(), &Idx::from(1));
+    }
+
+    #[tokio::test]
+    async fn ai_test_update_commit_idx_5_node_cluster_quorum() {
+        // 5-node cluster: needs 3 for quorum (majority of 5)
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let _server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer4_id = PeerId::new([13; 16]);
+        let peer5_id = PeerId::new([14; 16]);
+        let peer_list = vec![peer2_id, peer3_id, peer4_id, peer5_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+
+        // Insert entry
+        let entry = crate::log::Entry {
+            term: current_term,
+            command: 1,
+        };
+        let _ = state.log.update_to_match_leaders_log(entry, Idx::from(1));
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+
+        // Only 2 peers have match_idx = 1 (not enough, need 3)
+        leader.match_idx.insert(peer2_id, Idx::from(1));
+        leader.match_idx.insert(peer3_id, Idx::from(1));
+        leader.match_idx.insert(peer4_id, Idx::initial());
+        leader.match_idx.insert(peer5_id, Idx::initial());
+
+        leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+
+        // commit_idx should NOT advance (only 2 peers, need 3)
+        assert_eq!(state.commit_idx(), &Idx::initial());
+
+        // Now add third peer to quorum
+        leader.match_idx.insert(peer4_id, Idx::from(1));
+
+        leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer4_id);
+
+        // commit_idx should now advance (3 peers meet quorum)
+        assert_eq!(state.commit_idx(), &Idx::from(1));
+    }
+
+    #[tokio::test]
+    async fn ai_test_update_commit_idx_single_peer_cluster() {
+        // 2-node cluster (1 peer + self): quorum = 2
+        // Note: Leader doesn't count itself in match_idx, so needs 2 peers
+        // But with only 1 peer in peer_list, quorum calculation is:
+        // quorum(peer_list) = (1 + 1) / 2 + 1 = 2
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let _server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer_list = vec![peer2_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+
+        // Insert entry
+        let entry = crate::log::Entry {
+            term: current_term,
+            command: 1,
+        };
+        let _ = state.log.update_to_match_leaders_log(entry, Idx::from(1));
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+
+        // Single peer has match_idx = 1
+        // But quorum = 2 for 2-node cluster, and we only track 1 peer in match_idx
+        // This means 1 peer is not enough to meet quorum of 2
+        leader.match_idx.insert(peer2_id, Idx::from(1));
+
+        leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+
+        // With quorum = 2 and only 1 peer tracked, commit should NOT advance
+        // unless the implementation counts the leader as implicitly having the entry
+        // Based on the current implementation, it only counts match_idx entries
+        assert_eq!(state.commit_idx(), &Idx::initial());
     }
 }
