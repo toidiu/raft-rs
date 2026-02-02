@@ -31,10 +31,10 @@
 //! https://textik.com/#8dbf6540e0dd1676
 
 use crate::{
-    io::ServerEgress,
     macros::cast_unsafe,
     mode::{candidate::Candidate, follower::Follower, leader::Leader},
     packet::Rpc,
+    queue::ServerEgress,
     raft_state::RaftState,
     server::{PeerId, ServerId},
 };
@@ -213,8 +213,8 @@ pub enum ElectionResult {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::{helper_inspect_one_sent_packet, MockIo},
         log::{Idx, Term, TermIdx},
+        queue::testing::{helper_inspect_one_sent_packet, MockIo},
         server::PeerId,
         timeout::Timeout,
     };

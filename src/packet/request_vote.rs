@@ -1,7 +1,7 @@
 use crate::{
-    io::ServerEgress,
     log::{Term, TermIdx},
     packet::Rpc,
+    queue::ServerEgress,
     raft_state::RaftState,
     server::{Id, PeerId},
 };
@@ -31,7 +31,7 @@ impl RequestVote {
         &self,
         peer_id: PeerId,
         raft_state: &mut RaftState,
-        io_egress: &mut E,
+        server: &mut E,
     ) {
         let current_term = raft_state.current_term;
 
@@ -73,7 +73,7 @@ impl RequestVote {
         }
 
         let rpc = Rpc::new_request_vote_resp(current_term, grant_vote);
-        io_egress.send_packet(peer_id, rpc);
+        server.send_packet(peer_id, rpc);
     }
 }
 
@@ -138,9 +138,9 @@ impl EncoderValue for RequestVoteResp {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::{helper_inspect_one_sent_packet, MockIo},
         log::{Entry, Idx, Term, TermIdx},
         macros::cast_unsafe,
+        queue::testing::{helper_inspect_one_sent_packet, MockIo},
         raft_state::RaftState,
         server::{PeerId, ServerId},
         timeout::Timeout,

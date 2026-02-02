@@ -1,4 +1,4 @@
-use crate::{io::ServerEgress, packet::Rpc};
+use crate::{packet::Rpc, queue::ServerEgress};
 use s2n_codec::{DecoderValue, EncoderValue};
 
 macro_rules! id {
@@ -63,9 +63,9 @@ pub const TODO_PEER: PeerId = PeerId([100; 16]);
 pub const TODO_SERVER: ServerId = ServerId([10; 16]);
 
 impl PeerId {
-    pub fn send_rpc<E: ServerEgress>(&self, rpc: Rpc, io_egress: &mut E) {
+    pub fn send_rpc<E: ServerEgress>(&self, rpc: Rpc, server: &mut E) {
         // TODO address to this peer
-        io_egress.send_packet(*self, rpc);
+        server.send_packet(*self, rpc);
     }
 }
 

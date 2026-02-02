@@ -1,7 +1,7 @@
 use crate::{
-    io::ServerEgress,
     mode::{cast_unsafe, ElectionResult, Mode, ModeTransition},
     packet::{AppendEntries, RequestVoteResp, Rpc},
+    queue::ServerEgress,
     raft_state::RaftState,
     server::{Id, PeerId, ServerId},
 };
@@ -215,8 +215,8 @@ impl Candidate {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::{helper_inspect_next_sent_packet, MockIo},
         log::{Term, TermIdx},
+        queue::testing::{helper_inspect_next_sent_packet, MockIo},
         raft_state::RaftState,
         server::PeerId,
         timeout::Timeout,

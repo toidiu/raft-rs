@@ -1,8 +1,8 @@
 use crate::{
-    io::ServerEgress,
     log::{Idx, TermIdx},
     mode::Mode,
     packet::{AppendEntriesResp, Rpc},
+    queue::ServerEgress,
     raft_state::RaftState,
     server::{PeerId, ServerId},
     state_machine::CurrentMode,
@@ -296,8 +296,8 @@ impl Leader {
 mod tests {
     use super::*;
     use crate::{
-        io::testing::{helper_inspect_next_sent_packet, MockIo},
         log::{MatchOutcome, Term},
+        queue::testing::{helper_inspect_next_sent_packet, MockIo},
         raft_state::RaftState,
         server::{PeerId, ServerId},
         timeout::Timeout,

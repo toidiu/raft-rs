@@ -1,6 +1,6 @@
 use crate::{
-    io::IO_BUF_LEN,
     packet::{Packet, Rpc},
+    queue::IO_BUF_LEN,
     server::{PeerId, ServerId},
 };
 use core::task::Waker;
@@ -11,7 +11,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-/// A handle held by the Raft server task.
+/// A handle held by the Raft server task for sending bytes.
 #[derive(Debug)]
 pub struct ServerEgressImpl {
     pub server_id: ServerId,
@@ -22,9 +22,10 @@ pub struct ServerEgressImpl {
 
 pub trait ServerEgress {
     #[cfg(test)]
-    // Push data to the egress_queue
+    /// Push data to the `egress_queue`
     fn send_raw(&mut self, data: &[u8]);
 
+    /// Push packet to the `egress_queue`
     fn send_packet(&mut self, to: PeerId, rpc: Rpc);
 }
 

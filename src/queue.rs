@@ -16,7 +16,7 @@ pub mod testing;
 #[allow(unused_imports)]
 pub use network::NetIngress;
 
-pub use network::{NetEgress, NetworkIoImpl};
+pub use network::{NetEgress, NetworkQueueImpl};
 pub use server_egress::{ServerEgress, ServerEgressImpl};
 pub use server_ingress::{ServerIngress, ServerIngressImpl};
 
@@ -72,14 +72,14 @@ const IO_BUF_LEN: usize = 1024;
 pub struct BufferIo;
 
 impl BufferIo {
-    pub fn split(server_id: ServerId) -> (ServerIngressImpl, ServerEgressImpl, NetworkIoImpl) {
+    pub fn split(server_id: ServerId) -> (ServerIngressImpl, ServerEgressImpl, NetworkQueueImpl) {
         let ingress_queue = Arc::new(Mutex::new(VecDeque::with_capacity(IO_BUF_LEN)));
         let ingress_waker = Arc::new(Mutex::new(None));
 
         let egress_queue = Arc::new(Mutex::new(VecDeque::with_capacity(IO_BUF_LEN)));
         let egress_waker = Arc::new(Mutex::new(None));
 
-        let network_io_handle = NetworkIoImpl {
+        let network_queue_handle = NetworkQueueImpl {
             buf: [0; IO_BUF_LEN],
             ingress_queue: ingress_queue.clone(),
             egress_queue: egress_queue.clone(),
@@ -102,7 +102,7 @@ impl BufferIo {
         (
             server_ingress_handle,
             server_egress_handle,
-            network_io_handle,
+            network_queue_handle,
         )
     }
 }
@@ -132,7 +132,7 @@ macro_rules! impl_io_ready(($io:ident, $fut:ident, $poll_fn:ident) => {
 
 // Implement Futures to poll the queue for readiness.
 impl_io_ready!(ServerIngressImpl, RxReady, poll_ingress_queue_ready);
-impl_io_ready!(NetworkIoImpl, TxReady, poll_egress_queue_ready);
+impl_io_ready!(NetworkQueueImpl, TxReady, poll_egress_queue_ready);
 
 #[cfg(test)]
 mod tests {
@@ -144,12 +144,12 @@ mod tests {
     fn test_helper_io_setup() -> (
         ServerIngressImpl,
         ServerEgressImpl,
-        NetworkIoImpl,
+        NetworkQueueImpl,
         AwokenCount,
         AwokenCount,
     ) {
         let server_id = ServerId::new([1; 16]);
-        let (mut server_ingress, server_egress, mut network_io) = BufferIo::split(server_id);
+        let (mut server_ingress, server_egress, mut network_queue) = BufferIo::split(server_id);
 
         let (ingress_waker, ingress_cnt) = new_count_waker();
         let mut ctx = Context::from_waker(&ingress_waker);
@@ -160,13 +160,13 @@ mod tests {
         let (egress_waker, egress_cnt) = new_count_waker();
         let mut ctx = Context::from_waker(&egress_waker);
         // A egress waker must be registed by calling poll_egress_ready on NetworkIO
-        let _ = network_io.poll_egress_queue_ready(&mut ctx);
+        let _ = network_queue.poll_egress_queue_ready(&mut ctx);
         assert_eq!(egress_cnt, 0);
 
         (
             server_ingress,
             server_egress,
-            network_io,
+            network_queue,
             ingress_cnt,
             egress_cnt,
         )
@@ -174,13 +174,13 @@ mod tests {
 
     #[test]
     fn io_recv() {
-        let (mut server_ingress, _server_egress, mut network_io, ingress_cnt, _egress_cnt) =
+        let (mut server_ingress, _server_egress, mut network_queue, ingress_cnt, _egress_cnt) =
             test_helper_io_setup();
 
         // Recv
-        network_io.recv(vec![1]);
+        network_queue.push_recv_bytes(vec![1]);
         assert_eq!(ingress_cnt, 1);
-        network_io.recv(vec![2]);
+        network_queue.push_recv_bytes(vec![2]);
         assert_eq!(ingress_cnt, 2);
 
         assert_eq!(server_ingress.recv_raw(), Some(vec![1, 2]));
@@ -190,7 +190,7 @@ mod tests {
 
     #[test]
     fn io_send() {
-        let (_server_ingress, mut server_egress, mut network_io, _ingress_cnt, egress_cnt) =
+        let (_server_ingress, mut server_egress, mut network_queue, _ingress_cnt, egress_cnt) =
             test_helper_io_setup();
 
         // Send
@@ -200,18 +200,18 @@ mod tests {
         server_egress.send_raw(&[4]);
         assert_eq!(egress_cnt, 2);
 
-        assert_eq!(network_io.send(), Some(vec![3, 4]));
-        assert_eq!(network_io.send(), None);
+        assert_eq!(network_queue.get_send(), Some(vec![3, 4]));
+        assert_eq!(network_queue.get_send(), None);
         assert_eq!(egress_cnt, 2);
     }
 
     #[test]
     fn io_send_recv() {
-        let (mut server_ingress, mut server_egress, mut network_io, ingress_cnt, egress_cnt) =
+        let (mut server_ingress, mut server_egress, mut network_queue, ingress_cnt, egress_cnt) =
             test_helper_io_setup();
 
         // Interleaved send and recv
-        network_io.recv(vec![5]);
+        network_queue.push_recv_bytes(vec![5]);
         assert_eq!(ingress_cnt, 1);
         assert_eq!(egress_cnt, 0);
 
@@ -221,8 +221,8 @@ mod tests {
 
         assert_eq!(server_ingress.recv_raw(), Some(vec![5]));
         assert_eq!(server_ingress.recv_raw(), None);
-        assert_eq!(network_io.send(), Some(vec![6]));
-        assert_eq!(network_io.send(), None);
+        assert_eq!(network_queue.get_send(), Some(vec![6]));
+        assert_eq!(network_queue.get_send(), None);
 
         assert_eq!(ingress_cnt, 1);
         assert_eq!(egress_cnt, 1);
