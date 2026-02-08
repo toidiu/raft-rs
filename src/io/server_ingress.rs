@@ -22,11 +22,14 @@ pub trait ServerIngress {
     #[cfg(test)]
     fn recv_raw(&mut self) -> Option<Vec<u8>>;
 
+    /// Read bytes and return the wrapper [RecvPacket] which can be used to yield individual
+    /// [Packet]'s.
     fn recv_packet(&mut self) -> Option<RecvPacket<'_>>;
 
+    /// Check if there are bytes available in the Ingress queue for the server to process.
     fn poll_ingress_queue_ready(&mut self, cx: &mut Context) -> Poll<()>;
 
-    // A Future which can be polled to check for new messages in the queue
+    /// A Future which can be polled to check for new messages in the queue
     fn ingress_queue_ready(&mut self) -> RxReady<'_, Self> {
         RxReady(self)
     }
@@ -74,8 +77,13 @@ impl ServerIngress for ServerIngressImpl {
     }
 }
 
+/// A wrapper type around raw bytes that can yield [Packet].
+///
+/// Implements Iterator which can yield packets.
+///
+/// TODO
+/// The remaining bytes should be handled and merged with the next read call.
 pub struct RecvPacket<'a> {
-    // buf: &'a [u8],
     buf: DecoderBuffer<'a>,
 }
 
@@ -99,6 +107,14 @@ impl<'a> Iterator for RecvPacket<'a> {
             Some(rpc)
         } else {
             None
+        }
+    }
+}
+
+impl Drop for RecvPacket<'_> {
+    fn drop(&mut self) {
+        if !self.buf.is_empty() {
+            panic!("there are unprocessed bytes in RecvPacket. This can happen with partial reads and needs to be handled.")
         }
     }
 }
