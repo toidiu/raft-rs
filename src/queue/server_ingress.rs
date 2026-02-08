@@ -1,6 +1,6 @@
 use crate::{
-    io::{RxReady, IO_BUF_LEN},
     packet::Packet,
+    queue::{RxReady, IO_BUF_LEN},
 };
 use core::task::{Context, Poll, Waker};
 use s2n_codec::{DecoderBuffer, DecoderValue};
@@ -10,7 +10,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-/// A handle held by the Raft server task.
+/// A handle held by the Raft server task for receiving bytes.
 #[derive(Debug)]
 pub struct ServerIngressImpl {
     pub buf: [u8; IO_BUF_LEN],
@@ -19,18 +19,21 @@ pub struct ServerIngressImpl {
 }
 
 pub trait ServerIngress {
+    /// Read bytes from the `ingress_queue` and return raw bytes.
     #[cfg(test)]
     fn recv_raw(&mut self) -> Option<Vec<u8>>;
 
-    /// Read bytes and return the wrapper [RecvPacket] which can be used to yield individual
-    /// [Packet]'s.
+    /// Read bytes from the `ingress_queue` and return the wrapper [RecvPacket] which can be used
+    /// to yield individual [Packet]'s.
     fn recv_packet(&mut self) -> Option<RecvPacket<'_>>;
 
+    /// MARKME this needs to be called.
+    ///
     /// Check if there are bytes available in the Ingress queue for the server to process.
     fn poll_ingress_queue_ready(&mut self, cx: &mut Context) -> Poll<()>;
 
     /// A Future which can be polled to check for new messages in the queue
-    fn ingress_queue_ready(&mut self) -> RxReady<'_, Self> {
+    fn rx_ready(&mut self) -> RxReady<'_, Self> {
         RxReady(self)
     }
 }

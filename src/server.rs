@@ -1,6 +1,6 @@
 use crate::{
-    io::{BufferIo, NetworkIoImpl, ServerEgressImpl, ServerIngress, ServerIngressImpl},
     mode::Mode,
+    queue::{BufferIo, NetworkQueueImpl, ServerEgressImpl, ServerIngress, ServerIngressImpl},
     raft_state::RaftState,
     timeout::Timeout,
 };
@@ -43,8 +43,8 @@ impl Server {
         server_id: ServerId,
         peer_list: Vec<PeerId>,
         election_timeout: Timeout,
-    ) -> (Server, NetworkIoImpl) {
-        let (server_io_ingress, server_io_egress, network_io) = BufferIo::split(server_id);
+    ) -> (Server, NetworkQueueImpl) {
+        let (server_io_ingress, server_io_egress, network_queue) = BufferIo::split(server_id);
         let mode = Mode::new();
         let state = RaftState::new(election_timeout.clone());
         let server = Server {
@@ -57,7 +57,43 @@ impl Server {
             io_egress: server_io_egress,
         };
 
-        (server, network_io)
+        (server, network_queue)
+    }
+
+    /// Polls the recv and timeout future to see if progress can be made.
+    pub fn poll_progress(&mut self, cx: &mut std::task::Context<'_>) -> Poll<()> {
+        let mut fut = ServerFut {
+            timeout: &mut self.timer.timeout_ready(),
+            recv: self.io_ingress.rx_ready(),
+        };
+
+        let mut fut = Pin::new(&mut fut);
+        let outcome = ready!(fut.as_mut().poll(cx));
+
+        let Outcome {
+            timeout_rdy,
+            recv_rdy,
+        } = outcome;
+
+        dbg!(
+            "============== timeout_fut: {} recv_fut: {}",
+            timeout_rdy,
+            recv_rdy
+        );
+
+        if timeout_rdy {
+            self.on_timeout();
+        }
+        if recv_rdy {
+            self.recv();
+        }
+
+        Poll::Ready(())
+    }
+
+    /// Make progress by processing received packets and handling timeouts.
+    pub async fn make_progress(&mut self) {
+        core::future::poll_fn(|cx| self.poll_progress(cx)).await
     }
 
     fn on_timeout(&mut self) {
@@ -85,52 +121,6 @@ impl Server {
             }
         }
     }
-
-    // Async function that awaits the recv and timeout future and makes progress.
-    async fn process_next(&mut self) {
-        let fut = ServerFut {
-            timeout: &mut self.timer.timeout_ready(),
-            recv: self.io_ingress.ingress_queue_ready(),
-        };
-
-        let Outcome {
-            timeout_rdy,
-            recv_rdy,
-        } = if let Ok(outcome) = fut.await {
-            outcome
-        } else {
-            return;
-        };
-
-        dbg!(
-            "============== timeout_fut: {} recv_fut: {}",
-            timeout_rdy,
-            recv_rdy
-        );
-
-        if timeout_rdy {
-            self.on_timeout();
-        }
-        if recv_rdy {
-            self.recv();
-        }
-    }
-
-    // Polls the recv and timeout future to see if progress can be made.
-    pub fn poll(&mut self, cx: &mut std::task::Context<'_>) -> Poll<Result<Outcome, ()>> {
-        let mut fut = ServerFut {
-            timeout: &mut self.timer.timeout_ready(),
-            recv: self.io_ingress.ingress_queue_ready(),
-        };
-
-        let mut fut = Pin::new(&mut fut);
-        let poll = ready!(fut.as_mut().poll(cx));
-
-        match poll {
-            Ok(outcome) => Poll::Ready(Ok(outcome)),
-            Err(_) => Poll::Ready(Err(())),
-        }
-    }
 }
 
 pin_project! {
@@ -152,7 +142,7 @@ where
     S: Future,
     R: Future,
 {
-    type Output = Result<Outcome, ()>;
+    type Output = Outcome;
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
@@ -163,10 +153,10 @@ where
         let recv_rdy = this.recv.as_mut().poll(cx).is_ready();
 
         if timeout_rdy || recv_rdy {
-            Poll::Ready(Ok(Outcome {
+            Poll::Ready(Outcome {
                 timeout_rdy,
                 recv_rdy,
-            }))
+            })
         } else {
             Poll::Pending
         }
@@ -177,10 +167,10 @@ where
 mod tests {
     use super::*;
     use crate::{
-        io::{NetEgress, NetIngress},
         log::{Idx, Term, TermIdx},
         macros::cast_unsafe,
         packet::{Packet, Rpc},
+        queue::{NetEgress, NetIngress},
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;
@@ -202,8 +192,8 @@ mod tests {
         let peer2_id = PeerId::new([11; 16]);
         let peer3_id = PeerId::new([12; 16]);
         let peer_list = vec![peer2_id, peer3_id];
-        let (mut server, mut rx_network_io) = Server::new(server_id, peer_list.clone(), timeout);
-        let mut tx_network_io = rx_network_io.clone();
+        let (mut server, mut rx_network_queue) = Server::new(server_id, peer_list.clone(), timeout);
+        let mut tx_network_queue = rx_network_queue.clone();
 
         let term_initial = Term::initial();
         assert_eq!(server.state.current_term, term_initial);
@@ -224,7 +214,7 @@ mod tests {
         )
         .encode(&mut buf);
         let (written, buf) = buf.split_mut();
-        rx_network_io.recv(written.to_vec());
+        rx_network_queue.push_recv_bytes(written.to_vec());
 
         let mut buf = EncoderBuffer::new(buf);
         Packet::test_recv_new(
@@ -243,7 +233,7 @@ mod tests {
         )
         .encode(&mut buf);
 
-        rx_network_io.recv(buf.as_mut_slice().to_vec());
+        rx_network_queue.push_recv_bytes(buf.as_mut_slice().to_vec());
 
         // server ingress/egress:
         // trigger the server task. receives data from network + queue data to send
@@ -252,7 +242,7 @@ mod tests {
 
         // network egress:
         // check data to send out to the network
-        let bytes = tx_network_io.send().unwrap();
+        let bytes = tx_network_queue.get_send().unwrap();
         let buffer = DecoderBuffer::new(&bytes);
         let (packet, buffer) = Packet::decode(buffer).unwrap();
         let _rpc = cast_unsafe!(packet.rpc(), Rpc::RequestVoteResp);
@@ -278,8 +268,8 @@ mod tests {
         let peer2_id = PeerId::new([11; 16]);
         let peer3_id = PeerId::new([12; 16]);
         let peer_list = vec![peer2_id, peer3_id];
-        let (mut server, mut rx_network_io) = Server::new(server_id, peer_list.clone(), timeout);
-        let mut tx_network_io = rx_network_io.clone();
+        let (mut server, mut rx_network_queue) = Server::new(server_id, peer_list.clone(), timeout);
+        let mut tx_network_queue = rx_network_queue.clone();
 
         // network egress:
         // check data to send out to the network
@@ -287,10 +277,10 @@ mod tests {
             let mut expect_msg_count = NUMER_OF_MESSAGES;
 
             while expect_msg_count > 0 {
-                tx_network_io.tx_ready().await;
+                tx_network_queue.tx_ready().await;
                 tokio::time::advance(Duration::from_millis(10)).await;
 
-                if let Some(bytes) = tx_network_io.send() {
+                if let Some(bytes) = tx_network_queue.get_send() {
                     let mut decode_buffer = DecoderBuffer::new(&bytes);
 
                     while !decode_buffer.is_empty() {
@@ -327,7 +317,7 @@ mod tests {
                 )
                 .encode(&mut buf);
                 let (written, buf) = buf.split_mut();
-                rx_network_io.recv(written.to_vec());
+                rx_network_queue.push_recv_bytes(written.to_vec());
 
                 let mut buf = EncoderBuffer::new(buf);
                 Packet::test_recv_new(
@@ -344,7 +334,7 @@ mod tests {
                     ),
                 )
                 .encode(&mut buf);
-                rx_network_io.recv(buf.as_mut_slice().to_vec());
+                rx_network_queue.push_recv_bytes(buf.as_mut_slice().to_vec());
 
                 sleep(Duration::from_millis(10)).await;
             }
@@ -355,7 +345,7 @@ mod tests {
         // trigger the server task. receives data from network + queue data to send
         for _ in 1..=NUMER_OF_SENDS {
             sleep(Duration::from_millis(10)).await;
-            server.process_next().await;
+            server.make_progress().await;
         }
 
         assert_eq!(server.state.current_term, Term::from(5));

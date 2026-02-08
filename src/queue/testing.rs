@@ -1,6 +1,6 @@
 use crate::{
-    io::{ServerEgress, ServerIngress, IO_BUF_LEN},
     packet::{Packet, Rpc},
+    queue::{ServerEgress, ServerIngress, IO_BUF_LEN},
     server::{PeerId, ServerId},
 };
 use s2n_codec::{DecoderBuffer, EncoderBuffer, EncoderValue};
