@@ -1,8 +1,10 @@
 use crate::{
     mode::Mode,
-    queue::{BufferIo, NetworkQueueImpl, ServerEgressImpl, ServerIngress, ServerIngressImpl},
+    queue::{
+        BufferIo, NetworkQueueImpl, RxReady, ServerEgressImpl, ServerIngress, ServerIngressImpl,
+    },
     raft_state::RaftState,
-    timeout::Timeout,
+    timeout::{Timeout, TimeoutReady},
 };
 use pin_project_lite::pin_project;
 use std::{
@@ -15,7 +17,7 @@ mod id;
 
 pub use id::{Id, PeerId, ServerId};
 
-struct Server {
+pub struct Server {
     // Unique ServerId for this server process.
     server_id: ServerId,
 
@@ -39,7 +41,7 @@ struct Server {
 }
 
 impl Server {
-    fn new(
+    pub fn new(
         server_id: ServerId,
         peer_list: Vec<PeerId>,
         election_timeout: Timeout,
@@ -60,7 +62,7 @@ impl Server {
         (server, network_queue)
     }
 
-    /// Polls the recv and timeout future to see if progress can be made.
+    /// Polls the recv and timeout future and attempt to make progress.
     pub fn poll_progress(&mut self, cx: &mut std::task::Context<'_>) -> Poll<()> {
         let mut fut = ServerFut {
             timeout: &mut self.timer.timeout_ready(),
@@ -96,7 +98,12 @@ impl Server {
         core::future::poll_fn(|cx| self.poll_progress(cx)).await
     }
 
-    fn on_timeout(&mut self) {
+    /// Return futures to check if the server can make progress.
+    pub fn select_future(&mut self) -> (RxReady<'_, ServerIngressImpl>, TimeoutReady<'_>) {
+        (self.io_ingress.rx_ready(), self.timer.timeout_ready())
+    }
+
+    pub fn on_timeout(&mut self) {
         self.mode.on_timeout(
             &self.server_id,
             &self.peer_list,
@@ -105,7 +112,7 @@ impl Server {
         );
     }
 
-    fn recv(&mut self) {
+    pub fn recv(&mut self) {
         if let Some(recv_packets) = self.io_ingress.recv_packet() {
             for packet in recv_packets {
                 // SAFETY: Receiving RPC means that `from` is a PeerId.
