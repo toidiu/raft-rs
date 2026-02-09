@@ -24,9 +24,11 @@ async fn start() {
 
     let (mut server, mut network_handle) = Server::new(server_id, peer_list.clone(), timeout);
 
+    // TODO better error handling
+    // TODO actual peer address
     let stream = TcpStream::connect("127.0.0.1:8080")
         .await
-        .expect("TODO: better error handling");
+        .expect("better error handling");
 
     let mut buf = vec![0; BUF_SIZE];
     loop {
@@ -58,7 +60,8 @@ async fn start() {
 
         // Network recv.
         if socket_recv_rdy {
-            let bytes_read = stream.try_read(&mut buf).expect("TODO handle IO error");
+            // TODO better error handling
+            let bytes_read = stream.try_read(&mut buf).expect("handle IO error");
 
             // network task: recv
             network_handle.push_recv_bytes(buf[..bytes_read].to_vec());
@@ -73,7 +76,8 @@ async fn start() {
                 while already_sent < send_bytes.len() {
                     already_sent += stream
                         .try_write(&send_bytes[already_sent..total_bytes])
-                        .expect("TODO handle IO error");
+                        // TODO better error handling
+                        .expect("handle IO error");
                 }
             }
         }
