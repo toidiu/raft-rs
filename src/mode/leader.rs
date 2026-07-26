@@ -160,7 +160,7 @@ impl Leader {
             Rpc::RequestVote(request_vote) => request_vote.on_recv(peer_id, raft_state, io_egress),
             Rpc::RequestVoteResp(_request_vote_resp) => {
                 // Ignore since a Leader doesn't send RequestVote
-                debug_assert!(false);
+                // TODO: log for observability
             }
             Rpc::AppendEntry(_append_entries) => {
                 // Conversion to Follower is already handled so this is simple a sanity check.
@@ -591,6 +591,43 @@ mod tests {
             );
             assert!(idx.is_none());
         }
+    }
+
+    // A Leader should ignore stale RequestVoteResp from Followers after it has already won the
+    // election.
+    #[tokio::test]
+    async fn leader_ignores_stale_request_vote_resp() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+        let mut leader = Leader::new(&peer_list, &mut state);
+        let mut io = MockIo::new(server_id);
+
+        let next_idx_before = leader.next_idx.clone();
+        let match_idx_before = leader.match_idx.clone();
+
+        // A stale vote (term == current_term so Mode wouldn't have converted us to Follower).
+        let stale_vote = Rpc::new_request_vote_resp(current_term, true);
+        leader.on_recv(
+            &server_id,
+            peer2_id,
+            &peer_list,
+            &stale_vote,
+            &mut state,
+            &mut io,
+        );
+
+        // The Leader neither replies nor mutates any state.
+        assert!(io.send_queue.is_empty());
+        assert_eq!(leader.next_idx, next_idx_before);
+        assert_eq!(leader.match_idx, match_idx_before);
+        assert_eq!(state.current_term, current_term);
     }
 
     // Verifies commitIdx only advances once a majority of matchIndex[] have reached N (§5.3, §5.4).
