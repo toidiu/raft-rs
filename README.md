@@ -6,9 +6,9 @@ consensus protocol
 
 TODO:
 - Add leader test
-  - [ ] on_timeout
+  - [x] on_timeout
   - [ ] leader progression
-  - [ ] update_commit_idx
+  - [x] update_commit_idx
   - [x] on_recv_append_entry_resp
 - [ ] Add state machine test
 - [x] Include peer id in RPC header

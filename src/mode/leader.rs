@@ -208,7 +208,10 @@ impl Leader {
                 .count();
             //% Compliance:
             //% majority
-            larger_match_idx_count >= Mode::quorum(peer_list)
+            //
+            // The Leader counts itself toward the quorum since it trivially has every entry in
+            // its own log; match_idx only tracks peers, so add 1 for the Leader.
+            larger_match_idx_count + 1 >= Mode::quorum(peer_list)
         };
 
         //% Compliance:
@@ -405,6 +408,105 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn on_timeout() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+        let mut leader = Leader::new(&peer_list, &mut state);
+
+        let mut io = MockIo::new(server_id);
+
+        // A timeout triggers a heartbeat (empty AppendEntries) to each peer.
+        leader.on_timeout(&server_id, &peer_list, &mut state, &mut io);
+
+        // Expect append_entry is sent to both peers
+        for _ in 0..2 {
+            let packet = helper_inspect_next_sent_packet(&mut io);
+
+            // log is empty so expect to receive a RPC with initial term and idx
+            let expected_rpc = Rpc::new_append_entry(
+                current_term,
+                server_id,
+                TermIdx::initial(),
+                Idx::initial(),
+                vec![],
+            );
+            assert_eq!(&expected_rpc, packet.rpc());
+        }
+    }
+
+    // Verifies that on_timeout sends each peer a heartbeat based on that peer's existing next_idx
+    // and, unlike on_leader, does NOT reinitialize next_idx/match_idx.
+    #[tokio::test]
+    async fn on_timeout_uses_peer_next_idx() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+
+        // Insert two entries into log
+        for i in 1..=2 {
+            let entry = crate::log::Entry {
+                term: current_term,
+                command: i,
+            };
+            let outcome = state
+                .log
+                .update_to_match_leaders_log(entry.clone(), Idx::from(i as u64));
+            assert!(matches!(outcome, MatchOutcome::DoesntExist));
+        }
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+        // next_idx initialized to last_idx + 1 == 3
+        assert_eq!(leader.next_idx.get(&peer2_id).unwrap(), &Idx::from(3));
+        assert_eq!(leader.next_idx.get(&peer3_id).unwrap(), &Idx::from(3));
+
+        // Record that peer2 is behind (next_idx == 1). Unlike on_leader, on_timeout does not
+        // reinitialize next_idx, so the heartbeat should honor this state.
+        *leader.next_idx.get_mut(&peer2_id).unwrap() = Idx::from(1);
+
+        let mut io = MockIo::new(server_id);
+        leader.on_timeout(&server_id, &peer_list, &mut state, &mut io);
+
+        // next_idx is unchanged after a timeout heartbeat.
+        assert_eq!(leader.next_idx.get(&peer2_id).unwrap(), &Idx::from(1));
+        assert_eq!(leader.next_idx.get(&peer3_id).unwrap(), &Idx::from(3));
+
+        // peer2 (next_idx == 1): last_log_idx (2) >= next_idx (1), so send entry at idx 1.
+        let expected_peer2 = TermIdx {
+            term: current_term,
+            idx: Idx::from(1),
+        };
+        // peer3 (next_idx == 3): last_log_idx (2) < next_idx (3), so send the last log TermIdx.
+        let expected_peer3 = TermIdx {
+            term: current_term,
+            idx: Idx::from(2),
+        };
+        for expected_term_idx in [expected_peer2, expected_peer3] {
+            let packet = helper_inspect_next_sent_packet(&mut io);
+            let expected_rpc = Rpc::new_append_entry(
+                current_term,
+                server_id,
+                expected_term_idx,
+                Idx::initial(),
+                vec![],
+            );
+            assert_eq!(&expected_rpc, packet.rpc());
+        }
+    }
+
+    #[tokio::test]
     async fn test_on_recv_append_entry_resp() {
         let prng = Pcg32::from_seed([0; 16]);
         let timeout = Timeout::new(prng.clone());
@@ -489,5 +591,123 @@ mod tests {
             );
             assert!(idx.is_none());
         }
+    }
+
+    // Verifies commitIdx only advances once a majority of matchIndex[] have reached N (§5.3, §5.4).
+    #[tokio::test]
+    async fn update_commit_idx_requires_majority() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+
+        // 3-node cluster (2 peers + self) => quorum of 2.
+        // Insert one entry at the current term.
+        let entry = crate::log::Entry {
+            term: current_term,
+            command: 1,
+        };
+        let outcome = state.log.update_to_match_leaders_log(entry, Idx::from(1));
+        assert!(matches!(outcome, MatchOutcome::DoesntExist));
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+        // match_idx initialized to 0 for each peer.
+        assert_eq!(state.commit_idx(), &Idx::initial());
+
+        // No peer has replicated idx 1: only the Leader has it (1 of 3) which is short of the
+        // quorum of 2, so commit_idx does not advance.
+        {
+            leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+            assert_eq!(state.commit_idx(), &Idx::initial());
+        }
+
+        // One peer has replicated idx 1: together with the Leader that is a majority (2 of 3), so
+        // commit_idx advances to 1. The Leader counts itself toward the quorum.
+        {
+            *leader.match_idx.get_mut(&peer2_id).unwrap() = Idx::from(1);
+            leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+            assert_eq!(state.commit_idx(), &Idx::from(1));
+        }
+
+        // N is not greater than the current commit_idx: no change.
+        {
+            leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+            assert_eq!(state.commit_idx(), &Idx::from(1));
+        }
+    }
+
+    // Test quorum size for a 3 node cluster.
+    #[tokio::test]
+    async fn update_commit_idx_leader_counts_itself_3_node() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+
+        // Boundary: exactly `peers_at_n` peers have replicated idx 1. `expect_commit` is the
+        // correct Raft outcome once the Leader is counted (leader + peers_at_n >= quorum).
+        for (peers_at_n, expect_commit) in [(0, false), (1, true)] {
+            let mut state = RaftState::new(timeout.clone());
+            let entry = crate::log::Entry {
+                term: state.current_term,
+                command: 1,
+            };
+            let _ = state.log.update_to_match_leaders_log(entry, Idx::from(1));
+
+            let mut leader = Leader::new(&peer_list, &mut state);
+            for peer_id in peer_list.iter().take(peers_at_n) {
+                *leader.match_idx.get_mut(peer_id).unwrap() = Idx::from(1);
+            }
+
+            leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+
+            let expected = if expect_commit {
+                Idx::from(1)
+            } else {
+                Idx::initial()
+            };
+            assert_eq!(
+                state.commit_idx(),
+                &expected,
+                "3-node cluster with {peers_at_n} replicating peer(s)"
+            );
+        }
+    }
+
+    // Verifies a Leader never commits an entry from a previous term, even with a majority (§5.4.2).
+    #[tokio::test]
+    async fn update_commit_idx_only_commits_current_term() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+
+        // Insert an entry from an older term, then advance the current term.
+        let old_term = state.current_term;
+        let entry = crate::log::Entry {
+            term: old_term,
+            command: 1,
+        };
+        let outcome = state.log.update_to_match_leaders_log(entry, Idx::from(1));
+        assert!(matches!(outcome, MatchOutcome::DoesntExist));
+        state.current_term = Term::from(2);
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+
+        // Both peers have replicated idx 1 (a majority), but log[1].term != currentTerm so the
+        // Leader must NOT advance commit_idx.
+        *leader.match_idx.get_mut(&peer2_id).unwrap() = Idx::from(1);
+        *leader.match_idx.get_mut(&peer3_id).unwrap() = Idx::from(1);
+        leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+        assert_eq!(state.commit_idx(), &Idx::initial());
     }
 }
