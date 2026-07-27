@@ -276,9 +276,12 @@ impl Leader {
                 //% Compliance:
                 //% If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
                 self.next_idx.entry(peer_id).and_modify(|idx| {
-                    assert!(
-                        !idx.is_initial(),
-                        "Peer responded false to initial Idx, which is malformed behavior."
+                    // next_idx bottoms out at 1. The prev TermIdx is then the empty prefix, which
+                    // every log matches, so there is nothing left to back off to and Idx(0) names
+                    // no entry.
+                    debug_assert!(
+                        *idx > Idx::from(1),
+                        "Peer rejected an initial prev TermIdx, which every log matches."
                     );
                     *idx = idx.sub(1)
                 });
@@ -591,6 +594,70 @@ mod tests {
             );
             assert!(idx.is_none());
         }
+    }
+
+    // next_idx bottoms out at 1, since the prev TermIdx is then the empty prefix that every log
+    // matches. A peer that still replies false is malfunctioning and must not walk next_idx into
+    // Idx(0), which names no entry.
+    //
+    //     Idx:      0        1        2        3
+    //            [ empty ][  e1  ][  e2  ][  e3  ]
+    //              prefix
+    //                ^        ^
+    //                |        |
+    //                |        next_idx == 1, the floor. prev is the empty prefix,
+    //                |        which every log matches, so a false reply is bogus.
+    //                |
+    //                next_idx == 0 is off the front of the log. Nothing to send,
+    //                nothing to compare against, and as_log_idx() underflows.
+    //
+    // Each false reply steps next_idx one slot left. This test starts peer2 on the floor and
+    // pushes once more.
+    #[should_panic]
+    #[tokio::test]
+    async fn on_recv_append_entry_resp_does_not_decrement_next_idx_past_one() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+
+        // One entry, so the RPC sent at next_idx == 1 carries idx 1 and the response echoing it
+        // passes the out-of-order check.
+        let outcome = state.log.update_to_match_leaders_log(
+            crate::log::Entry {
+                term: current_term,
+                command: 1,
+            },
+            Idx::from(1),
+        );
+        assert!(matches!(outcome, MatchOutcome::DoesntExist));
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+        let mut io = MockIo::new(server_id);
+
+        // Record that peer2 has already been walked all the way back.
+        *leader.next_idx.get_mut(&peer2_id).unwrap() = Idx::from(1);
+
+        // A false response echoing the TermIdx that was sent at next_idx == 1.
+        let append_entries_resp = AppendEntriesResp {
+            term: current_term,
+            success: false,
+            echo_prev_log_term_idx: TermIdx::builder()
+                .with_term(current_term)
+                .with_idx(Idx::from(1)),
+        };
+        leader.on_recv_append_entry_resp(
+            &server_id,
+            peer2_id,
+            &append_entries_resp,
+            &mut state,
+            &mut io,
+        );
     }
 
     // A Leader should ignore stale RequestVoteResp from Followers after it has already won the
