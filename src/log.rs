@@ -19,6 +19,21 @@ impl Log {
         Log { entries: vec![] }
     }
 
+    // Return all log entries starting at `idx` (inclusive).
+    //
+    // Returns an empty Vec if `idx` is one past the last entry, which is the case when a peer is
+    // already up-to-date and there is nothing left to send.
+    pub fn get_entries(&self, idx: &Idx) -> Vec<Entry> {
+        // Check out of bounds in Raft
+        debug_assert!(!idx.is_initial(), "Invalid Raft Idx::INITIAL");
+        debug_assert!(*idx <= self.last_idx() + 1, "Invalid Raft out of bound idx");
+
+        self.entries
+            .get(idx.as_log_idx()..)
+            .map(<[Entry]>::to_vec)
+            .unwrap_or_default()
+    }
+
     pub fn push(&mut self, entries: Vec<Entry>) {
         for entry in entries.into_iter() {
             self.entries.push(entry);
@@ -172,6 +187,57 @@ pub(crate) enum MatchOutcome {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_get_entries() {
+        let mut log = Log::new();
+
+        // An empty log has no entries to return.
+        assert!(log.get_entries(&Idx::from(1)).is_empty());
+
+        let t1 = Term::from(1);
+        let t2 = Term::from(2);
+        let e1 = Entry::new(t1, 1);
+        let e2 = Entry::new(t2, 2);
+        let e3 = Entry::new(t2, 3);
+        log.push(vec![e1.clone(), e2.clone(), e3.clone()]);
+
+        // Slicing from idx 1 returns the whole log.
+        let ti_1 = TermIdx::builder().with_term(t1).with_idx(Idx::from(1));
+        assert_eq!(
+            log.get_entries(&ti_1.idx),
+            vec![e1.clone(), e2.clone(), e3.clone()]
+        );
+
+        // Slicing from idx 2 returns the last two entries.
+        let ti_2 = TermIdx::builder().with_term(t2).with_idx(Idx::from(2));
+        assert_eq!(log.get_entries(&ti_2.idx), vec![e2, e3.clone()]);
+
+        // Slicing from the last idx returns just that entry.
+        let ti_3 = TermIdx::builder().with_term(t2).with_idx(Idx::from(3));
+        assert_eq!(log.get_entries(&ti_3.idx), vec![e3]);
+
+        // Slicing one past the last entry returns no entries.
+        let ti_past = TermIdx::builder().with_term(t2).with_idx(Idx::from(4));
+        assert!(log.get_entries(&ti_past.idx).is_empty());
+    }
+
+    #[should_panic]
+    #[test]
+    fn get_entries_at_initial_idx() {
+        let log = Log::new();
+        log.get_entries(&Idx::initial());
+    }
+
+    #[should_panic]
+    #[test]
+    fn get_entries_past_end_of_log() {
+        let mut log = Log::new();
+        log.push(vec![Entry::new(Term::from(1), 1)]);
+
+        // last_idx is 1, so idx 3 is beyond the one-past-the-end bound.
+        log.get_entries(&Idx::from(3));
+    }
 
     #[test]
     fn test_find_log_entry() {
