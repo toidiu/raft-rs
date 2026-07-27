@@ -1,10 +1,11 @@
 use crate::server::{Id, PeerId, ServerId};
 use s2n_codec::{DecoderBuffer, DecoderBufferResult, DecoderValue, EncoderValue};
 
-mod append_entries;
+pub(crate) mod append_entries;
 mod request_vote;
 mod rpc;
 
+pub(crate) use append_entries::EntriesLenTypeEncoding;
 pub use append_entries::{AppendEntries, AppendEntriesResp};
 pub use request_vote::{RequestVote, RequestVoteResp};
 pub use rpc::Rpc;

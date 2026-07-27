@@ -5,7 +5,7 @@ use crate::{
 use s2n_codec::{DecoderValue, EncoderValue};
 
 // Type used to encode the number of entries sent over an AppendEntries RPC.
-type EntriesLenTypeEncoding = u16;
+pub(crate) type EntriesLenTypeEncoding = u16;
 
 #[must_use]
 #[derive(Debug, PartialEq, Eq)]
@@ -60,11 +60,22 @@ pub struct AppendEntriesResp {
     //% success: true if follower contained entry matching prevLogIndex and prevLogTerm
     pub success: bool,
 
-    // The last log index that the peer send in the [AppendEntries] RPC.
+    // The `prev_log_term_idx` that the peer sent in the [AppendEntries] RPC.
     //
     // This is used to match the Response to the original RPC since it is possible to have multiple
     // RPCs in-flight due to retries.
     pub echo_prev_log_term_idx: TermIdx,
+
+    // The number of entries stored from the [AppendEntries] RPC.
+    //
+    // The Follower accepts all of the entries or none of them, so this is the RPC's entries.len()
+    // on success and 0 on failure.
+    //
+    // Together with the echoed prev this gives the Leader the peer's matchIndex:
+    // `echo_prev_log_term_idx.idx + entries_cnt`. Anchoring the count to the echo means the
+    // matchIndex is derived from a TermIdx the Leader has already matched to its own next_idx,
+    // so it cannot drift from the RPC being acknowledged.
+    pub entries_cnt: EntriesLenTypeEncoding,
 }
 
 impl AppendEntriesResp {
@@ -125,11 +136,13 @@ impl<'a> DecoderValue<'a> for AppendEntriesResp {
         let (success, buffer): (u8, _) = buffer.decode()?;
         let success = success != 0;
         let (echo_prev_log_term_idx, buffer) = buffer.decode()?;
+        let (entries_cnt, buffer) = buffer.decode()?;
 
         let rpc = AppendEntriesResp {
             term,
             success,
             echo_prev_log_term_idx,
+            entries_cnt,
         };
         Ok((rpc, buffer))
     }
@@ -140,6 +153,7 @@ impl EncoderValue for AppendEntriesResp {
         encoder.encode(&self.term);
         encoder.write_slice(&(self.success as u8).to_be_bytes());
         encoder.encode(&self.echo_prev_log_term_idx);
+        encoder.encode(&self.entries_cnt);
     }
 }
 
@@ -247,6 +261,7 @@ mod tests {
             echo_prev_log_term_idx: TermIdx::builder()
                 .with_term(Term::from(2))
                 .with_idx(Idx::from(1)),
+            entries_cnt: 3,
         };
 
         let rpc2 = AppendEntriesResp {
@@ -255,6 +270,8 @@ mod tests {
             echo_prev_log_term_idx: TermIdx::builder()
                 .with_term(Term::from(4))
                 .with_idx(Idx::from(3)),
+            // A rejected RPC stored no entries.
+            entries_cnt: 0,
         };
 
         let mut slice = vec![0; 60];

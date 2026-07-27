@@ -7,7 +7,11 @@ use crate::{
     server::{PeerId, ServerId},
     state_machine::CurrentMode,
 };
-use std::{collections::BTreeMap, ops::Sub};
+use std::{
+    cmp::{max, min},
+    collections::BTreeMap,
+    ops::Sub,
+};
 
 #[derive(Debug, Default)]
 pub struct Leader {
@@ -237,10 +241,12 @@ impl Leader {
         }
     }
 
-    // Echoed Idx from the received AppendEntriesResp.
+    // Returns the peer's updated match_idx, after processing AppendEntriesResp.
     //
-    // Returns None if the RPC was not successful or if the RPC was received out of order (didn't
-    // match the peer's next_idx).
+    // Returns None when there is nothing to check:
+    // - the RPC failed
+    // - it was received out of order (the echoed prev didn't match next_idx - 1)
+    // - it succeeded with the peer holding nothing (still updates match_idx)
     fn on_recv_append_entry_resp<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
@@ -253,6 +259,7 @@ impl Leader {
             term: _,
             success,
             echo_prev_log_term_idx,
+            entries_cnt,
         } = append_entries_resp;
 
         // The RPC echoes the prev TermIdx that was sent, which is next_idx - 1.
@@ -273,22 +280,45 @@ impl Leader {
         // can be out-of-order due to timeout and re-transmission.
         if expected_echo_prev_idx.eq(&echo_prev_log_term_idx.idx) {
             if *success {
-                // Check the TermIdx in the Resp rpc rather than assuming next_idx to make the
-                // protocol more resilient.
-                let rpc_sent_idx = *self
-                    .next_idx
-                    .get(&peer_id)
-                    .expect("peer should have next_idx state");
+                let peer_match_idx = {
+                    // The peer stored every entry the RPC carried, so it now holds everything through
+                    // prev plus those entries.
+                    //
+                    // entries_cnt arrives off the wire, so clamp it to what the Leader actually holds.
+                    let reported_match_idx = min(
+                        echo_prev_log_term_idx.idx + *entries_cnt as u64,
+                        raft_state.log.last_idx(),
+                    );
+
+                    //% Compliance:
+                    //% `matchIndex[]` for each server, index of highest log entry known to be
+                    //% replicated on server (initialized to 0, increases monotonically)
+                    //
+                    // A delayed response can still satisfy the echo check. A entry known to be
+                    // replicated stays replicated, and match_idx increases monotonically.
+                    let current_match_idx = *self
+                        .match_idx
+                        .get(&peer_id)
+                        .expect("peer should have match_idx state");
+
+                    max(reported_match_idx, current_match_idx)
+                };
 
                 //% Compliance:
                 //% If successful: update nextIndex and matchIndex for follower (§5.3)
                 self.next_idx
                     .entry(peer_id)
-                    .and_modify(|idx| *idx = rpc_sent_idx);
+                    .and_modify(|idx| *idx = peer_match_idx + 1);
                 self.match_idx
                     .entry(peer_id)
-                    .and_modify(|idx| *idx = rpc_sent_idx);
-                Some(rpc_sent_idx)
+                    .and_modify(|idx| *idx = peer_match_idx);
+
+                // An initial Idx means the peer holds nothing, so there is no entry to commit.
+                if peer_match_idx.is_initial() {
+                    None
+                } else {
+                    Some(peer_match_idx)
+                }
             } else {
                 //% Compliance:
                 //% If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
@@ -590,6 +620,7 @@ mod tests {
                 echo_prev_log_term_idx: TermIdx::builder()
                     .with_term(Term::from(2))
                     .with_idx(bad_echo_idx),
+                entries_cnt: 0,
             };
             let idx = leader.on_recv_append_entry_resp(
                 &server_id,
@@ -610,6 +641,8 @@ mod tests {
                 echo_prev_log_term_idx: TermIdx::builder()
                     .with_term(Term::from(2))
                     .with_idx(echo_idx),
+                // The peer was caught up, so the RPC carried no entries.
+                entries_cnt: 0,
             };
             let idx = leader.on_recv_append_entry_resp(
                 &server_id,
@@ -618,7 +651,8 @@ mod tests {
                 &mut state,
                 &mut io,
             );
-            assert_eq!(idx.unwrap(), Idx::from(3));
+            // match_idx: the peer holds through the echoed prev, and no entries were sent.
+            assert_eq!(idx.unwrap(), Idx::from(2));
         }
 
         // RPC failure: use the same.. now outdated echo idx
@@ -629,6 +663,7 @@ mod tests {
                 echo_prev_log_term_idx: TermIdx::builder()
                     .with_term(Term::from(2))
                     .with_idx(echo_idx),
+                entries_cnt: 0,
             };
             let idx = leader.on_recv_append_entry_resp(
                 &server_id,
@@ -689,6 +724,7 @@ mod tests {
                 echo_prev_log_term_idx: TermIdx::builder()
                     .with_term(current_term)
                     .with_idx(Idx::from(1)),
+                entries_cnt: 0,
             };
             leader.on_recv_append_entry_resp(
                 &server_id,
@@ -709,6 +745,7 @@ mod tests {
                 echo_prev_log_term_idx: TermIdx::builder()
                     .with_term(current_term)
                     .with_idx(Idx::from(2)),
+                entries_cnt: 0,
             };
             let idx = leader.on_recv_append_entry_resp(
                 &server_id,
@@ -721,6 +758,158 @@ mod tests {
             assert!(idx.is_none());
             assert_eq!(leader.next_idx.get(&peer2_id).unwrap(), &Idx::from(2));
         }
+    }
+
+    // A success means the peer stored every entry the RPC carried, so match_idx advances to the
+    // last one sent and next_idx to the one after it.
+    //
+    //     Leader log:   Idx:      0        1        2
+    //                          [ empty ][  e1  ][  e2  ]
+    //                            prefix
+    //
+    //     peer2 before:   next_idx == 1, prev == 0, entries == [e1, e2]
+    //     peer2 after:    match_idx == 2 (both stored), next_idx == 3
+    //
+    //     peer3 before:   next_idx == 3, prev == 2, entries == [] (heartbeat)
+    //     peer3 after:    match_idx == 2 (prev is known held), next_idx == 3 (unmoved)
+    //
+    // Leaving next_idx where it was means the peer is asked for the same entries forever and
+    // match_idx never reaches a quorum, so commit_idx never advances.
+    #[tokio::test]
+    async fn on_recv_append_entry_resp_success_advances_next_and_match_idx() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+
+        for i in 1..=2 {
+            let outcome = state.log.update_to_match_leaders_log(
+                crate::log::Entry {
+                    term: current_term,
+                    command: i,
+                },
+                Idx::from(i as u64),
+            );
+            assert!(matches!(outcome, MatchOutcome::DoesntExist));
+        }
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+        let mut io = MockIo::new(server_id);
+
+        // peer2 holds nothing, so it was sent the whole log behind an empty prefix.
+        *leader.next_idx.get_mut(&peer2_id).unwrap() = Idx::from(1);
+        {
+            let append_entries_resp = AppendEntriesResp {
+                term: current_term,
+                success: true,
+                echo_prev_log_term_idx: TermIdx::initial(),
+                // Both entries were sent behind the empty prefix and stored.
+                entries_cnt: 2,
+            };
+            let idx = leader.on_recv_append_entry_resp(
+                &server_id,
+                peer2_id,
+                &append_entries_resp,
+                &mut state,
+                &mut io,
+            );
+
+            // Both entries are now replicated, so the next one to send is idx 3.
+            assert_eq!(idx.unwrap(), Idx::from(2));
+            assert_eq!(leader.match_idx.get(&peer2_id).unwrap(), &Idx::from(2));
+            assert_eq!(leader.next_idx.get(&peer2_id).unwrap(), &Idx::from(3));
+        }
+
+        // peer3 is already caught up, so it was sent a bare heartbeat.
+        {
+            let append_entries_resp = AppendEntriesResp {
+                term: current_term,
+                success: true,
+                echo_prev_log_term_idx: TermIdx::builder()
+                    .with_term(current_term)
+                    .with_idx(Idx::from(2)),
+                // A bare heartbeat carries no entries.
+                entries_cnt: 0,
+            };
+            let idx = leader.on_recv_append_entry_resp(
+                &server_id,
+                peer3_id,
+                &append_entries_resp,
+                &mut state,
+                &mut io,
+            );
+
+            // Acking prev proves the peer holds idx 2. No entries were sent, so next_idx stays.
+            assert_eq!(idx.unwrap(), Idx::from(2));
+            assert_eq!(leader.match_idx.get(&peer3_id).unwrap(), &Idx::from(2));
+            assert_eq!(leader.next_idx.get(&peer3_id).unwrap(), &Idx::from(3));
+        }
+    }
+
+    // match_idx increases monotonically, so a response reporting less than the Leader already
+    // recorded leaves it alone.
+    //
+    // The echo check does not rule this out. It compares against next_idx - 1, and next_idx is
+    // walked backwards on every failure, so a delayed success can arrive when next_idx has since
+    // dropped to the value that response was sent under.
+    //
+    // Replication is append-only: an entry known to be stored stays stored. Letting match_idx fall
+    // would drop an entry back below the quorum that update_commit_idx counts.
+    #[tokio::test]
+    async fn on_recv_append_entry_resp_match_idx_never_moves_backward() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let server_id = ServerId::new([1; 16]);
+        let peer2_id = PeerId::new([11; 16]);
+        let peer3_id = PeerId::new([12; 16]);
+        let peer_list = vec![peer2_id, peer3_id];
+        let mut state = RaftState::new(timeout);
+        let current_term = state.current_term;
+
+        for i in 1..=2 {
+            let outcome = state.log.update_to_match_leaders_log(
+                crate::log::Entry {
+                    term: current_term,
+                    command: i,
+                },
+                Idx::from(i as u64),
+            );
+            assert!(matches!(outcome, MatchOutcome::DoesntExist));
+        }
+
+        let mut leader = Leader::new(&peer_list, &mut state);
+        let mut io = MockIo::new(server_id);
+
+        // peer2 has acknowledged both entries.
+        *leader.match_idx.get_mut(&peer2_id).unwrap() = Idx::from(2);
+        *leader.next_idx.get_mut(&peer2_id).unwrap() = Idx::from(1);
+
+        // A stale success reporting only the empty prefix, which passes the echo check because
+        // next_idx has been walked back to 1.
+        let append_entries_resp = AppendEntriesResp {
+            term: current_term,
+            success: true,
+            echo_prev_log_term_idx: TermIdx::initial(),
+            entries_cnt: 0,
+        };
+        let idx = leader.on_recv_append_entry_resp(
+            &server_id,
+            peer2_id,
+            &append_entries_resp,
+            &mut state,
+            &mut io,
+        );
+
+        // The Leader keeps the higher value it already knew.
+        assert_eq!(idx.unwrap(), Idx::from(2));
+        assert_eq!(leader.match_idx.get(&peer2_id).unwrap(), &Idx::from(2));
+        assert_eq!(leader.next_idx.get(&peer2_id).unwrap(), &Idx::from(3));
     }
 
     // next_idx bottoms out at 1, since the prev TermIdx is then the empty prefix that every log
@@ -764,6 +953,7 @@ mod tests {
             term: current_term,
             success: false,
             echo_prev_log_term_idx: TermIdx::initial(),
+            entries_cnt: 0,
         };
         leader.on_recv_append_entry_resp(
             &server_id,
