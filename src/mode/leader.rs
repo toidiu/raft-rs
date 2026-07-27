@@ -102,31 +102,35 @@ impl Leader {
         let leader_current_term = raft_state.current_term;
         let leader_commit_idx = *raft_state.commit_idx();
 
-        let last_log_term_idx = raft_state.log.last_term_idx();
-        let peer_next_idx = *self
-            .next_idx
-            .get(peer_id)
-            .expect("peer should have next_idx state");
+        let prev_idx = {
+            let peer_next_idx = *self
+                .next_idx
+                .get(peer_id)
+                .expect("peer should have next_idx state");
 
-        //% Compliance:
-        //% If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log
-        //% entries starting at nextIndex
-        let peer_term_idx = if last_log_term_idx.idx >= peer_next_idx {
-            let peer_next_term = raft_state.log.term_at_idx(&peer_next_idx).unwrap();
-            TermIdx::builder()
-                .with_term(peer_next_term)
-                .with_idx(peer_next_idx)
+            //% Compliance:
+            //% prevLogIndex: index of log entry immediately preceding new ones
+            //% prevLogTerm: term of prevLogIndex entry
+            peer_next_idx - 1
+        };
+
+        let prev_log_term_idx = if prev_idx.is_initial() {
+            // The peer holds nothing, so the entries are preceded by the empty prefix. Every log
+            // contains that prefix, so the peer cannot reject on this.
+            TermIdx::initial()
         } else {
-            // The peer should be theoritically up-to-date so send the latest Leader entry. If
-            // the peer is not up-to-date we will get a failure and will decrement the peer's
-            // nextIndex.
-            last_log_term_idx
+            // next_idx is at most last_idx + 1, so prev_idx always names an existing entry.
+            let prev_term = raft_state
+                .log
+                .term_at_idx(&prev_idx)
+                .expect("prev_idx is at most last_idx");
+            TermIdx::builder().with_term(prev_term).with_idx(prev_idx)
         };
 
         let rpc = Rpc::new_append_entry(
             leader_current_term,
             *server_id,
-            peer_term_idx,
+            prev_log_term_idx,
             leader_commit_idx,
             vec![],
         );
@@ -486,12 +490,26 @@ mod tests {
         assert_eq!(leader.next_idx.get(&peer2_id).unwrap(), &Idx::from(1));
         assert_eq!(leader.next_idx.get(&peer3_id).unwrap(), &Idx::from(3));
 
-        // peer2 (next_idx == 1): last_log_idx (2) >= next_idx (1), so send entry at idx 1.
-        let expected_peer2 = TermIdx {
-            term: current_term,
-            idx: Idx::from(1),
-        };
-        // peer3 (next_idx == 3): last_log_idx (2) < next_idx (3), so send the last log TermIdx.
+        // prev names the entry immediately preceding the ones being sent, so it is next_idx - 1.
+        // The Follower relies on this: it appends the first entry at prev.idx + 1.
+        //
+        //     Leader log:   Idx:      0        1        2
+        //                          [ empty ][  e1  ][  e2  ]
+        //                            prefix
+        //
+        //     peer2, next_idx == 1:    ^        ^
+        //                              |        |
+        //                        prev == 0    entries start here
+        //                     (empty prefix)
+        //
+        //     peer3, next_idx == 3:                     ^        ^
+        //                                               |        |
+        //                                         prev == 2    entries start here
+        //                                                     (nothing left, so a bare heartbeat)
+        //
+        // peer2 (next_idx == 1): nothing precedes the first entry, so prev is the empty prefix.
+        let expected_peer2 = TermIdx::initial();
+        // peer3 (next_idx == 3): prev is the last entry in the log.
         let expected_peer3 = TermIdx {
             term: current_term,
             idx: Idx::from(2),
