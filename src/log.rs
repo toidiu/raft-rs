@@ -105,11 +105,13 @@ impl Log {
         }
     }
 
+    // Report whether this Log holds the entry named by `term_idx`.
+    //
     //% Compliance:
     //% if two entries in different logs have the same index/term, they store the same command
     pub(crate) fn entry_matches(&self, term_idx: TermIdx) -> MatchOutcome {
-        // TermIdx::initial indicates that both logs are empty
-        if term_idx.is_initial() && self.entries.is_empty() {
+        // Every log contains the entry TermIdx::initial.
+        if term_idx.is_initial() {
             return MatchOutcome::Match;
         }
 
@@ -275,7 +277,7 @@ mod tests {
         log.push(vec![entry.clone()]);
         assert!(matches!(
             log.entry_matches(TermIdx::initial()),
-            MatchOutcome::DoesntExist
+            MatchOutcome::Match
         ));
 
         // Log entry match
