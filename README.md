@@ -6,11 +6,19 @@ consensus protocol
 
 TODO:
 - Add leader test
-  - [x] on_timeout
   - [ ] leader progression
+  - [x] on_timeout
   - [x] update_commit_idx
   - [x] on_recv_append_entry_resp
-- [ ] Add state machine test
+- [ ] test: state machine tests
+- [ ] Client API: on the server to propose a command (stores `u8` data)
+- [ ] Leader
+  - [ ] Send actual entries in AppendEntries (leader currently ships `vec![]`)
+    - ship the full log tail `log[next_idx..]` with matching `prevLogTermIdx`;
+    handles multi-entry replication and backfilling lagging followers.
+- [ ] Integration tests
+  - [ ] election -> timeout/heartbeat -> re-election -> commit an entry
+  - [ ] Multi-node test harness: route packets between in-memory nodes by `Packet::to()`
 - [x] Include peer id in RPC header
 - [x] Include idx in AppendEntryResp
 - [x] Handle on_recv in leader

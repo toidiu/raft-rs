@@ -79,14 +79,12 @@ impl<'a> DecoderValue<'a> for AppendEntries {
         let (leader_commit_idx, buffer) = buffer.decode()?;
 
         // decode a vec of Entries
-        let (entries_cnt, buffer) = buffer.decode::<EntriesLenTypeEncoding>()?;
-        let entries_total_bytes = entries_cnt as usize * std::mem::size_of::<Entry>();
-        let (mut entry_buffer, buffer) = buffer.decode_slice(entries_total_bytes)?;
+        let (entries_cnt, mut buffer) = buffer.decode::<EntriesLenTypeEncoding>()?;
         let mut entries = Vec::with_capacity(entries_cnt.into());
         for _i in 0..entries_cnt {
-            let (entry, remaining_entry_buffer) = entry_buffer.decode()?;
+            let (entry, remaining_entry_buffer) = buffer.decode()?;
             // update entry_buffer
-            entry_buffer = remaining_entry_buffer;
+            buffer = remaining_entry_buffer;
             entries.push(entry);
         }
 
@@ -154,7 +152,7 @@ mod tests {
     // A Raft heartbeat doesn't have entries
     #[test]
     fn encode_decode_heartbeat_rpc() {
-        let rpc = Rpc::new_append_entry(
+        let rpc1 = Rpc::new_append_entry(
             Term::from(2),
             ServerId::new([1; 16]),
             TermIdx::builder()
@@ -163,21 +161,47 @@ mod tests {
             Idx::from(4),
             vec![],
         );
-        let rpc = cast_unsafe!(rpc, Rpc::AppendEntry);
+        let rpc1 = cast_unsafe!(rpc1, Rpc::AppendEntry);
+
+        let rpc2 = Rpc::new_append_entry(
+            Term::from(7),
+            ServerId::new([9; 16]),
+            TermIdx::builder()
+                .with_term(Term::from(8))
+                .with_idx(Idx::from(2)),
+            Idx::from(1),
+            vec![],
+        );
+        let rpc2 = cast_unsafe!(rpc2, Rpc::AppendEntry);
 
         let mut slice = vec![0; 200];
         let mut buf = EncoderBuffer::new(&mut slice);
-        rpc.encode(&mut buf);
+        rpc1.encode(&mut buf);
+        rpc2.encode(&mut buf);
 
+        // Decoding the second RPC only lines up if the first advanced the cursor by exactly its
+        // encoded length.
         let d_buf = DecoderBuffer::new(&slice);
-        let (d_rpc, _) = AppendEntries::decode(d_buf).unwrap();
+        let (d_rpc1, d_buf) = AppendEntries::decode(d_buf).unwrap();
+        let (d_rpc2, _) = AppendEntries::decode(d_buf).unwrap();
 
-        assert_eq!(rpc, d_rpc);
+        assert_eq!(rpc1, d_rpc1);
+        assert_eq!(rpc2, d_rpc2);
     }
 
     #[test]
     fn encode_decode_rpc() {
-        let rpc = Rpc::new_append_entry(
+        // Encode two AppendEntries (each carrying entries) back-to-back into one buffer.
+        //
+        // Regression test: the decoder used to size the entries region with
+        // `size_of::<Entry>()` (the padded in-memory size, 16B) instead of the encoded size (9B),
+        // so it advanced the cursor too far. With a single RPC in a zero-padded slice the
+        // over-read landed on harmless padding and hid the bug. Packing a second RPC right after
+        // the first means that over-read eats into the second RPC's bytes, misaligning it — so
+        // the second decode (or the final emptiness check) fails unless the cursor advances by
+        // exactly the encoded length. This also mirrors how ServerIngress decodes packets
+        // back-to-back from one buffer.
+        let rpc1 = Rpc::new_append_entry(
             Term::from(2),
             ServerId::new([1; 16]),
             TermIdx::builder()
@@ -186,21 +210,38 @@ mod tests {
             Idx::from(4),
             vec![Entry::new(Term::from(2), 3), Entry::new(Term::from(5), 6)],
         );
-        let rpc = cast_unsafe!(rpc, Rpc::AppendEntry);
+        let rpc1 = cast_unsafe!(rpc1, Rpc::AppendEntry);
+
+        let rpc2 = Rpc::new_append_entry(
+            Term::from(7),
+            ServerId::new([9; 16]),
+            TermIdx::builder()
+                .with_term(Term::from(8))
+                .with_idx(Idx::from(2)),
+            Idx::from(1),
+            vec![Entry::new(Term::from(7), 42)],
+        );
+        let rpc2 = cast_unsafe!(rpc2, Rpc::AppendEntry);
 
         let mut slice = vec![0; 200];
         let mut buf = EncoderBuffer::new(&mut slice);
-        rpc.encode(&mut buf);
+        rpc1.encode(&mut buf);
+        rpc2.encode(&mut buf);
 
-        let d_buf = DecoderBuffer::new(&slice);
-        let (d_rpc, _) = AppendEntries::decode(d_buf).unwrap();
+        // Decode from ONLY the written bytes so the final buffer must be exactly empty.
+        let (written, _) = buf.split_mut();
+        let d_buf = DecoderBuffer::new(written);
+        let (d_rpc1, d_buf) = AppendEntries::decode(d_buf).unwrap();
+        let (d_rpc2, remaining) = AppendEntries::decode(d_buf).unwrap();
 
-        assert_eq!(rpc, d_rpc);
+        assert_eq!(rpc1, d_rpc1);
+        assert_eq!(rpc2, d_rpc2);
+        assert!(remaining.is_empty());
     }
 
     #[test]
     fn encode_decode_rpc_resp() {
-        let rpc = AppendEntriesResp {
+        let rpc1 = AppendEntriesResp {
             term: Term::from(2),
             success: true,
             echo_prev_log_term_idx: TermIdx::builder()
@@ -208,13 +249,27 @@ mod tests {
                 .with_idx(Idx::from(1)),
         };
 
-        let mut slice = vec![0; 30];
+        let rpc2 = AppendEntriesResp {
+            term: Term::from(5),
+            success: false,
+            echo_prev_log_term_idx: TermIdx::builder()
+                .with_term(Term::from(4))
+                .with_idx(Idx::from(3)),
+        };
+
+        let mut slice = vec![0; 60];
         let mut buf = EncoderBuffer::new(&mut slice);
-        rpc.encode(&mut buf);
+        rpc1.encode(&mut buf);
+        rpc2.encode(&mut buf);
 
-        let d_buf = DecoderBuffer::new(&slice);
-        let (d_rpc, _) = AppendEntriesResp::decode(d_buf).unwrap();
+        // Decode from ONLY the written bytes so the buffer must end exactly empty.
+        let (written, _) = buf.split_mut();
+        let d_buf = DecoderBuffer::new(written);
+        let (d_rpc1, d_buf) = AppendEntriesResp::decode(d_buf).unwrap();
+        let (d_rpc2, remaining) = AppendEntriesResp::decode(d_buf).unwrap();
 
-        assert_eq!(rpc, d_rpc);
+        assert_eq!(rpc1, d_rpc1);
+        assert_eq!(rpc2, d_rpc2);
+        assert!(remaining.is_empty());
     }
 }
