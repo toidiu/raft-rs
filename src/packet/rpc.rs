@@ -1,6 +1,8 @@
 use crate::{
     log::{Entry, Idx, Term, TermIdx},
-    packet::{AppendEntries, AppendEntriesResp, RequestVote, RequestVoteResp},
+    packet::{
+        AppendEntries, AppendEntriesResp, EntriesLenTypeEncoding, RequestVote, RequestVoteResp,
+    },
     server::ServerId,
 };
 use s2n_codec::{DecoderBuffer, DecoderBufferResult, DecoderError, DecoderValue, EncoderValue};
@@ -51,11 +53,13 @@ impl Rpc {
         term: Term,
         success: bool,
         echo_prev_log_term_idx: TermIdx,
+        entries_cnt: EntriesLenTypeEncoding,
     ) -> Rpc {
         Rpc::AppendEntryResp(AppendEntriesResp {
             term,
             success,
             echo_prev_log_term_idx,
+            entries_cnt,
         })
     }
 
@@ -217,6 +221,7 @@ mod tests {
             TermIdx::builder()
                 .with_term(Term::from(2))
                 .with_idx(Idx::from(1)),
+            2,
         );
 
         let mut slice = vec![0; 50];

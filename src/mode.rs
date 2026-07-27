@@ -282,7 +282,7 @@ mod tests {
 
         // expect Follower to send RespAppendEntries acknowledging the leader
         // construct RPC to compare
-        let expected_rpc = Rpc::new_append_entry_resp(current_term, true, TermIdx::initial());
+        let expected_rpc = Rpc::new_append_entry_resp(current_term, true, TermIdx::initial(), 0);
         assert_eq!(&expected_rpc, packet.rpc());
     }
 
@@ -328,7 +328,7 @@ mod tests {
         let packet = helper_inspect_one_sent_packet(&mut io);
 
         // expect Follower to send RespAppendEntries acknowledging the leader
-        let expected_rpc = Rpc::new_append_entry_resp(current_term, false, TermIdx::initial());
+        let expected_rpc = Rpc::new_append_entry_resp(current_term, false, TermIdx::initial(), 0);
         assert_eq!(&expected_rpc, packet.rpc());
     }
 }

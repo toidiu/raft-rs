@@ -110,7 +110,8 @@ impl Candidate {
             //% if the leader's current term is < the candidate's
             //% - reject the RPC and continue in the candidate state
             let term = raft_state.current_term;
-            let rpc = Rpc::new_append_entry_resp(term, false, *prev_log_term_idx);
+            // A rejected RPC stored no entries.
+            let rpc = Rpc::new_append_entry_resp(term, false, *prev_log_term_idx, 0);
             let leader_io = io_egress;
             leader_io.send_packet(peer_id, rpc);
             (ModeTransition::Noop, None)

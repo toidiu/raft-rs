@@ -1,7 +1,7 @@
 use crate::{
     log::MatchOutcome,
     mode::ModeTransition,
-    packet::{AppendEntries, Rpc},
+    packet::{append_entries::EntriesLenTypeEncoding, AppendEntries, Rpc},
     queue::ServerEgress,
     raft_state::RaftState,
     server::PeerId,
@@ -111,8 +111,16 @@ impl Follower {
             }
         }
 
+        // The entries are stored all or nothing, so a success accounts for every entry sent.
+        let entries_cnt = if response {
+            entries.len() as EntriesLenTypeEncoding
+        } else {
+            0
+        };
+
         let leader_io = io_egress;
-        let rpc = Rpc::new_append_entry_resp(current_term, response, *prev_log_term_idx);
+        let rpc =
+            Rpc::new_append_entry_resp(current_term, response, *prev_log_term_idx, entries_cnt);
         leader_io.send_packet(peer_id, rpc);
     }
 }
@@ -161,7 +169,8 @@ mod tests {
             follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
             let packet = helper_inspect_one_sent_packet(&mut io);
-            let expected_rpc = Rpc::new_append_entry_resp(current_term, true, TermIdx::initial());
+            let expected_rpc =
+                Rpc::new_append_entry_resp(current_term, true, TermIdx::initial(), 0);
             assert_eq!(&expected_rpc, packet.rpc());
             assert!(state.log.is_empty());
         }
@@ -181,7 +190,8 @@ mod tests {
             follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
             let packet = helper_inspect_one_sent_packet(&mut io);
-            let expected_rpc = Rpc::new_append_entry_resp(current_term, false, TermIdx::initial());
+            let expected_rpc =
+                Rpc::new_append_entry_resp(current_term, false, TermIdx::initial(), 0);
             assert_eq!(&expected_rpc, packet.rpc());
             assert!(state.log.is_empty());
         }
@@ -209,6 +219,7 @@ mod tests {
                 TermIdx::builder()
                     .with_term(Term::from(1))
                     .with_idx(Idx::from(1)),
+                0,
             );
             assert_eq!(&expected_rpc, packet.rpc());
             assert!(state.log.is_empty());
@@ -233,7 +244,8 @@ mod tests {
             follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
             let packet = helper_inspect_one_sent_packet(&mut io);
-            let expected_rpc = Rpc::new_append_entry_resp(current_term, true, TermIdx::initial());
+            let expected_rpc =
+                Rpc::new_append_entry_resp(current_term, true, TermIdx::initial(), 2);
             assert_eq!(&expected_rpc, packet.rpc());
 
             // expect received entries to be in the log
@@ -277,7 +289,7 @@ mod tests {
         follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
         let packet = helper_inspect_one_sent_packet(&mut io);
-        let expected_rpc = Rpc::new_append_entry_resp(current_term, true, TermIdx::initial());
+        let expected_rpc = Rpc::new_append_entry_resp(current_term, true, TermIdx::initial(), 1);
         assert_eq!(&expected_rpc, packet.rpc());
 
         // The conflicting entry at idx 1 is replaced and everything following it is dropped.
@@ -314,7 +326,7 @@ mod tests {
         follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
 
         let packet = helper_inspect_one_sent_packet(&mut io);
-        let expected_rpc = Rpc::new_append_entry_resp(current_term, true, TermIdx::initial());
+        let expected_rpc = Rpc::new_append_entry_resp(current_term, true, TermIdx::initial(), 1);
         assert_eq!(&expected_rpc, packet.rpc());
 
         // commit_idx is clamped to the last entry the Follower actually holds. Committing idx 5
