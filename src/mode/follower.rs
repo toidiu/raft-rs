@@ -105,10 +105,6 @@ impl Follower {
             //% Compliance:
             //% If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of
             //% last new entry)
-            assert!(
-                leader_commit_idx <= &raft_state.log.last_idx(),
-                "leader_commit_idx should not be greater than the number of enties in the log"
-            );
             if leader_commit_idx > raft_state.commit_idx() {
                 let min_idx = min(*leader_commit_idx, raft_state.log.last_idx());
                 raft_state.set_commit_idx(min_idx, peer_id, CurrentMode::Follower);
@@ -287,5 +283,43 @@ mod tests {
         // The conflicting entry at idx 1 is replaced and everything following it is dropped.
         assert_eq!(state.log.test_len(), 1);
         assert_eq!(state.log.test_get_unchecked(1), Entry::new(current_term, 9));
+    }
+
+    // A Leader's commit_idx can outrun a lagging Follower's log, so the Follower clamps it to its
+    // own last_idx instead of trusting it.
+    #[tokio::test]
+    async fn test_recv_append_entries_leader_commit_idx_past_end_of_log() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let leader_id = ServerId::new([2; 16]);
+        let peer_id = PeerId::new([10; 16]);
+        let mut state = RaftState::new(timeout);
+        let current_term = Term::from(2);
+        state.current_term = current_term;
+
+        let mut follower = Follower;
+        let mut io = MockIo::new(leader_id);
+
+        // The Leader has committed through idx 5 but only sends the first entry, so the Follower
+        // ends this RPC with a single entry in its log.
+        let leader_commit_idx = Idx::from(5);
+        let recv_rpc = Rpc::new_append_entry(
+            current_term,
+            leader_id,
+            TermIdx::initial(),
+            leader_commit_idx,
+            vec![Entry::new(current_term, 3)],
+        );
+        follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
+
+        let packet = helper_inspect_one_sent_packet(&mut io);
+        let expected_rpc = Rpc::new_append_entry_resp(current_term, true, TermIdx::initial());
+        assert_eq!(&expected_rpc, packet.rpc());
+
+        // commit_idx is clamped to the last entry the Follower actually holds. Committing idx 5
+        // would mark entries it has never seen as committed.
+        assert_eq!(state.log.test_len(), 1);
+        assert_eq!(state.commit_idx(), &Idx::from(1));
     }
 }
