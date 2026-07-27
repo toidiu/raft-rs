@@ -5,9 +5,9 @@ type Command = u8;
 
 //% Compliance:
 //% each log entry stores
-//% 	- state machine command
-//% 	- term number
-//% 	- log index: integer
+//% - state machine command
+//% - term number
+//% - log index: integer
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
     pub term: Term,
