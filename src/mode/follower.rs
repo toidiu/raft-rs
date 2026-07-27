@@ -249,4 +249,43 @@ mod tests {
             assert_eq!(state.commit_idx(), &leader_commit_idx);
         }
     }
+
+    // A prev_log_term_idx of TermIdx::initial is used to repair the Follower logs.
+    #[tokio::test]
+    async fn test_recv_append_entries_initial_prev_with_non_empty_log() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+
+        let leader_id = ServerId::new([2; 16]);
+        let peer_id = PeerId::new([10; 16]);
+        let mut state = RaftState::new(timeout);
+        let old_term = Term::from(1);
+        let current_term = Term::from(2);
+        state.current_term = current_term;
+
+        // The Follower holds two entries from an earlier term, which the Leader will overwrite.
+        state
+            .log
+            .push(vec![Entry::new(old_term, 3), Entry::new(old_term, 6)]);
+
+        let mut follower = Follower;
+        let mut io = MockIo::new(leader_id);
+
+        let recv_rpc = Rpc::new_append_entry(
+            current_term,
+            leader_id,
+            TermIdx::initial(),
+            Idx::initial(),
+            vec![Entry::new(current_term, 9)],
+        );
+        follower.on_recv(peer_id, &recv_rpc, &mut state, &mut io);
+
+        let packet = helper_inspect_one_sent_packet(&mut io);
+        let expected_rpc = Rpc::new_append_entry_resp(current_term, true, TermIdx::initial());
+        assert_eq!(&expected_rpc, packet.rpc());
+
+        // The conflicting entry at idx 1 is replaced and everything following it is dropped.
+        assert_eq!(state.log.test_len(), 1);
+        assert_eq!(state.log.test_get_unchecked(1), Entry::new(current_term, 9));
+    }
 }
