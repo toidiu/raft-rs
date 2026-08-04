@@ -196,7 +196,7 @@ mod tests {
         let mut state = RaftState::new(timeout);
         let current_term = Term::initial();
         state.current_term = current_term;
-        assert!(state.log.is_empty());
+        assert!(state.log.test_is_empty());
 
         let mut io = MockIo::new(candidate_id);
         let rpc_term_idx_initial = TermIdx::initial();
@@ -248,7 +248,7 @@ mod tests {
         // local Log: [ [term: 1] [term: 2] ]
         state
             .log
-            .push(vec![Entry::new(term_prev, 3), Entry::new(term_current, 6)]);
+            .test_append_entries(vec![Entry::new(term_prev, 3), Entry::new(term_current, 6)]);
 
         let mut io = MockIo::new(candidate_id);
 

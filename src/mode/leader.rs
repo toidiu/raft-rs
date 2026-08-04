@@ -194,6 +194,9 @@ impl Leader {
         }
     }
 
+    /// Update the commit_idx if a new AppendEntriesResp means that an Entry is now replicated on a
+    /// majority of servers.
+    ///
     //% Compliance:
     //% If there exists an N such that N > commitIndex, a majority of matchIndex[i] ≥ N,
     //% and log[N].term == currentTerm: set commitIndex = N (§5.3, §5.4).
@@ -208,7 +211,7 @@ impl Leader {
         //% N > commitIndex
         let larger_than_current_commit_idx = &newly_inserted_match_idx > raft_state.commit_idx();
 
-        let new_idx_larger_than_majority = {
+        let reached_quorum = {
             let larger_match_idx_count = self
                 .match_idx
                 .iter()
@@ -234,7 +237,7 @@ impl Leader {
             .map(|term| term.eq(&raft_state.current_term))
             .is_some_and(|matches| matches);
 
-        if larger_than_current_commit_idx && new_idx_larger_than_majority && matches_current_term {
+        if larger_than_current_commit_idx && reached_quorum && matches_current_term {
             //% Compliance:
             //% set commitIndex = N (§5.3, §5.4).
             raft_state.set_commit_idx(newly_inserted_match_idx, peer_id, CurrentMode::Leader);
@@ -859,7 +862,7 @@ mod tests {
     // dropped to the value that response was sent under.
     //
     // Replication is append-only: an entry known to be stored stays stored. Letting match_idx fall
-    // would drop an entry back below the quorum that update_commit_idx counts.
+    // would drop an entry back below the quorum that `update_commit_idx` counts.
     #[tokio::test]
     async fn on_recv_append_entry_resp_match_idx_never_moves_backward() {
         let prng = Pcg32::from_seed([0; 16]);

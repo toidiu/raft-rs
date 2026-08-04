@@ -172,7 +172,7 @@ mod tests {
             let expected_rpc =
                 Rpc::new_append_entry_resp(current_term, true, TermIdx::initial(), 0);
             assert_eq!(&expected_rpc, packet.rpc());
-            assert!(state.log.is_empty());
+            assert!(state.log.test_is_empty());
         }
 
         // Expect response false
@@ -193,7 +193,7 @@ mod tests {
             let expected_rpc =
                 Rpc::new_append_entry_resp(current_term, false, TermIdx::initial(), 0);
             assert_eq!(&expected_rpc, packet.rpc());
-            assert!(state.log.is_empty());
+            assert!(state.log.test_is_empty());
         }
 
         // Expect response false
@@ -222,7 +222,7 @@ mod tests {
                 0,
             );
             assert_eq!(&expected_rpc, packet.rpc());
-            assert!(state.log.is_empty());
+            assert!(state.log.test_is_empty());
         }
 
         // Expect response true
@@ -230,7 +230,7 @@ mod tests {
         //  - update commit_idx
         let leader_commit_idx = Idx::from(1);
         {
-            assert!(state.log.is_empty());
+            assert!(state.log.test_is_empty());
             assert_eq!(state.commit_idx(), &Idx::initial());
 
             // construct RPC to recv
@@ -274,7 +274,7 @@ mod tests {
         // The Follower holds two entries from an earlier term, which the Leader will overwrite.
         state
             .log
-            .push(vec![Entry::new(old_term, 3), Entry::new(old_term, 6)]);
+            .test_append_entries(vec![Entry::new(old_term, 3), Entry::new(old_term, 6)]);
 
         let mut follower = Follower;
         let mut io = MockIo::new(leader_id);

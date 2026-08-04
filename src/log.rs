@@ -34,12 +34,6 @@ impl Log {
             .unwrap_or_default()
     }
 
-    pub fn push(&mut self, entries: Vec<Entry>) {
-        for entry in entries.into_iter() {
-            self.entries.push(entry);
-        }
-    }
-
     // Return the Idx of the last entry in the Log.
     pub(crate) fn last_idx(&self) -> Idx {
         if self.entries.is_empty() {
@@ -158,7 +152,14 @@ impl Log {
     }
 
     #[cfg(test)]
-    pub fn is_empty(&self) -> bool {
+    pub fn test_append_entries(&mut self, entries: Vec<Entry>) {
+        for entry in entries.into_iter() {
+            self.entries.push(entry);
+        }
+    }
+
+    #[cfg(test)]
+    pub fn test_is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
@@ -202,7 +203,7 @@ mod tests {
         let e1 = Entry::new(t1, 1);
         let e2 = Entry::new(t2, 2);
         let e3 = Entry::new(t2, 3);
-        log.push(vec![e1.clone(), e2.clone(), e3.clone()]);
+        log.test_append_entries(vec![e1.clone(), e2.clone(), e3.clone()]);
 
         // Slicing from idx 1 returns the whole log.
         let ti_1 = TermIdx::builder().with_term(t1).with_idx(Idx::from(1));
@@ -235,7 +236,7 @@ mod tests {
     #[test]
     fn get_entries_past_end_of_log() {
         let mut log = Log::new();
-        log.push(vec![Entry::new(Term::from(1), 1)]);
+        log.test_append_entries(vec![Entry::new(Term::from(1), 1)]);
 
         // last_idx is 1, so idx 3 is beyond the one-past-the-end bound.
         log.get_entries(&Idx::from(3));
@@ -252,7 +253,7 @@ mod tests {
         // Empty log
         assert!(log.find_entry_at(&Idx::from(1)).is_none());
 
-        log.push(vec![entry.clone()]);
+        log.test_append_entries(vec![entry.clone()]);
 
         // Find Idx::initial
         assert!(log.find_entry_at(&Idx::initial()).is_none());
@@ -274,7 +275,7 @@ mod tests {
         ));
 
         // Non-empty log
-        log.push(vec![entry.clone()]);
+        log.test_append_entries(vec![entry.clone()]);
         assert!(matches!(
             log.entry_matches(TermIdx::initial()),
             MatchOutcome::Match
@@ -320,7 +321,7 @@ mod tests {
             term: expected_term,
             command: 8,
         };
-        log.push(vec![entry]);
+        log.test_append_entries(vec![entry]);
 
         let term = log.term_at_idx(&Idx::from(1)).unwrap();
         assert_eq!(expected_term, term);
@@ -352,7 +353,7 @@ mod tests {
     #[test]
     pub fn test_match_leaders_log() {
         let mut log = Log::new();
-        log.push(vec![
+        log.test_append_entries(vec![
             // Idx 1
             Entry {
                 term: Term::from(2),
@@ -418,8 +419,8 @@ mod tests {
         assert!(log.is_candidate_log_up_to_date(&ti_initial));
 
         // log: [ [t:1] [t:2] ]
-        log.push(vec![Entry::new(t1, 8)]);
-        log.push(vec![Entry::new(t2, 8)]);
+        log.test_append_entries(vec![Entry::new(t1, 8)]);
+        log.test_append_entries(vec![Entry::new(t2, 8)]);
         assert_eq!(log.entries.len(), 2);
 
         // Initial NOT up-to-date
