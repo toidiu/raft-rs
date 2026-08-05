@@ -28,13 +28,14 @@ pub struct RaftState {
     commit_idx: Idx,
 
     //% Compliance:
-    //% lastApplied: index of highest log entry applied to state machine (initialized to 0,
-    //% increases monotonically)
+    //% lastApplied: index of highest log entry 'committed'/'applied' to state machine (initialized
+    //% to 0, % increases monotonically)
     last_applied: Idx,
 
-    pub election_timer: Timeout,
-
+    // The permanent storage which stored Entries replicated on majority of Raft servers.
     state_machine: StateMachine,
+
+    pub election_timer: Timeout,
 }
 
 impl RaftState {
@@ -67,14 +68,17 @@ impl RaftState {
             "commitIdx is monotonically increasing"
         );
         if idx > self.commit_idx {
+            // TODO: (replace with metrics)
+            // Detect if we are actually every sending more than 1 Entry.
+            // Sending 1 Entry per RPC was meant to be a simplification for the POC.
             assert!(
                 idx == self.commit_idx + 1,
-                "we expect commitIdx should increase by 1 so each entry is captured in the log"
+                "Comitting more than 1 entry!! its not wrong but understand this path."
             );
         }
-        self.commit_idx = idx;
 
-        while self.commit_idx() > self.last_applied() {
+        // Commit the entries to the StateMachine.
+        while &idx > self.last_applied() {
             //% Compliance:
             //% If commitIndex > lastApplied: increment lastApplied
             self.last_applied += 1;
@@ -91,7 +95,10 @@ impl RaftState {
                 peer_id,
                 mode,
             };
-            self.state_machine.apply(commit_entry);
+
+            // Commit the entry and update commit_idx.
+            self.state_machine.commit_entry(commit_entry);
+            self.commit_idx = *self.last_applied();
         }
     }
 
@@ -144,8 +151,8 @@ mod tests {
 
         // Insert 2 entries for Term 1
         let t1 = Term::from(1);
-        state.log.push(vec![Entry::new(t1, 8)]);
-        state.log.push(vec![Entry::new(t1, 8)]);
+        state.log.test_append_entries(vec![Entry::new(t1, 8)]);
+        state.log.test_append_entries(vec![Entry::new(t1, 8)]);
         // on_start_election should increment the currentTerm and return the last log TermIdx
         let last_log_term_idx = state.on_start_election();
         assert_eq!(
@@ -156,8 +163,8 @@ mod tests {
 
         // Insert 2 entries for Term 2
         let t2 = Term::from(2);
-        state.log.push(vec![Entry::new(t2, 8)]);
-        state.log.push(vec![Entry::new(t2, 8)]);
+        state.log.test_append_entries(vec![Entry::new(t2, 8)]);
+        state.log.test_append_entries(vec![Entry::new(t2, 8)]);
         // on_start_election should increment the currentTerm and return the last log TermIdx
         let last_log_term_idx = state.on_start_election();
         assert_eq!(
