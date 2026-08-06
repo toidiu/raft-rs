@@ -106,8 +106,8 @@ impl Follower {
             //% If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of
             //% last new entry)
             if leader_commit_idx > raft_state.commit_idx() {
-                let min_idx = min(*leader_commit_idx, raft_state.log.last_idx());
-                raft_state.set_commit_idx(min_idx, peer_id, CurrentMode::Follower);
+                let commit_idx = min(*leader_commit_idx, raft_state.log.last_idx());
+                raft_state.update_commit_idx(commit_idx, &[peer_id], CurrentMode::Follower);
             }
         }
 

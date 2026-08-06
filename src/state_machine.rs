@@ -47,7 +47,7 @@ pub struct CommitEntry {
     pub(crate) log_last_applied_idx: Idx,
 
     // The PeerId that initiated (on_recv) this commit.
-    pub(crate) peer_id: PeerId,
+    pub(crate) updated_peers: Vec<PeerId>,
 
     // The current mode when this Entry was comitted.
     pub(crate) mode: CurrentMode,

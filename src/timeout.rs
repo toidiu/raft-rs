@@ -14,6 +14,8 @@ use tokio::time::{sleep_until, Instant, Sleep};
 //% Election timeout is chosen randomly between 150-300ms
 const MIN_REARM_DURATION: u64 = 150;
 const MAX_REARM_DURATION: u64 = 300;
+
+// Pin the timeout to a single value to create deterministic tests.
 const TEST_REARM_DURATION: u64 = 200;
 
 /// A auto-rearming Timeout which can be used to make perpetual progress based on a timeout

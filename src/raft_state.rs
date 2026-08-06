@@ -62,23 +62,30 @@ impl RaftState {
         &self.commit_idx
     }
 
-    pub fn set_commit_idx(&mut self, idx: Idx, peer_id: PeerId, mode: CurrentMode) {
+    /// Commit Entries in the StateMachine up to the commit_up_to_idx. Use `last_log_term_idx` to
+    /// figure out the last idx that was committed.
+    pub fn update_commit_idx(
+        &mut self,
+        commit_up_to_idx: Idx,
+        updated_peers: &[PeerId],
+        mode: CurrentMode,
+    ) {
         assert!(
-            idx >= self.commit_idx,
+            commit_up_to_idx >= self.commit_idx,
             "commitIdx is monotonically increasing"
         );
-        if idx > self.commit_idx {
+        if commit_up_to_idx > self.commit_idx {
             // TODO: (replace with metrics)
             // Detect if we are actually every sending more than 1 Entry.
             // Sending 1 Entry per RPC was meant to be a simplification for the POC.
             assert!(
-                idx == self.commit_idx + 1,
+                commit_up_to_idx == self.commit_idx + 1,
                 "Comitting more than 1 entry!! its not wrong but understand this path."
             );
         }
 
         // Commit the entries to the StateMachine.
-        while &idx > self.last_applied() {
+        while &commit_up_to_idx > self.last_applied() {
             //% Compliance:
             //% If commitIndex > lastApplied: increment lastApplied
             self.last_applied += 1;
@@ -92,7 +99,7 @@ impl RaftState {
             let commit_entry = CommitEntry {
                 entry: entry_at_last_applied.clone(),
                 log_last_applied_idx: *self.last_applied(),
-                peer_id,
+                updated_peers: updated_peers.to_vec(),
                 mode,
             };
 

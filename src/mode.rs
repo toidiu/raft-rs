@@ -188,12 +188,16 @@ impl Mode {
         leader.on_leader(server_id, peer_list, raft_state, io_egress);
     }
 
-    fn quorum(peer_list: &[PeerId]) -> usize {
+    fn quorum(peer_list: &[PeerId]) -> Quorum {
         let peer_plus_self = peer_list.len() + 1;
         let half = peer_plus_self / 2;
-        half + 1
+        Quorum(half + 1)
     }
 }
+
+/// The number of servers to reach quorum.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct Quorum(usize);
 
 #[must_use]
 pub enum ModeTransition {
@@ -228,16 +232,16 @@ mod tests {
         let peer4_id = PeerId::new([4; 16]);
 
         let peer_list = vec![];
-        assert_eq!(Mode::quorum(&peer_list), 1);
+        assert_eq!(Mode::quorum(&peer_list).0, 1);
 
         let peer_list = vec![peer2_id];
-        assert_eq!(Mode::quorum(&peer_list), 2);
+        assert_eq!(Mode::quorum(&peer_list).0, 2);
 
         let peer_list = vec![peer2_id, peer3_id];
-        assert_eq!(Mode::quorum(&peer_list), 2);
+        assert_eq!(Mode::quorum(&peer_list).0, 2);
 
         let peer_list = vec![peer2_id, peer3_id, peer4_id];
-        assert_eq!(Mode::quorum(&peer_list), 3);
+        assert_eq!(Mode::quorum(&peer_list).0, 3);
     }
 
     #[tokio::test]

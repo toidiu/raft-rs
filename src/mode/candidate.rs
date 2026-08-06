@@ -1,5 +1,5 @@
 use crate::{
-    mode::{cast_unsafe, ElectionResult, Mode, ModeTransition},
+    mode::{cast_unsafe, ElectionResult, Mode, ModeTransition, Quorum},
     packet::{AppendEntries, RequestVoteResp, Rpc},
     queue::ServerEgress,
     raft_state::RaftState,
@@ -189,7 +189,7 @@ impl Candidate {
             "vote_for_self should not be called with a peer_id"
         );
         self.votes_received.insert(server_id.into_id());
-        self.check_election_result(peer_list)
+        self.check_election_result(Mode::quorum(&peer_list))
     }
 
     fn on_vote_received(&mut self, peer_id: &PeerId, peer_list: &[PeerId]) -> ElectionResult {
@@ -200,11 +200,11 @@ impl Candidate {
             "voter id should be a peer"
         );
         self.votes_received.insert(peer_id.into_id());
-        self.check_election_result(peer_list)
+        self.check_election_result(Mode::quorum(&peer_list))
     }
 
-    fn check_election_result(&mut self, peer_list: &[PeerId]) -> ElectionResult {
-        if self.votes_received.len() >= Mode::quorum(peer_list) {
+    fn check_election_result(&mut self, quorum: Quorum) -> ElectionResult {
+        if self.votes_received.len() >= quorum.0 {
             ElectionResult::Elected
         } else {
             ElectionResult::Pending
@@ -268,7 +268,7 @@ mod tests {
 
         let mut io = MockIo::new(server_id);
         let mut candidate = Candidate::default();
-        assert_eq!(Mode::quorum(&peer_list), 1);
+        assert_eq!(Mode::quorum(&peer_list), Quorum(1));
 
         // Elect self
         let transition = candidate.start_election(&server_id, &peer_list, &mut state, &mut io);
@@ -286,29 +286,29 @@ mod tests {
         let peer_list = vec![peer2_id, peer3_id];
 
         let mut candidate = Candidate::default();
-        assert_eq!(Mode::quorum(&peer_list), 2);
-        assert!(Mode::quorum(&peer_list) > candidate.votes_received.len());
+        assert_eq!(Mode::quorum(&peer_list), Quorum(2));
+        assert!(Mode::quorum(&peer_list) > Quorum(candidate.votes_received.len()));
 
         // Receive peer's vote
         assert!(matches!(
             candidate.on_vote_received(&peer2_id, &peer_list),
             ElectionResult::Pending
         ));
-        assert!(Mode::quorum(&peer_list) > candidate.votes_received.len());
+        assert!(Mode::quorum(&peer_list) > Quorum(candidate.votes_received.len()));
 
         // Don't count same vote
         assert!(matches!(
             candidate.on_vote_received(&peer2_id, &peer_list),
             ElectionResult::Pending
         ));
-        assert!(Mode::quorum(&peer_list) > candidate.votes_received.len());
+        assert!(Mode::quorum(&peer_list) > Quorum(candidate.votes_received.len()));
         //
         // Vote for self and reach quorum
         assert!(matches!(
             candidate.on_vote_for_self(&self_id, &peer_list),
             ElectionResult::Elected
         ));
-        assert_eq!(Mode::quorum(&peer_list), 2);
+        assert_eq!(Mode::quorum(&peer_list), Quorum(2));
     }
 
     #[tokio::test]
@@ -326,7 +326,7 @@ mod tests {
         state.current_term = term_current;
 
         let mut io = MockIo::new(server_id);
-        assert_eq!(Mode::quorum(&peer_list), 2);
+        assert_eq!(Mode::quorum(&peer_list), Quorum(2));
 
         // Initialize Candidate (votes for self)
         let mut candidate = Candidate::default();
@@ -379,7 +379,7 @@ mod tests {
         state.current_term = term_current;
 
         let mut io = MockIo::new(server_id);
-        assert_eq!(Mode::quorum(&peer_list), 3);
+        assert_eq!(Mode::quorum(&peer_list), Quorum(3));
 
         // Initialize Candidate (votes for self)
         let mut candidate = Candidate::default();

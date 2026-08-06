@@ -1,6 +1,6 @@
 use crate::{
     log::{Idx, TermIdx},
-    mode::Mode,
+    mode::{Mode, Quorum},
     packet::{AppendEntriesResp, Rpc},
     queue::ServerEgress,
     raft_state::RaftState,
@@ -84,6 +84,7 @@ impl Leader {
         self.broadcast_send_append_entries(server_id, peer_list, raft_state, io_egress);
     }
 
+    /// Send Append entry to all peer servers.
     fn broadcast_send_append_entries<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
@@ -188,7 +189,7 @@ impl Leader {
                     raft_state,
                     io_egress,
                 ) {
-                    self.update_commit_idx(check_match_idx, peer_list, raft_state, peer_id);
+                    self.update_commit_idx(check_match_idx, Mode::quorum(peer_list), raft_state);
                 }
             }
         }
@@ -202,17 +203,18 @@ impl Leader {
     //% and log[N].term == currentTerm: set commitIndex = N (§5.3, §5.4).
     fn update_commit_idx(
         &mut self,
-        newly_inserted_match_idx: Idx,
-        peer_list: &[PeerId],
+        newly_inserted_match_idx: UpdatedMatchIdx,
+        quorum: Quorum,
         raft_state: &mut RaftState,
-        peer_id: PeerId,
     ) {
+        let newly_inserted_match_idx = newly_inserted_match_idx.0;
+
         //% Compliance:
         //% N > commitIndex
         let larger_than_current_commit_idx = &newly_inserted_match_idx > raft_state.commit_idx();
 
-        let reached_quorum = {
-            let larger_match_idx_count = self
+        let (reached_quorum, updated_peers) = {
+            let updated_peers: Vec<PeerId> = self
                 .match_idx
                 .iter()
                 .filter(|(_peer_id, peer_match_idx)| {
@@ -220,13 +222,17 @@ impl Leader {
                     //% matchIndex[i] ≥ N
                     peer_match_idx >= &&newly_inserted_match_idx
                 })
-                .count();
+                .map(|(peer_id, _)| *peer_id)
+                .collect();
+
             //% Compliance:
             //% majority
             //
             // The Leader counts itself toward the quorum since it trivially has every entry in
             // its own log; match_idx only tracks peers, so add 1 for the Leader.
-            larger_match_idx_count + 1 >= Mode::quorum(peer_list)
+            let reached_quorum = updated_peers.len() + 1 >= quorum.0;
+
+            (reached_quorum, updated_peers)
         };
 
         //% Compliance:
@@ -240,16 +246,20 @@ impl Leader {
         if larger_than_current_commit_idx && reached_quorum && matches_current_term {
             //% Compliance:
             //% set commitIndex = N (§5.3, §5.4).
-            raft_state.set_commit_idx(newly_inserted_match_idx, peer_id, CurrentMode::Leader);
+            raft_state.update_commit_idx(
+                newly_inserted_match_idx,
+                &updated_peers,
+                CurrentMode::Leader,
+            );
         }
     }
 
-    // Returns the peer's updated match_idx, after processing AppendEntriesResp.
-    //
-    // Returns None when there is nothing to check:
-    // - the RPC failed
-    // - it was received out of order (the echoed prev didn't match next_idx - 1)
-    // - it succeeded with the peer holding nothing (still updates match_idx)
+    /// Returns the peer's updated match_idx, after processing AppendEntriesResp.
+    ///
+    /// Returns None when there is nothing to check:
+    /// - the RPC failed
+    /// - it was received out of order (the echoed prev didn't match next_idx - 1)
+    /// - it succeeded with the peer holding nothing (still updates match_idx)
     fn on_recv_append_entry_resp<E: ServerEgress>(
         &mut self,
         server_id: &ServerId,
@@ -257,7 +267,7 @@ impl Leader {
         append_entries_resp: &AppendEntriesResp,
         raft_state: &mut RaftState,
         io_egress: &mut E,
-    ) -> Option<Idx> {
+    ) -> Option<UpdatedMatchIdx> {
         let AppendEntriesResp {
             term: _,
             success,
@@ -320,7 +330,7 @@ impl Leader {
                 if peer_match_idx.is_initial() {
                     None
                 } else {
-                    Some(peer_match_idx)
+                    Some(UpdatedMatchIdx(peer_match_idx))
                 }
             } else {
                 //% Compliance:
@@ -345,6 +355,16 @@ impl Leader {
             // RPC was received out of order and didn't match the peer's next_idx.
             None
         }
+    }
+}
+
+#[must_use]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+struct UpdatedMatchIdx(Idx);
+
+impl From<Idx> for UpdatedMatchIdx {
+    fn from(value: Idx) -> Self {
+        UpdatedMatchIdx(value)
     }
 }
 
@@ -655,7 +675,7 @@ mod tests {
                 &mut io,
             );
             // match_idx: the peer holds through the echoed prev, and no entries were sent.
-            assert_eq!(idx.unwrap(), Idx::from(2));
+            assert_eq!(idx.unwrap(), Idx::from(2).into());
         }
 
         // RPC failure: use the same.. now outdated echo idx
@@ -823,7 +843,7 @@ mod tests {
             );
 
             // Both entries are now replicated, so the next one to send is idx 3.
-            assert_eq!(idx.unwrap(), Idx::from(2));
+            assert_eq!(idx.unwrap(), Idx::from(2).into());
             assert_eq!(leader.match_idx.get(&peer2_id).unwrap(), &Idx::from(2));
             assert_eq!(leader.next_idx.get(&peer2_id).unwrap(), &Idx::from(3));
         }
@@ -848,7 +868,7 @@ mod tests {
             );
 
             // Acking prev proves the peer holds idx 2. No entries were sent, so next_idx stays.
-            assert_eq!(idx.unwrap(), Idx::from(2));
+            assert_eq!(idx.unwrap(), Idx::from(2).into());
             assert_eq!(leader.match_idx.get(&peer3_id).unwrap(), &Idx::from(2));
             assert_eq!(leader.next_idx.get(&peer3_id).unwrap(), &Idx::from(3));
         }
@@ -910,7 +930,7 @@ mod tests {
         );
 
         // The Leader keeps the higher value it already knew.
-        assert_eq!(idx.unwrap(), Idx::from(2));
+        assert_eq!(idx.unwrap(), Idx::from(2).into());
         assert_eq!(leader.match_idx.get(&peer2_id).unwrap(), &Idx::from(2));
         assert_eq!(leader.next_idx.get(&peer2_id).unwrap(), &Idx::from(3));
     }
@@ -1032,7 +1052,7 @@ mod tests {
         // No peer has replicated idx 1: only the Leader has it (1 of 3) which is short of the
         // quorum of 2, so commit_idx does not advance.
         {
-            leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+            leader.update_commit_idx(Idx::from(1).into(), Mode::quorum(&peer_list), &mut state);
             assert_eq!(state.commit_idx(), &Idx::initial());
         }
 
@@ -1040,13 +1060,13 @@ mod tests {
         // commit_idx advances to 1. The Leader counts itself toward the quorum.
         {
             *leader.match_idx.get_mut(&peer2_id).unwrap() = Idx::from(1);
-            leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+            leader.update_commit_idx(Idx::from(1).into(), Mode::quorum(&peer_list), &mut state);
             assert_eq!(state.commit_idx(), &Idx::from(1));
         }
 
         // N is not greater than the current commit_idx: no change.
         {
-            leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+            leader.update_commit_idx(Idx::from(1).into(), Mode::quorum(&peer_list), &mut state);
             assert_eq!(state.commit_idx(), &Idx::from(1));
         }
     }
@@ -1076,7 +1096,7 @@ mod tests {
                 *leader.match_idx.get_mut(peer_id).unwrap() = Idx::from(1);
             }
 
-            leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+            leader.update_commit_idx(Idx::from(1).into(), Mode::quorum(&peer_list), &mut state);
 
             let expected = if expect_commit {
                 Idx::from(1)
@@ -1118,7 +1138,7 @@ mod tests {
         // Leader must NOT advance commit_idx.
         *leader.match_idx.get_mut(&peer2_id).unwrap() = Idx::from(1);
         *leader.match_idx.get_mut(&peer3_id).unwrap() = Idx::from(1);
-        leader.update_commit_idx(Idx::from(1), &peer_list, &mut state, peer2_id);
+        leader.update_commit_idx(Idx::from(1).into(), Mode::quorum(&peer_list), &mut state);
         assert_eq!(state.commit_idx(), &Idx::initial());
     }
 }
