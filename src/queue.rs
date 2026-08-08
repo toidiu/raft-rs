@@ -12,11 +12,7 @@ mod server_ingress;
 #[cfg(test)]
 pub mod testing;
 
-// This is only used in tests currently but will be used for the networking task
-#[allow(unused_imports)]
-pub use network::NetIngress;
-
-pub use network::{NetEgress, NetworkQueueImpl};
+pub use network::{NetEgress, NetIngress, NetworkQueueImpl};
 pub use server_egress::{ServerEgress, ServerEgressImpl};
 pub use server_ingress::{ServerIngress, ServerIngressImpl};
 
