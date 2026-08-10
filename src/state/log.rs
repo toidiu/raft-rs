@@ -1,12 +1,11 @@
-pub use entry::Entry;
+use crate::state::entry::Entry;
 pub use idx::Idx;
 use std::cmp::Ordering;
 pub use term::Term;
 pub use term_idx::TermIdx;
 
-mod entry;
 mod idx;
-mod term;
+pub(super) mod term;
 mod term_idx;
 
 #[derive(Debug)]

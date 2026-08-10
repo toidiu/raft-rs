@@ -1,7 +1,9 @@
 use crate::{
-    log::{Idx, Log, Term, TermIdx},
     server::{Id, PeerId, ServerId},
-    state_machine::{CommitEntry, CurrentMode, StateMachine},
+    state::{
+        log::{Idx, Log, Term, TermIdx},
+        state_machine::{CommitEntry, CurrentMode, StateMachine},
+    },
     timeout::Timeout,
 };
 
@@ -139,8 +141,10 @@ impl RaftState {
 #[cfg(test)]
 mod tests {
     use crate::{
-        log::Entry,
-        raft_state::{Idx, RaftState, Term, TermIdx},
+        state::{
+            entry::Entry,
+            raft_state::{Idx, RaftState, Term, TermIdx},
+        },
         timeout::Timeout,
     };
     use rand::SeedableRng;

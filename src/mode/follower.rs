@@ -1,11 +1,9 @@
 use crate::{
-    log::MatchOutcome,
     mode::ModeTransition,
     packet::{append_entries::EntriesLenTypeEncoding, AppendEntries, Rpc},
     queue::ServerEgress,
-    raft_state::RaftState,
     server::PeerId,
-    state_machine::CurrentMode,
+    state::{log::MatchOutcome, raft_state::RaftState, state_machine::CurrentMode},
 };
 use std::cmp::min;
 
@@ -129,10 +127,13 @@ impl Follower {
 mod tests {
     use super::*;
     use crate::{
-        log::{Entry, Idx, Term, TermIdx},
         queue::testing::{helper_inspect_one_sent_packet, MockIo},
-        raft_state::RaftState,
         server::ServerId,
+        state::{
+            entry::Entry,
+            log::{Idx, Term, TermIdx},
+            raft_state::RaftState,
+        },
         timeout::Timeout,
     };
     use rand::SeedableRng;

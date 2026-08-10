@@ -1,9 +1,11 @@
 use crate::{
-    log::{Term, TermIdx},
     packet::Rpc,
     queue::ServerEgress,
-    raft_state::RaftState,
     server::{Id, PeerId},
+    state::{
+        log::{Term, TermIdx},
+        raft_state::RaftState,
+    },
 };
 use s2n_codec::{DecoderValue, EncoderValue};
 
@@ -138,11 +140,14 @@ impl EncoderValue for RequestVoteResp {
 mod tests {
     use super::*;
     use crate::{
-        log::{Entry, Idx, Term, TermIdx},
         macros::cast_unsafe,
         queue::testing::{helper_inspect_one_sent_packet, MockIo},
-        raft_state::RaftState,
         server::{PeerId, ServerId},
+        state::{
+            entry::Entry,
+            log::{Idx, Term, TermIdx},
+            raft_state::RaftState,
+        },
         timeout::Timeout,
     };
     use rand::SeedableRng;

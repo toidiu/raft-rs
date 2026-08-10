@@ -1,6 +1,9 @@
 use crate::{
-    log::{Entry, Idx, Term, TermIdx},
     server::Id,
+    state::{
+        entry::Entry,
+        log::{Idx, Term, TermIdx},
+    },
 };
 use s2n_codec::{DecoderValue, EncoderValue};
 
@@ -160,7 +163,7 @@ impl EncoderValue for AppendEntriesResp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{log::Idx, macros::cast_unsafe, packet::Rpc, server::ServerId};
+    use crate::{macros::cast_unsafe, packet::Rpc, server::ServerId, state::log::Idx};
     use s2n_codec::{DecoderBuffer, EncoderBuffer};
 
     // A Raft heartbeat doesn't have entries

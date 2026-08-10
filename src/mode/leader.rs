@@ -1,11 +1,13 @@
 use crate::{
-    log::{Idx, TermIdx},
     mode::{Mode, Quorum},
     packet::{AppendEntriesResp, Rpc},
     queue::ServerEgress,
-    raft_state::RaftState,
     server::{PeerId, ServerId},
-    state_machine::CurrentMode,
+    state::{
+        log::{Idx, TermIdx},
+        raft_state::RaftState,
+        state_machine::CurrentMode,
+    },
 };
 use std::{
     cmp::{max, min},
@@ -372,10 +374,13 @@ impl From<Idx> for UpdatedMatchIdx {
 mod tests {
     use super::*;
     use crate::{
-        log::{MatchOutcome, Term},
         queue::testing::{helper_inspect_next_sent_packet, MockIo},
-        raft_state::RaftState,
         server::{PeerId, ServerId},
+        state::{
+            entry::Entry,
+            log::{MatchOutcome, Term},
+            raft_state::RaftState,
+        },
         timeout::Timeout,
     };
     use rand::SeedableRng;
@@ -433,7 +438,7 @@ mod tests {
 
         // Insert two entries into log
         for i in 1..=2 {
-            let entry = crate::log::Entry {
+            let entry = Entry {
                 term: current_term,
                 command: i,
             };
@@ -530,7 +535,7 @@ mod tests {
 
         // Insert two entries into log
         for i in 1..=2 {
-            let entry = crate::log::Entry {
+            let entry = Entry {
                 term: current_term,
                 command: i,
             };
@@ -577,10 +582,7 @@ mod tests {
         // the whole log is shipped.
         let expected_peer2 = (
             TermIdx::initial(),
-            vec![
-                crate::log::Entry::new(current_term, 1),
-                crate::log::Entry::new(current_term, 2),
-            ],
+            vec![Entry::new(current_term, 1), Entry::new(current_term, 2)],
         );
         // peer3 (next_idx == 3): prev is the last entry in the log and nothing follows it, so this
         // is a bare heartbeat.
@@ -618,7 +620,7 @@ mod tests {
 
         // Mock sending two AppendEntries (insert two entries into log)
         for i in 1..=2 {
-            let entry = crate::log::Entry {
+            let entry = Entry {
                 term: current_term,
                 command: i,
             };
@@ -725,7 +727,7 @@ mod tests {
 
         for i in 1..=2 {
             let outcome = state.log.update_to_match_leaders_log(
-                crate::log::Entry {
+                Entry {
                     term: current_term,
                     command: i,
                 },
@@ -812,7 +814,7 @@ mod tests {
 
         for i in 1..=2 {
             let outcome = state.log.update_to_match_leaders_log(
-                crate::log::Entry {
+                Entry {
                     term: current_term,
                     command: i,
                 },
@@ -897,7 +899,7 @@ mod tests {
 
         for i in 1..=2 {
             let outcome = state.log.update_to_match_leaders_log(
-                crate::log::Entry {
+                Entry {
                     term: current_term,
                     command: i,
                 },
@@ -1038,7 +1040,7 @@ mod tests {
 
         // 3-node cluster (2 peers + self) => quorum of 2.
         // Insert one entry at the current term.
-        let entry = crate::log::Entry {
+        let entry = Entry {
             term: current_term,
             command: 1,
         };
@@ -1085,7 +1087,7 @@ mod tests {
         // correct Raft outcome once the Leader is counted (leader + peers_at_n >= quorum).
         for (peers_at_n, expect_commit) in [(0, false), (1, true)] {
             let mut state = RaftState::new(timeout.clone());
-            let entry = crate::log::Entry {
+            let entry = Entry {
                 term: state.current_term,
                 command: 1,
             };
@@ -1124,7 +1126,7 @@ mod tests {
 
         // Insert an entry from an older term, then advance the current term.
         let old_term = state.current_term;
-        let entry = crate::log::Entry {
+        let entry = Entry {
             term: old_term,
             command: 1,
         };

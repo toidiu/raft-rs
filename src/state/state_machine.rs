@@ -1,6 +1,6 @@
 use crate::{
-    log::{Entry, Idx},
     server::PeerId,
+    state::{entry::Entry, log::Idx},
 };
 
 /// Entries/data that a majority of Raft servers agree on. This is permanent storage which can be

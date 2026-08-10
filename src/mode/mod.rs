@@ -35,8 +35,8 @@ use crate::{
     mode::{candidate::Candidate, follower::Follower, leader::Leader},
     packet::Rpc,
     queue::ServerEgress,
-    raft_state::RaftState,
     server::{PeerId, ServerId},
+    state::raft_state::RaftState,
 };
 
 mod candidate;
@@ -217,9 +217,9 @@ pub enum ElectionResult {
 mod tests {
     use super::*;
     use crate::{
-        log::{Idx, Term, TermIdx},
         queue::testing::{helper_inspect_one_sent_packet, MockIo},
         server::PeerId,
+        state::log::{Idx, Term, TermIdx},
         timeout::Timeout,
     };
     use rand::SeedableRng;

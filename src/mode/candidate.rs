@@ -2,8 +2,8 @@ use crate::{
     mode::{cast_unsafe, ElectionResult, Mode, ModeTransition, Quorum},
     packet::{AppendEntries, RequestVoteResp, Rpc},
     queue::ServerEgress,
-    raft_state::RaftState,
     server::{Id, PeerId, ServerId},
+    state::raft_state::RaftState,
 };
 use std::collections::HashSet;
 
@@ -189,7 +189,7 @@ impl Candidate {
             "vote_for_self should not be called with a peer_id"
         );
         self.votes_received.insert(server_id.into_id());
-        self.check_election_result(Mode::quorum(&peer_list))
+        self.check_election_result(Mode::quorum(peer_list))
     }
 
     fn on_vote_received(&mut self, peer_id: &PeerId, peer_list: &[PeerId]) -> ElectionResult {
@@ -200,7 +200,7 @@ impl Candidate {
             "voter id should be a peer"
         );
         self.votes_received.insert(peer_id.into_id());
-        self.check_election_result(Mode::quorum(&peer_list))
+        self.check_election_result(Mode::quorum(peer_list))
     }
 
     fn check_election_result(&mut self, quorum: Quorum) -> ElectionResult {
@@ -216,10 +216,12 @@ impl Candidate {
 mod tests {
     use super::*;
     use crate::{
-        log::{Term, TermIdx},
         queue::testing::{helper_inspect_next_sent_packet, MockIo},
-        raft_state::RaftState,
         server::PeerId,
+        state::{
+            log::{Term, TermIdx},
+            raft_state::RaftState,
+        },
         timeout::Timeout,
     };
     use rand::SeedableRng;
