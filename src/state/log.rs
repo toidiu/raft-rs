@@ -13,6 +13,12 @@ pub struct Log {
     entries: Vec<Entry>,
 }
 
+impl Default for Log {
+    fn default() -> Self {
+        Log::new()
+    }
+}
+
 impl Log {
     pub fn new() -> Self {
         Log { entries: vec![] }
