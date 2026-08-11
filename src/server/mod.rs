@@ -1,7 +1,7 @@
 use crate::{
     mode::Mode,
     queue::{BufferIo, NetworkQueueImpl, ServerEgressImpl, ServerIngress, ServerIngressImpl},
-    state::raft_state::RaftState,
+    state::{entry::Command, log::Idx, raft_state::RaftState},
     timeout::Timeout,
 };
 use pin_project_lite::pin_project;
@@ -58,6 +58,32 @@ impl Server {
         };
 
         (server, network_queue)
+    }
+
+    /// Submit a command from a client.
+    ///
+    /// Only a Leader can accept one. A Follower redirects to the Leader it last heard from, and a
+    /// Candidate has no Leader to point at.
+    pub fn on_client_request(&mut self, command: Command) -> ClientResponse {
+        match &mut self.mode {
+            Mode::Leader(leader) => {
+                let idx = leader.on_client_request(
+                    &self.server_id,
+                    &self.peer_list,
+                    command,
+                    &mut self.state,
+                    &mut self.io_egress,
+                );
+                ClientResponse::Accepted(idx)
+            }
+            Mode::Follower(follower) => ClientResponse::Redirect(follower.current_leader()),
+            Mode::Candidate(_) => ClientResponse::NoLeader,
+        }
+    }
+
+    /// The lastApplied Idx of every Entry applied to the StateMachine, in apply order.
+    pub fn query_state_machine(&self) -> Vec<Idx> {
+        self.state.applied_entries()
     }
 
     /// Polls the recv and timeout future to see if progress can be made.
@@ -121,6 +147,20 @@ impl Server {
             }
         }
     }
+}
+
+/// The outcome of submitting a command to a Server.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ClientResponse {
+    // The command was appended to the Leader's log at this Idx. It is committed once
+    // `last_applied >= idx`.
+    Accepted(Idx),
+
+    // Not the Leader. Retry against this peer, if the Follower knows of one.
+    Redirect(Option<PeerId>),
+
+    // No Leader right now (an election is in flight).
+    NoLeader,
 }
 
 pin_project! {
