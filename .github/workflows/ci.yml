@@ -69,3 +69,19 @@ jobs:
         run: |
           cargo test
 
+  sim:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rust toolchain
+        id: toolchain
+        run: |
+          rustup toolchain install stable
+          rustup override set stable
+
+      - name: Run simulation
+        run: |
+          cargo test -p sim
+

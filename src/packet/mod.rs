@@ -65,6 +65,7 @@ impl EncoderValue for Packet {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Header {
+    // FIXME: add len to header so its easier to route packets without decoding them.
     from: Id,
     to: Id,
 }

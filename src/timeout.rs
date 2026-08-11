@@ -52,7 +52,7 @@ pub struct Timeout {
 
 impl Timeout {
     /// Returns an armed Timeout.
-    pub(crate) fn new(mut prng: Pcg32) -> Self {
+    pub fn new(mut prng: Pcg32) -> Self {
         let duration = Self::rearm_duration(&mut prng);
         let expire = Instant::now() + duration;
         let sleep = Box::pin(sleep_until(expire));
@@ -88,6 +88,13 @@ impl Timeout {
     fn rearm_duration<R: RngCore>(prng: &mut R) -> Duration {
         let range = prng.gen_range(MIN_REARM_DURATION..=MAX_REARM_DURATION);
         Duration::from_millis(range)
+    }
+
+    /// The Instant this Timeout next expires. This is needed to support a discrete event
+    /// simulator.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn deadline(&self) -> Instant {
+        self.sleep.lock().unwrap().deadline()
     }
 }
 
