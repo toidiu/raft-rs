@@ -51,7 +51,7 @@ pub enum Mode {
 
 impl Mode {
     pub fn new() -> Self {
-        Mode::Follower(Follower)
+        Mode::Follower(Follower::default())
     }
 
     pub fn on_timeout<E: ServerEgress>(
@@ -148,7 +148,7 @@ impl Mode {
     }
 
     fn on_follower(&mut self) {
-        *self = Mode::Follower(Follower);
+        *self = Mode::Follower(Follower::default());
         let follower = cast_unsafe!(self, Mode::Follower);
         follower.on_follower();
     }

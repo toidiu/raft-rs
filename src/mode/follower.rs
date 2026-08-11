@@ -8,10 +8,21 @@ use crate::{
 use std::cmp::min;
 
 #[derive(Debug, Default)]
-pub struct Follower;
+pub struct Follower {
+    //% Compliance:
+    //% leaderId: so follower can redirect clients
+    //
+    // The Leader this Follower last accepted an AppendEntries from.
+    current_leader: Option<PeerId>,
+}
 
 impl Follower {
     pub fn on_follower(&mut self) {}
+
+    /// The Leader to redirect a client to, if this Follower knows of one.
+    pub fn current_leader(&self) -> Option<PeerId> {
+        self.current_leader
+    }
 
     pub fn on_timeout(&mut self) -> ModeTransition {
         //% Compliance:
@@ -87,6 +98,12 @@ impl Follower {
 
         if response {
             //% Compliance:
+            //% leaderId: so follower can redirect clients
+            //
+            // Accepting the RPC means recognizing the sender as the current Leader.
+            self.current_leader = Some(peer_id);
+
+            //% Compliance:
             //% If an existing entry conflicts with a new one (same index but different terms),
             //% delete the existing entry and all that follow it (§5.3)
             //
@@ -150,7 +167,7 @@ mod tests {
         let current_term = Term::from(2);
         state.current_term = current_term;
 
-        let mut follower = Follower;
+        let mut follower = Follower::default();
         let leader_commit_idx = Idx::initial();
         let prev_log_term_idx = TermIdx::initial();
 
@@ -277,7 +294,7 @@ mod tests {
             .log
             .test_append_entries(vec![Entry::new(old_term, 3), Entry::new(old_term, 6)]);
 
-        let mut follower = Follower;
+        let mut follower = Follower::default();
         let mut io = MockIo::new(leader_id);
 
         let recv_rpc = Rpc::new_append_entry(
@@ -311,7 +328,7 @@ mod tests {
         let current_term = Term::from(2);
         state.current_term = current_term;
 
-        let mut follower = Follower;
+        let mut follower = Follower::default();
         let mut io = MockIo::new(leader_id);
 
         // The Leader has committed through idx 5 but only sends the first entry, so the Follower

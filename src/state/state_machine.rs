@@ -35,6 +35,14 @@ impl StateMachine {
     pub fn commit_entry(&mut self, data: CommitEntry) {
         self.entries.push(data);
     }
+
+    /// The Entries that have been applied to the StateMachine, in apply order.
+    pub fn applied_entries(&self) -> Vec<Idx> {
+        self.entries
+            .iter()
+            .map(|e| e.log_last_applied_idx)
+            .collect()
+    }
 }
 
 /// Data which is committed to the StateMachine.
