@@ -5,7 +5,7 @@ use core::{
     time::Duration,
 };
 use pin_project_lite::pin_project;
-use rand::RngCore;
+use rand::{Rng, RngCore};
 use rand_pcg::Pcg32;
 use std::sync::{Arc, Mutex};
 use tokio::time::{sleep_until, Instant, Sleep};
@@ -14,9 +14,6 @@ use tokio::time::{sleep_until, Instant, Sleep};
 //% Election timeout is chosen randomly between 150-300ms
 const MIN_REARM_DURATION: u64 = 150;
 const MAX_REARM_DURATION: u64 = 300;
-
-// Pin the timeout to a single value to create deterministic tests.
-const TEST_REARM_DURATION: u64 = 200;
 
 /// A auto-rearming Timeout which can be used to make perpetual progress based on a timeout
 /// duration.
@@ -88,18 +85,9 @@ impl Timeout {
     }
 
     /// Randomly select a duration for the next timeout.
-    #[allow(unused_variables)]
     fn rearm_duration<R: RngCore>(prng: &mut R) -> Duration {
-        cfg_if::cfg_if! {
-            if #[cfg(test)] {
-                let range = TEST_REARM_DURATION;
-                Duration::from_millis(range)
-            } else {
-                use rand::Rng;
-                let range = prng.gen_range(MIN_REARM_DURATION..=MAX_REARM_DURATION);
-                Duration::from_millis(range)
-            }
-        }
+        let range = prng.gen_range(MIN_REARM_DURATION..=MAX_REARM_DURATION);
+        Duration::from_millis(range)
     }
 }
 
