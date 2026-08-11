@@ -49,6 +49,13 @@ pub enum Mode {
     Leader(Leader),
 }
 
+impl Default for Mode {
+    /// A Server starts as a Follower.
+    fn default() -> Self {
+        Mode::new()
+    }
+}
+
 impl Mode {
     pub fn new() -> Self {
         Mode::Follower(Follower::default())

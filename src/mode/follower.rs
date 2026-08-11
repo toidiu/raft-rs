@@ -109,12 +109,13 @@ impl Follower {
             //
             //% Compliance:
             //% Append any new entries not already in the log
-            let mut entry_idx = prev_log_term_idx.idx + 1;
-            for entry in entries.iter() {
+            // The RPC's entries are contiguous and start immediately after prev.
+            for (offset, entry) in entries.iter().enumerate() {
+                // Log idx is 1-indexed.
+                let entry_idx = prev_log_term_idx.idx + 1 + offset as u64;
                 let _match_outcome = raft_state
                     .log
                     .update_to_match_leaders_log(entry.clone(), entry_idx);
-                entry_idx += 1;
             }
 
             //% Compliance:
