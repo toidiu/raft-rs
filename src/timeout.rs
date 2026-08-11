@@ -89,6 +89,13 @@ impl Timeout {
         let range = prng.gen_range(MIN_REARM_DURATION..=MAX_REARM_DURATION);
         Duration::from_millis(range)
     }
+
+    /// The Instant this Timeout next expires. This is needed to support a discrete event
+    /// simulator.
+    #[cfg(test)]
+    pub(crate) fn deadline(&self) -> Instant {
+        self.sleep.lock().unwrap().deadline()
+    }
 }
 
 pin_project! {

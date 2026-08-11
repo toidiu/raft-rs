@@ -15,15 +15,15 @@ mod id;
 
 pub use id::{Id, PeerId, ServerId};
 
-struct Server {
+pub(crate) struct Server {
     // Unique ServerId for this server process.
-    server_id: ServerId,
+    pub(crate) server_id: ServerId,
 
     // The mode of this server process.
-    mode: Mode,
+    pub(crate) mode: Mode,
 
     // Common Raft state for this server process.
-    state: RaftState,
+    pub(crate) state: RaftState,
 
     // The list of peers participating in the Raft quorum.
     peer_list: Vec<PeerId>,
@@ -39,7 +39,7 @@ struct Server {
 }
 
 impl Server {
-    fn new(
+    pub(crate) fn new(
         server_id: ServerId,
         peer_list: Vec<PeerId>,
         election_timeout: Timeout,
@@ -122,7 +122,29 @@ impl Server {
         core::future::poll_fn(|cx| self.poll_progress(cx)).await
     }
 
-    fn on_timeout(&mut self) {
+    /// The Instant this Timeout next expires. Required to support a discrete event simulator.
+    #[cfg(test)]
+    pub(crate) fn timeout_deadline(&self) -> tokio::time::Instant {
+        self.timer.deadline()
+    }
+
+    /// Fire the election timeout if it has expired, and re-arm it. Returns whether it fired.
+    /// Required to support a discrete event simulator.
+    ///
+    /// This is the same work `poll_progress` does for the timeout half, exposed so a simulated
+    /// clock can drive a server without an async runtime scheduling its tasks.
+    #[cfg(test)]
+    pub(crate) fn poll_timeout(&mut self, cx: &mut std::task::Context<'_>) -> bool {
+        let fired = Pin::new(&mut self.timer.timeout_ready())
+            .poll(cx)
+            .is_ready();
+        if fired {
+            self.on_timeout();
+        }
+        fired
+    }
+
+    pub(crate) fn on_timeout(&mut self) {
         self.mode.on_timeout(
             &self.server_id,
             &self.peer_list,
@@ -131,7 +153,7 @@ impl Server {
         );
     }
 
-    fn recv(&mut self) {
+    pub(crate) fn recv(&mut self) {
         if let Some(recv_packets) = self.io_ingress.recv_packet() {
             for packet in recv_packets {
                 // SAFETY: Receiving RPC means that `from` is a PeerId.

@@ -9,4 +9,5 @@ mod server;
 mod state;
 mod timeout;
 
-fn start() {}
+#[cfg(test)]
+mod tests;
