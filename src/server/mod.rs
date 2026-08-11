@@ -1,7 +1,7 @@
 use crate::{
     mode::Mode,
     queue::{BufferIo, NetworkQueueImpl, ServerEgressImpl, ServerIngress, ServerIngressImpl},
-    raft_state::RaftState,
+    state::raft_state::RaftState,
     timeout::Timeout,
 };
 use pin_project_lite::pin_project;
@@ -167,10 +167,10 @@ where
 mod tests {
     use super::*;
     use crate::{
-        log::{Idx, Term, TermIdx},
         macros::cast_unsafe,
         packet::{Packet, Rpc},
         queue::{NetEgress, NetIngress},
+        state::log::{Idx, Term, TermIdx},
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg32;

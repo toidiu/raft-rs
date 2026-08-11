@@ -1,4 +1,4 @@
-use crate::log::{idx::Idx, term::Term};
+use crate::state::log::{idx::Idx, term::Term};
 use core::cmp::Ordering;
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 

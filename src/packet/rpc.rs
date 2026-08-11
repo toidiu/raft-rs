@@ -1,9 +1,12 @@
 use crate::{
-    log::{Entry, Idx, Term, TermIdx},
     packet::{
         AppendEntries, AppendEntriesResp, EntriesLenTypeEncoding, RequestVote, RequestVoteResp,
     },
     server::ServerId,
+    state::{
+        entry::Entry,
+        log::{Idx, Term, TermIdx},
+    },
 };
 use s2n_codec::{DecoderBuffer, DecoderBufferResult, DecoderError, DecoderValue, EncoderValue};
 

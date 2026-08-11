@@ -1,4 +1,4 @@
-use crate::log::term::Term;
+use crate::state::log::term::Term;
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 
 type Command = u8;

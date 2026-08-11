@@ -1,11 +1,9 @@
 use crate::{
-    log::MatchOutcome,
     mode::ModeTransition,
     packet::{append_entries::EntriesLenTypeEncoding, AppendEntries, Rpc},
     queue::ServerEgress,
-    raft_state::RaftState,
     server::PeerId,
-    state_machine::CurrentMode,
+    state::{log::MatchOutcome, raft_state::RaftState, state_machine::CurrentMode},
 };
 use std::cmp::min;
 
@@ -106,8 +104,8 @@ impl Follower {
             //% If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of
             //% last new entry)
             if leader_commit_idx > raft_state.commit_idx() {
-                let min_idx = min(*leader_commit_idx, raft_state.log.last_idx());
-                raft_state.set_commit_idx(min_idx, peer_id, CurrentMode::Follower);
+                let commit_idx = min(*leader_commit_idx, raft_state.log.last_idx());
+                raft_state.update_commit_idx(commit_idx, &[peer_id], CurrentMode::Follower);
             }
         }
 
@@ -129,10 +127,13 @@ impl Follower {
 mod tests {
     use super::*;
     use crate::{
-        log::{Entry, Idx, Term, TermIdx},
         queue::testing::{helper_inspect_one_sent_packet, MockIo},
-        raft_state::RaftState,
         server::ServerId,
+        state::{
+            entry::Entry,
+            log::{Idx, Term, TermIdx},
+            raft_state::RaftState,
+        },
         timeout::Timeout,
     };
     use rand::SeedableRng;

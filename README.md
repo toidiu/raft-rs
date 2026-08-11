@@ -6,11 +6,11 @@ consensus protocol
 
 TODO:
 - [ ] Client API: on the server to propose a command (stores `u8` data)
+  - [ ] same timeout of 200ms in cfg(test)
+  - [ ] packets are not routed between servers yet
 - [ ] Integration tests
   - [ ] Election -> timeout/heartbeat -> re-election -> commit an entry
   - [ ] Multi-node test harness: route packets between in-memory nodes by `Packet::to()`
-- [ ] same timeout of 200ms in cfg(test)
-- [ ] packets are not routed between servers yet
 - [ ] test: leader progression
 - [ ] test: state machine tests
 - [x] Include peer id in RPC header
