@@ -5,19 +5,7 @@ A toy implementation to better understand the
 consensus protocol
 
 TODO:
-- [ ] Client API: on the server to propose a command (stores `u8` data)
-  - [ ] same timeout of 200ms in cfg(test)
-  - [ ] packets are not routed between servers yet
-- [ ] Integration tests
-  - [ ] Election -> timeout/heartbeat -> re-election -> commit an entry
-  - [ ] Multi-node test harness: route packets between in-memory nodes by `Packet::to()`
-- [ ] test: leader progression
-- [ ] test: state machine tests
-- [x] Include peer id in RPC header
-- [x] Include idx in AppendEntryResp
-- [x] Handle on_recv in leader
-- [x] Handle on_recv in follower
-- [x] Handle on_recv in candidate
+- [ ] Fuzz test the protocol.
 
 ## Design
 **sans I/O design**

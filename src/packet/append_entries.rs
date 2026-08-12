@@ -214,8 +214,8 @@ mod tests {
         // `size_of::<Entry>()` (the padded in-memory size, 16B) instead of the encoded size (9B),
         // so it advanced the cursor too far. With a single RPC in a zero-padded slice the
         // over-read landed on harmless padding and hid the bug. Packing a second RPC right after
-        // the first means that over-read eats into the second RPC's bytes, misaligning it — so
-        // the second decode (or the final emptiness check) fails unless the cursor advances by
+        // the first means that over-read eats into the second RPC's bytes, misaligning it. The
+        // second decode (or the final emptiness check) then fails unless the cursor advances by
         // exactly the encoded length. This also mirrors how ServerIngress decodes packets
         // back-to-back from one buffer.
         let rpc1 = Rpc::new_append_entry(

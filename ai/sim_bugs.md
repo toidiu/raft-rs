@@ -12,6 +12,8 @@ Fix one at a time. Each row lands with the test that proves it.
 | 3 | `votedFor` is never cleared when the term advances | `state/raft_state.rs`, `mode/mod.rs` | After one election every server holds a vote forever, so no second Leader can ever be elected | `reelection_after_leader_crash` |
 | 4 | `update_commit_idx` asserts commit advances by exactly 1 | `state/raft_state.rs` | Panics when a peer acknowledges 2+ entries at once, or a Follower catches up | `commit_multiple_entries_in_order` |
 
+| 5 | `debug_assert!(false)` on a response RPC arriving after a role change | `mode/follower.rs`, `mode/candidate.rs` | Panics whenever a demoted Leader receives its own in-flight AppendEntriesResp | `divergent_follower_log_is_repaired` |
+
 ## Order of work
 
 **1 + 2 together.** Neither is provable alone through `leader_is_stable`: the Follower reset does
@@ -97,3 +99,27 @@ at a time regardless of the jump. Drop the assert, keep the monotonicity one.
 under the current model: packet passes do not advance the clock, so elections resolve within a
 single instant and a voter cannot time out mid-election. Testable once the network can delay a
 packet.
+
+---
+
+## 5. Response RPC arriving after a role change
+
+Both `Follower::on_recv` and `Candidate::on_recv` asserted that a response RPC cannot reach them:
+
+```rust
+Rpc::RequestVoteResp(_) | Rpc::AppendEntryResp(_) => {
+    // Ignore since a Follower doesn't send AppendEntry or RequestVote
+    debug_assert!(false);
+}
+```
+
+The premise is wrong. Stepping down does not recall requests already in flight. A Leader that
+broadcasts AppendEntries, then learns a higher term from the first rejection, converts to Follower
+and immediately receives the remaining responses to its own broadcast.
+
+`Mode::on_recv` makes this certain rather than likely: it bumps the term, converts to Follower, and
+then hands *that same RPC* to the new mode.
+
+Found by `divergent_follower_log_is_repaired`, where a crashed Leader restarts still believing it
+leads, broadcasts at the old term, and is demoted by the reply. Fixed by ignoring the response with
+a comment naming the case; there is nothing to do with a response whose term is over.

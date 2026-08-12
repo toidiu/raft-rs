@@ -22,8 +22,8 @@ impl Cluster {
 
     /// The current Leader, if exactly one running server thinks it leads.
     ///
-    /// None while an election is in flight, and also when two servers each believe they lead —
-    /// which is legal during a term change and is not by itself a safety violation.
+    /// None while an election is in flight, and also when two servers each believe they lead.
+    /// That is legal during a term change and is not by itself a safety violation.
     pub fn leader(&self) -> Option<ServerIdx> {
         let mut found = None;
 
