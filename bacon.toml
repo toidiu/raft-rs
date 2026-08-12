@@ -5,8 +5,7 @@
 command = ["cargo", "test", "-p", "sim", "--color", "always"]
 need_stdout = true
 
-# The same suite without the 1000 server test, which takes about 4 seconds in debug and dominates
-# the edit loop. Worth having when the slow test is not the one being worked on.
+# Ignore the large_cluster tests
 [jobs.test-fast]
 command = [
     "cargo",

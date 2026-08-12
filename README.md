@@ -5,12 +5,17 @@ A toy implementation to better understand the
 consensus protocol
 
 TODO:
-- [ ] sim
-  - [ ] unique server id
-  - [ ] faster router
-- [ ] add len to packet header
-- [ ] ring buffer for queues
 - [ ] Fuzz test the protocol.
+- [x] sim
+  - [x] unique server id
+  - [x] faster router
+  - [x] large size cluster test
+- [ ] add len to packet header
+- [ ] queues
+  - [ ] ring buffer for queues
+  - [ ] queue bounds check rather than overflow
+  - [ ] fragmented packets (TCP can deliver a payload over multiple packets)
+- [ ] network send should return packet
 
 ## Design
 **sans I/O design**
