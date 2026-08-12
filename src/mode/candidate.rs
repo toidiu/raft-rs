@@ -69,8 +69,7 @@ impl Candidate {
                 self.on_recv_append_entries(peer_id, rpc, raft_state, io_egress)
             }
             Rpc::AppendEntryResp(_) => {
-                // Ignore since a Candidate doesn't send AppendEntry
-                debug_assert!(false);
+                // A Leader could have sent request before stepping down. Ignore the responses.
                 (ModeTransition::Noop, None)
             }
         }

@@ -31,7 +31,7 @@ pub enum SingleStepOutcome {
 impl Cluster {
     /// Run until an election has settled, and return the winner.
     ///
-    /// Which server wins is not chosen here — it falls out of the timeout race.
+    /// Which server wins is not chosen here. It falls out of the timeout race.
     pub async fn elect(&mut self) -> ServerIdx {
         let settled = self
             .run_until_condition(Cluster::election_has_settled)

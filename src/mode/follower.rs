@@ -56,8 +56,7 @@ impl Follower {
                 self.on_recv_append_entries(peer_id, append_entries, raft_state, io_egress)
             }
             Rpc::RequestVoteResp(_) | Rpc::AppendEntryResp(_) => {
-                // Ignore since a Follower doesn't send AppendEntry or RequestVote
-                debug_assert!(false);
+                // A Leader could have sent request before stepping down. Ignore the responses.
             }
         }
     }
