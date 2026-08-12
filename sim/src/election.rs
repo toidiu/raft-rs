@@ -1,5 +1,6 @@
 use crate::cluster::Cluster;
 use raft_rs::server::ClientResponse;
+use std::time::Duration;
 
 /// 3 nodes, empty logs. Left alone, one wins the timeout race.
 #[tokio::test]
@@ -55,4 +56,32 @@ async fn client_request_redirects_to_leader() {
         cluster.client_request(follower, 7),
         ClientResponse::Redirect(Some(cluster.as_peer_id(leader)))
     );
+}
+
+/// A healthy Leader holds power indefinitely.
+///
+/// Two things have to hold for this:
+/// - A Leader must heartbeat well inside the election timeout, and
+/// - A Follower must re-arm its own timer when a heartbeat lands.
+#[tokio::test]
+async fn leader_is_stable() {
+    let mut cluster = Cluster::new(3);
+    let leader = cluster.elect().await;
+    let term = cluster.current_term(leader);
+
+    // Many election timeouts worth of simulated time.
+    cluster.run_for(Duration::from_secs(10)).await;
+
+    assert_eq!(
+        cluster.leader(),
+        Some(leader),
+        "Leader changed while every server was healthy"
+    );
+    for idx in cluster.idxs() {
+        assert_eq!(
+            cluster.current_term(idx),
+            term,
+            "server {idx} term moved without cause"
+        );
+    }
 }

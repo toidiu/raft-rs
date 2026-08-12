@@ -6,6 +6,7 @@ use crate::cluster::{
     variables::{CLOCK_EPSILON, MAX_EVENTS},
     Cluster,
 };
+use std::time::Duration;
 use tokio::time::Instant;
 
 /// The outcome of running the next step in the simulation.
@@ -16,6 +17,9 @@ pub enum SingleStepOutcome {
 
     /// The clock jumped to the earliest deadline and fired the timeout.
     FiredTimeout,
+
+    /// The clock reached the caller's time_horizon with no event due before it.
+    ReachedMaxTimeHorizon,
 
     /// No in-flight packets and no running server holds a timer.
     ///
@@ -74,12 +78,34 @@ impl Cluster {
         cond(self)
     }
 
+    /// Run for a span of simulated time.
+    pub async fn run_for(&mut self, duration: Duration) {
+        let time_horizon = Instant::now() + duration;
+
+        for _ in 0..MAX_EVENTS {
+            match self.run_next_until(Some(time_horizon)).await {
+                // Reached the end of the time_horizon or equilibrium (Stalled).
+                SingleStepOutcome::ReachedMaxTimeHorizon | SingleStepOutcome::Stalled => return,
+                SingleStepOutcome::Delivered(_) | SingleStepOutcome::FiredTimeout => (),
+            }
+        }
+
+        panic!("cluster did not reach the time_horizon within the event budget");
+    }
+
     /// Take the next event, "fast-forwarding" the clock if the network is quiet.
     ///
     /// Whichever comes first:
     /// - deliver in-flight packets
     /// - advance the clock to the earliest timeout and fire it
     pub async fn run_next(&mut self) -> SingleStepOutcome {
+        self.run_next_until(None).await
+    }
+
+    /// Run the next step in the simulator.
+    ///
+    /// `time_horizon` caps how far the clock moves.
+    async fn run_next_until(&mut self, time_horizon: Option<Instant>) -> SingleStepOutcome {
         // Process, deliver and send packets on the network. All packets are handled/routed before
         // handling timeouts (timeouts are only handled if there are no packets).
         //
@@ -92,15 +118,23 @@ impl Cluster {
             SingleStepOutcome::Delivered(network_outcome)
         } else {
             // The network has nothing left to move, so only the clock can change anything.
-            match self.next_deadline() {
-                Some(deadline) => {
+            match (self.next_deadline(), time_horizon) {
+                // A timeout is due, but not before the caller wants to stop.
+                (Some(deadline), Some(time_horizon)) if time_horizon < deadline => {
+                    self.advance_time_to(time_horizon).await;
+                    SingleStepOutcome::ReachedMaxTimeHorizon
+                }
+                (None, Some(time_horizon)) => {
+                    self.advance_time_to(time_horizon).await;
+                    SingleStepOutcome::ReachedMaxTimeHorizon
+                }
+                (Some(deadline), _) => {
                     // Advance past the deadline so the timeout fires.
-                    let advance_to_time = deadline + CLOCK_EPSILON;
-                    self.advance_time_to(advance_to_time).await;
+                    self.advance_time_to(deadline + CLOCK_EPSILON).await;
                     self.fire_expired_timeouts();
                     SingleStepOutcome::FiredTimeout
                 }
-                None => SingleStepOutcome::Stalled,
+                (None, None) => SingleStepOutcome::Stalled,
             }
         }
     }
@@ -108,8 +142,13 @@ impl Cluster {
     /// Advance clock to the provided instant.
     async fn advance_time_to(&self, instant: Instant) {
         let now = Instant::now();
-        assert!(instant > now);
-        tokio::time::advance(instant - now).await;
+
+        // An instant already in the past means the event is due now, e.g.
+        // - a time_horizon the clock has landed on
+        // - a restarted server whose deadline expired while it was down
+        if instant > now {
+            tokio::time::advance(instant - now).await;
+        }
     }
 
     /// The earliest election timeout across the servers still running.
