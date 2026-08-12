@@ -10,11 +10,12 @@
 use network::InFlightPacket;
 use node::{Node, ServerIdx};
 use raft_rs::{
-    server::{PeerId, Server, ServerId},
+    server::{Id, PeerId, Server, ServerId},
     timeout::Timeout,
 };
 use rand::SeedableRng;
 use rand_pcg::Pcg32;
+use std::collections::HashMap;
 
 mod faults;
 mod inspect;
@@ -29,6 +30,9 @@ pub struct Cluster {
 
     // Packets that have left a sender and not yet arrived. This is the network itself.
     in_flight_packets: Vec<InFlightPacket>,
+
+    // Destination Id to position in `nodes`.
+    routing_table: HashMap<Id, usize>,
 }
 
 impl Cluster {
@@ -37,7 +41,7 @@ impl Cluster {
         // Freeze the clock. From here time only moves when the simulation moves it.
         tokio::time::pause();
 
-        let nodes = {
+        let nodes: Vec<Node> = {
             // Server Ids for all nodes in this test.
             let server_ids: Vec<ServerId> = (0..n)
                 .map(|idx| ServerId::new(Self::unique_bytes(idx)))
@@ -72,9 +76,16 @@ impl Cluster {
                 .collect()
         };
 
+        let routing_table = nodes
+            .iter()
+            .enumerate()
+            .map(|(idx, node): (usize, &Node)| (node.id(), idx))
+            .collect();
+
         Cluster {
             nodes,
             in_flight_packets: Vec::new(),
+            routing_table,
         }
     }
 
