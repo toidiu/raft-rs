@@ -66,7 +66,7 @@ impl Cluster {
     }
 
     /// Run until `cond` holds. Returns false if the cluster went idle or the budget ran out first.
-    async fn run_until_condition(&mut self, cond: impl Fn(&Cluster) -> bool) -> bool {
+    pub async fn run_until_condition(&mut self, cond: impl Fn(&Cluster) -> bool) -> bool {
         for _ in 0..MAX_EVENTS {
             if cond(self) {
                 return true;
