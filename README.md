@@ -5,6 +5,11 @@ A toy implementation to better understand the
 consensus protocol
 
 TODO:
+- [ ] sim
+  - [ ] unique server id
+  - [ ] faster router
+- [ ] add len to packet header
+- [ ] ring buffer for queues
 - [ ] Fuzz test the protocol.
 
 ## Design
