@@ -1,0 +1,21 @@
+# Watch jobs for this project. Bacon's built-in jobs stay available, this file only adds to them.
+
+# The deterministic cluster simulation.
+[jobs.sim]
+command = ["cargo", "test", "-p", "sim", "--color", "always"]
+need_stdout = true
+
+# The same suite without the 1000 server test, which takes about 4 seconds in debug and dominates
+# the edit loop. Worth having when the slow test is not the one being worked on.
+[jobs.test-fast]
+command = [
+    "cargo",
+    "test",
+    "--workspace",
+    "--color",
+    "always",
+    "--",
+    "--skip",
+    "large_cluster",
+]
+need_stdout = true

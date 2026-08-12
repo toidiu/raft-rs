@@ -40,7 +40,7 @@ impl Cluster {
         let nodes = {
             // Server Ids for all nodes in this test.
             let server_ids: Vec<ServerId> = (0..n)
-                .map(|idx| ServerId::new([idx as u8 + 1; 16]))
+                .map(|idx| ServerId::new(Self::unique_bytes(idx)))
                 .collect();
 
             server_ids
@@ -59,7 +59,7 @@ impl Cluster {
 
                     // A distinct seed per server is what staggers the election timeouts. Give them all
                     // the same seed and every server campaigns on the same tick, forever.
-                    let prng = Pcg32::from_seed([server_idx as u8; 16]);
+                    let prng = Pcg32::from_seed(Self::unique_bytes(server_idx));
 
                     let (server, queue) = Server::new(*server_id, peer_list, Timeout::new(prng));
 
@@ -96,5 +96,14 @@ impl Cluster {
     /// Healthy nodes in the system.
     fn healthy_nodes_mut(&mut self) -> impl Iterator<Item = &mut Node> {
         self.nodes.iter_mut().filter(|node| !node.has_crashed())
+    }
+
+    /// 16 distinct bytes per server position. Servers are addressed by a 16 byte Id and seeded
+    /// from 16 bytes.
+    fn unique_bytes(idx: usize) -> [u8; 16] {
+        let mut bytes = [0; 16];
+        // Offset by 1 so no server holds the all-zero pattern, which is the natural "unset" value.
+        bytes[..8].copy_from_slice(&(idx as u64 + 1).to_be_bytes());
+        bytes
     }
 }
