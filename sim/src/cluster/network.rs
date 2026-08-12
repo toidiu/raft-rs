@@ -64,7 +64,11 @@ impl Cluster {
         let mut outcome = NetworkOutcome::default();
 
         for packet in std::mem::take(&mut self.in_flight_packets) {
-            let Some(node) = self.nodes.iter_mut().find(|node| node.id() == packet.to) else {
+            let Some(node) = self
+                .routing_table
+                .get(&packet.to)
+                .map(|idx| &mut self.nodes[*idx])
+            else {
                 panic!("packet addressed to an unknown server");
             };
 
