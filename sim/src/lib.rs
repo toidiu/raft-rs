@@ -5,6 +5,7 @@
 //! works end to end.
 
 pub mod cluster;
+mod fuzz;
 
 #[cfg(test)]
 mod election;
