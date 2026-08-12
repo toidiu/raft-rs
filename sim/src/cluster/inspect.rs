@@ -76,7 +76,7 @@ impl Cluster {
     }
 
     /// The Idx of every Entry applied to the StateMachine, in apply order.
-    pub fn applied_idxs(&self, idx: ServerIdx) -> Vec<Idx> {
+    pub fn query_state_machine(&self, idx: ServerIdx) -> Vec<Idx> {
         self.node(idx).server.query_state_machine()
     }
 
@@ -90,6 +90,11 @@ impl Cluster {
     pub fn known_leader(&self, idx: ServerIdx) -> Option<PeerId> {
         let server = &self.node(idx).server;
         server.mode.current_leader(&server.server_id)
+    }
+
+    /// The commands the StateMachine applied, in apply order.
+    pub fn applied_commands(&self, idx: ServerIdx) -> Vec<u8> {
+        self.node(idx).server.state.applied_commands()
     }
 
     /// Submit a client command.
