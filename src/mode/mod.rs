@@ -121,7 +121,7 @@ impl Mode {
         //% If RPC request or response contains term T > currentTerm: set currentTerm = T, convert
         //% to follower (§5.1)
         if rpc.term() > &raft_state.current_term {
-            raft_state.current_term = *rpc.term();
+            raft_state.update_current_term(*rpc.term());
             self.on_follower(raft_state);
         }
 
