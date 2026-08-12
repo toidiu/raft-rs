@@ -12,8 +12,16 @@ use tokio::time::{sleep_until, Instant, Sleep};
 
 //% Compliance
 //% Election timeout is chosen randomly between 150-300ms
-const MIN_REARM_DURATION: u64 = 150;
-const MAX_REARM_DURATION: u64 = 300;
+const MIN_ELECTION_REARM_DURATION: u64 = 150;
+const MAX_ELECTION_REARM_DURATION: u64 = 300;
+
+//% Compliance:
+//% Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat during
+//% idle periods to prevent election timeouts (§5.2)
+//
+// A Leader re-arms on an interval smaller than the election interval instead of the election
+// range. The assumes a max 100ms network delay.
+const HEARTBEAT_REARM_DURATION: u64 = 50;
 
 /// A auto-rearming Timeout which can be used to make perpetual progress based on a timeout
 /// duration.
@@ -48,17 +56,28 @@ pub struct Timeout {
     // > Sleep operates at millisecond granularity and should not be used for tasks that require
     // > high-resolution timers.
     sleep: Arc<Mutex<Pin<Box<Sleep>>>>,
+
+    // The current Server mode is used to determine the timeout interval.
+    current_mode: CurrentMode,
 }
 
 impl Timeout {
     /// Returns an armed Timeout.
     pub fn new(mut prng: Pcg32) -> Self {
-        let duration = Self::rearm_duration(&mut prng);
+        // Follower is the default starting mode for a Raft server.
+        let current_mode = CurrentMode::FollowerCandidate;
+
+        let duration = Self::rearm_duration(&current_mode, &mut prng);
         let expire = Instant::now() + duration;
         let sleep = Box::pin(sleep_until(expire));
         let sleep = Arc::new(Mutex::new(sleep));
 
-        Timeout { prng, sleep }
+        Timeout {
+            prng,
+            sleep,
+            // Follower is the default starting mode for a Raft server.
+            current_mode: CurrentMode::FollowerCandidate,
+        }
     }
 
     /// Returns a Future which can be polled to check if the timeout has expired.
@@ -72,11 +91,11 @@ impl Timeout {
         sleep.as_mut().poll(ctx)
     }
 
-    /// Reset the expiration time.
+    /// Reset the expiration time for Candidate and Follower.
     ///
     /// Sets the next timeout to a duration relative to `Instant::now()`.
-    pub fn reset(&mut self) {
-        let duration = Self::rearm_duration(&mut self.prng);
+    pub fn reset_timeout(&mut self) {
+        let duration = Self::rearm_duration(&self.current_mode, &mut self.prng);
         let expire = Instant::now() + duration;
 
         // reset the sleep future
@@ -85,9 +104,22 @@ impl Timeout {
     }
 
     /// Randomly select a duration for the next timeout.
-    fn rearm_duration<R: RngCore>(prng: &mut R) -> Duration {
-        let range = prng.gen_range(MIN_REARM_DURATION..=MAX_REARM_DURATION);
+    fn rearm_duration<R: RngCore>(mode: &CurrentMode, prng: &mut R) -> Duration {
+        let range = match mode {
+            CurrentMode::FollowerCandidate => {
+                prng.gen_range(MIN_ELECTION_REARM_DURATION..=MAX_ELECTION_REARM_DURATION)
+            }
+            CurrentMode::Leader => HEARTBEAT_REARM_DURATION,
+        };
         Duration::from_millis(range)
+    }
+
+    pub fn on_leader(&mut self) {
+        self.current_mode = CurrentMode::Leader;
+    }
+
+    pub fn on_follower_candidate(&mut self) {
+        self.current_mode = CurrentMode::FollowerCandidate;
     }
 
     /// The Instant this Timeout next expires. This is needed to support a discrete event
@@ -108,6 +140,13 @@ pin_project! {
     }
 }
 
+// The current Server mode.
+#[derive(Debug, Clone)]
+enum CurrentMode {
+    FollowerCandidate,
+    Leader,
+}
+
 impl Future for TimeoutReady<'_> {
     type Output = ();
 
@@ -117,7 +156,7 @@ impl Future for TimeoutReady<'_> {
 
         // rearm the timeout if expired to ensure perpetual progress
         if poll.is_ready() {
-            this.timeout.reset();
+            this.timeout.reset_timeout();
         }
         poll
     }
@@ -160,7 +199,7 @@ mod tests {
 
         // wait timeout duration more so the timeout expires
         advance(Duration::from_millis(
-            MAX_REARM_DURATION - MIN_REARM_DURATION,
+            MAX_ELECTION_REARM_DURATION - MIN_ELECTION_REARM_DURATION,
         ))
         .await;
         let mut timeout_rdy = pin!(timeout.timeout_ready());
@@ -190,7 +229,9 @@ mod tests {
         assert_eq!(cnt, 1);
 
         // timeout should have rearmed but not expired
-        assert!(duration_to_expiration(&timeout) > Duration::from_millis(MIN_REARM_DURATION));
+        assert!(
+            duration_to_expiration(&timeout) > Duration::from_millis(MIN_ELECTION_REARM_DURATION)
+        );
         let mut timeout_rdy = pin!(timeout.timeout_ready());
         assert!(timeout_rdy.as_mut().poll(&mut ctx).is_pending());
         assert_eq!(cnt, 1);

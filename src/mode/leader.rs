@@ -85,6 +85,9 @@ impl Leader {
         //% Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat
         //% during idle periods to prevent election timeouts (§5.2)
         self.broadcast_send_append_entries(server_id, peer_list, raft_state, io_egress);
+
+        // A Leader ticks on the heartbeat interval, not the election range.
+        raft_state.timeout.reset_timeout();
     }
 
     /// Append a client command to the Log and replicate it.
@@ -187,6 +190,9 @@ impl Leader {
         //% Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat
         //% during idle periods to prevent election timeouts (§5.2)
         self.broadcast_send_append_entries(server_id, peer_list, raft_state, io_egress);
+
+        // A Leader ticks on the heartbeat interval, not the election range.
+        raft_state.timeout.reset_timeout();
     }
 
     pub fn on_recv<E: ServerEgress>(

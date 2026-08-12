@@ -104,6 +104,14 @@ impl Follower {
             self.current_leader = Some(peer_id);
 
             //% Compliance:
+            //% If election timeout elapses without receiving AppendEntries RPC from current
+            //% leader or granting vote to candidate: convert to candidate
+            //
+            // A heartbeat landed, so the Leader is alive. Without this a Follower campaigns against
+            // a healthy Leader as soon as its own timeout fires.
+            raft_state.timeout.reset_timeout();
+
+            //% Compliance:
             //% If an existing entry conflicts with a new one (same index but different terms),
             //% delete the existing entry and all that follow it (§5.3)
             //

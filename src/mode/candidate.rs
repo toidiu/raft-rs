@@ -158,7 +158,7 @@ impl Candidate {
 
         //% Compliance:
         //% Reset election timer
-        raft_state.election_timer.reset();
+        raft_state.timeout.reset_timeout();
 
         //% Compliance:
         //% Vote for self

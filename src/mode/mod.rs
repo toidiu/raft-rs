@@ -122,7 +122,7 @@ impl Mode {
         //% to follower (§5.1)
         if rpc.term() > &raft_state.current_term {
             raft_state.current_term = *rpc.term();
-            self.on_follower();
+            self.on_follower(raft_state);
         }
 
         let process_rpc_again = match self {
@@ -168,7 +168,7 @@ impl Mode {
     ) {
         match transition {
             ModeTransition::Noop => (),
-            ModeTransition::ToFollower => self.on_follower(),
+            ModeTransition::ToFollower => self.on_follower(raft_state),
             ModeTransition::ToCandidate => {
                 self.on_candidate(server_id, peer_list, raft_state, io_egress)
             }
@@ -176,7 +176,9 @@ impl Mode {
         }
     }
 
-    fn on_follower(&mut self) {
+    fn on_follower(&mut self, raft_state: &mut RaftState) {
+        raft_state.timeout.on_follower_candidate();
+
         *self = Mode::Follower(Follower::default());
         let follower = cast_unsafe!(self, Mode::Follower);
         follower.on_follower();
@@ -189,6 +191,8 @@ impl Mode {
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
+        raft_state.timeout.on_follower_candidate();
+
         *self = Mode::Candidate(Candidate::default());
         let candidate = cast_unsafe!(self, Mode::Candidate);
 
@@ -211,6 +215,8 @@ impl Mode {
         raft_state: &mut RaftState,
         io_egress: &mut E,
     ) {
+        raft_state.timeout.on_leader();
+
         let leader = Leader::new(peer_list, raft_state);
         *self = Mode::Leader(leader);
         let leader = cast_unsafe!(self, Mode::Leader);
