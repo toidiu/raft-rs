@@ -13,7 +13,7 @@ const COMMANDS: [u8; 3] = [10, 20, 30];
 
 /// A 25 server cluster elects a Leader and commits commands on every server.
 ///
-/// Twenty five servers start together and take three client commands. Nothing is crashed and no
+/// Twenty five servers start together and take three client commands. Nothing is paused and no
 /// packet is lost, so the only thing separating this from the 3 server tests is the size of a
 /// single round.
 ///

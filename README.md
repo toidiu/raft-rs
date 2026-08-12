@@ -6,6 +6,7 @@ consensus protocol
 
 TODO:
 - [ ] Fuzz test the protocol.
+  - [ ] make timeout independent of tokio
 - [x] sim
   - [x] unique server id
   - [x] faster router

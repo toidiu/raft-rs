@@ -28,7 +28,7 @@ impl Cluster {
         let mut found = None;
 
         for idx in self.idxs() {
-            if self.has_crashed(idx) || !self.is_leader(idx) {
+            if self.is_paused(idx) || !self.is_leader(idx) {
                 continue;
             }
 
@@ -53,8 +53,8 @@ impl Cluster {
     }
 
     /// Has a test stopped this server.
-    pub fn has_crashed(&self, idx: ServerIdx) -> bool {
-        self.node(idx).crashed
+    pub fn is_paused(&self, idx: ServerIdx) -> bool {
+        self.node(idx).paused
     }
 
     /// The latest term this server has seen. Servers agree on it once a Leader settles.
