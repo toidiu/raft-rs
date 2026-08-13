@@ -17,6 +17,7 @@ use rand::SeedableRng;
 use rand_pcg::Pcg32;
 use std::collections::HashMap;
 
+mod check;
 mod faults;
 mod inspect;
 mod network;

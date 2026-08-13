@@ -1,20 +1,16 @@
 use crate::{
     packet::Packet,
-    queue::{RxReady, IO_BUF_LEN},
+    queue::{BoundedQueue, RxReady, IO_BUF_LEN},
 };
 use core::task::{Context, Poll, Waker};
 use s2n_codec::{DecoderBuffer, DecoderValue};
-use std::{
-    collections::VecDeque,
-    io::Read,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 /// A handle held by the Raft server task for receiving bytes.
 #[derive(Debug)]
 pub struct ServerIngressImpl {
     pub buf: [u8; IO_BUF_LEN],
-    pub ingress_queue: Arc<Mutex<VecDeque<u8>>>,
+    pub ingress_queue: Arc<Mutex<BoundedQueue>>,
     pub ingress_waker: Arc<Mutex<Option<Waker>>>,
 }
 
@@ -42,12 +38,8 @@ impl ServerIngress for ServerIngressImpl {
     // Retrieve data for the Server to process
     #[cfg(test)]
     fn recv_raw(&mut self) -> Option<Vec<u8>> {
-        let bytes_to_recv = self
-            .ingress_queue
-            .lock()
-            .unwrap()
-            .read(&mut self.buf[0..])
-            .ok()?;
+        let bytes_to_recv = self.ingress_queue.lock().unwrap().read_into(&mut self.buf[0..]);
+
         if bytes_to_recv > 0 {
             dbg!("  server <--- {:?}", &self.buf[0..bytes_to_recv]);
             Some(self.buf[0..bytes_to_recv].to_vec())
@@ -57,12 +49,7 @@ impl ServerIngress for ServerIngressImpl {
     }
 
     fn recv_packet(&mut self) -> Option<RecvPacket<'_>> {
-        let len = self
-            .ingress_queue
-            .lock()
-            .unwrap()
-            .read(&mut self.buf)
-            .ok()?;
+        let len = self.ingress_queue.lock().unwrap().read_into(&mut self.buf);
 
         Some(RecvPacket::new(&self.buf[0..len]))
     }

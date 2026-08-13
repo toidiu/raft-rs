@@ -20,6 +20,11 @@ impl Cluster {
         (0..self.nodes.len()).map(ServerIdx)
     }
 
+    /// How many servers the cluster was built with.
+    pub fn server_count(&self) -> usize {
+        self.nodes.len()
+    }
+
     /// The current Leader, if exactly one running server thinks it leads.
     ///
     /// None while an election is in flight, and also when two servers each believe they lead.
@@ -97,35 +102,17 @@ impl Cluster {
         self.node(idx).server.state.applied_commands()
     }
 
-    /// Submit a client command.
-    pub fn client_request(&mut self, idx: ServerIdx, command: u8) -> ClientResponse {
-        self.node_mut(idx).server.on_client_request(command)
-    }
-
-    /// Log Matching Property (§5.3): if two logs hold an entry at the same index, the entries are
-    /// identical.
+    /// Submit a client command. None when the server is paused and never saw the request.
     ///
-    /// Compares the prefix both servers hold, so a Follower that is merely behind passes; only an
-    /// actual conflict at a shared index fails. Worth asserting after any test that replicates,
-    /// since it catches divergence the test's own assertions would not look for.
-    pub fn assert_logs_match(&self) {
-        for (position, server) in self.idxs().enumerate() {
-            // Check every pair of servers once. Starting past `server` avoids comparing a pair
-            // against itself, and avoids re-checking it with the two sides swapped.
-            for other_server in self.idxs().skip(position + 1) {
-                let server_log = self.log_entries(server);
-                let other_log = self.log_entries(other_server);
-
-                // The shorter log is a server that is merely behind, which is legal. Only the
-                // indexes both of them hold can conflict.
-                let shared_len = server_log.len().min(other_log.len());
-
-                assert_eq!(
-                    server_log[..shared_len],
-                    other_log[..shared_len],
-                    "logs diverge between server {server} and server {other_server}"
-                );
-            }
+    /// A paused server is a process that is not running, so it cannot answer a client any more
+    /// than it can answer a peer. Letting one accept a command would let a Leader the cluster has
+    /// already moved past keep appending to its log, which manufactures log divergence that no
+    /// reachable Raft execution produces.
+    pub fn client_request(&mut self, idx: ServerIdx, command: u8) -> Option<ClientResponse> {
+        if self.is_paused(idx) {
+            return None;
         }
+
+        Some(self.node_mut(idx).server.on_client_request(command))
     }
 }
