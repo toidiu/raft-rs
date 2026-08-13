@@ -185,6 +185,10 @@ pub enum ClientResponse {
     NoLeader,
 }
 
+/// The server was paused, so the process was not running and never saw the request.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ServerPaused;
+
 pin_project! {
     struct ServerFut<S, R> {
         #[pin]

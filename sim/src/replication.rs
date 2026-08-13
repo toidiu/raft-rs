@@ -1,5 +1,5 @@
 use crate::cluster::Cluster;
-use raft_rs::state::log::Idx;
+use raft_rs::{server::ClientResponse, state::log::Idx};
 use std::time::Duration;
 
 /// Several commands commit, and every server applies them in the same order.
@@ -18,8 +18,11 @@ async fn commit_multiple_entries_in_order() {
     let commands = [10, 20, 30, 40];
 
     // Submit all the commands to the leader.
-    for command in commands {
-        cluster.client_request(leader, command);
+    for (position, command) in commands.into_iter().enumerate() {
+        assert_eq!(
+            cluster.client_request(leader, command),
+            Some(ClientResponse::Accepted(Idx::from(position as u64 + 1)))
+        );
     }
 
     // Run until every server, not just the Leader, has committed through the last entry.
@@ -76,8 +79,11 @@ async fn committed_entries_survive_leader_pause() {
     let old_term = cluster.current_term(old_leader);
 
     let commands = [10, 20, 30];
-    for command in commands {
-        cluster.client_request(old_leader, command);
+    for (position, command) in commands.into_iter().enumerate() {
+        assert_eq!(
+            cluster.client_request(old_leader, command),
+            Some(ClientResponse::Accepted(Idx::from(position as u64 + 1)))
+        );
     }
 
     let last_idx = Idx::from(commands.len() as u64);
@@ -105,8 +111,11 @@ async fn committed_entries_survive_leader_pause() {
     cluster.assert_logs_match();
 
     // And the new Leader can still commit, on top of the old Leader's entries.
-    cluster.client_request(new_leader, 40);
     let next_idx = last_idx + 1;
+    assert_eq!(
+        cluster.client_request(new_leader, 40),
+        Some(ClientResponse::Accepted(next_idx))
+    );
     assert!(
         cluster
             .run_until_condition(|c| c.commit_idx(new_leader) == next_idx)
@@ -136,7 +145,10 @@ async fn no_commit_without_quorum() {
 
     // The Leader keeps heartbeating into the void for a long stretch of simulated time. If it were
     // going to commit wrongly, this is where it would.
-    cluster.client_request(leader, 99);
+    assert_eq!(
+        cluster.client_request(leader, 99),
+        Some(ClientResponse::Accepted(Idx::from(1)))
+    );
     cluster.run_for(Duration::from_secs(5)).await;
 
     // The entry is in the Leader's log. Accepting it is fine.
@@ -167,8 +179,11 @@ async fn paused_follower_catches_up() {
     // With one Follower left the Leader still has a quorum of 2, so these commit while the third
     // server knows nothing about them.
     let commands = [1, 2, 3];
-    for command in commands {
-        cluster.client_request(leader, command);
+    for (position, command) in commands.into_iter().enumerate() {
+        assert_eq!(
+            cluster.client_request(leader, command),
+            Some(ClientResponse::Accepted(Idx::from(position as u64 + 1)))
+        );
     }
     let last_idx = Idx::from(commands.len() as u64);
     assert!(
@@ -209,13 +224,19 @@ async fn divergent_follower_log_is_repaired() {
 
     // Accept a command, then lose the Leader before a single AppendEntries leaves it. The entry
     // exists only here, uncommitted, and no other server has any idea it was written.
-    cluster.client_request(old_leader, 111);
+    assert_eq!(
+        cluster.client_request(old_leader, 111),
+        Some(ClientResponse::Accepted(Idx::from(1)))
+    );
     cluster.pause(old_leader);
     assert_eq!(cluster.log_entries(old_leader).len(), 1);
 
     // The survivors elect among themselves and commit a different command at the same index.
     let new_leader = cluster.elect().await;
-    cluster.client_request(new_leader, 222);
+    assert_eq!(
+        cluster.client_request(new_leader, 222),
+        Some(ClientResponse::Accepted(Idx::from(1)))
+    );
     assert!(
         cluster
             .run_until_condition(|c| c.commit_idx(new_leader) == Idx::from(1))

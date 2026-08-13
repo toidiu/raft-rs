@@ -5,10 +5,11 @@
 //! works end to end.
 
 pub mod cluster;
-mod fuzz;
 
 #[cfg(test)]
 mod election;
+#[cfg(test)]
+mod fuzz;
 #[cfg(test)]
 mod large_cluster;
 #[cfg(test)]
