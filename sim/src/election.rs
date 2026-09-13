@@ -85,3 +85,30 @@ async fn leader_is_stable() {
         );
     }
 }
+
+/// Kill the Leader and the survivors elect a new one on their own.
+///
+/// Every server voted in the first election. The voted_for state should be cleared so a new
+/// election has a chance to pick a new leader.
+#[tokio::test]
+async fn reelection_after_leader_crash() {
+    let mut cluster = Cluster::new(3);
+    let old_leader = cluster.elect().await;
+    let old_term = cluster.current_term(old_leader);
+
+    cluster.crash(old_leader);
+
+    // No test choreography: heartbeats stop, a survivor's election timeout expires, and it
+    // campaigns. Quorum of 3 is 2, which the two survivors still have.
+    let new_leader = cluster.elect().await;
+
+    assert_ne!(new_leader, old_leader);
+    assert!(
+        cluster.current_term(new_leader) > old_term,
+        "a new Leader must serve a higher term"
+    );
+
+    // The crashed server is frozen in the old term, still believing it leads.
+    assert!(cluster.is_leader(old_leader));
+    assert_eq!(cluster.current_term(old_leader), old_term);
+}

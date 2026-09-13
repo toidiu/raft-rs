@@ -163,7 +163,7 @@ impl Candidate {
         //% Compliance:
         //% Vote for self
         if matches!(
-            self.on_vote_for_self(server_id, peer_list),
+            self.on_vote_for_self(server_id, raft_state, peer_list),
             ElectionResult::Elected
         ) {
             //% Compliance:
@@ -181,7 +181,14 @@ impl Candidate {
         ModeTransition::Noop
     }
 
-    fn on_vote_for_self(&mut self, server_id: &ServerId, peer_list: &[PeerId]) -> ElectionResult {
+    fn on_vote_for_self(
+        &mut self,
+        server_id: &ServerId,
+        raft_state: &mut RaftState,
+        peer_list: &[PeerId],
+    ) -> ElectionResult {
+        raft_state.voted_for_self(*server_id);
+
         debug_assert!(
             !peer_list
                 .iter()
@@ -282,6 +289,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_vote_received() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+        let mut state = RaftState::new(timeout);
+
         let self_id = ServerId::new([1; 16]);
         let peer2_id = PeerId::new([11; 16]);
         let peer3_id = PeerId::new([12; 16]);
@@ -307,7 +318,7 @@ mod tests {
         //
         // Vote for self and reach quorum
         assert!(matches!(
-            candidate.on_vote_for_self(&self_id, &peer_list),
+            candidate.on_vote_for_self(&self_id, &mut state, &peer_list),
             ElectionResult::Elected
         ));
         assert_eq!(Mode::quorum(&peer_list), Quorum(2));
