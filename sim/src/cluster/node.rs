@@ -6,7 +6,7 @@ use std::fmt;
 
 /// Which server in the Cluster, by position.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ServerIdx(pub(super) usize);
+pub struct ServerIdx(pub usize);
 
 impl fmt::Display for ServerIdx {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -21,11 +21,11 @@ pub struct Node {
     // Server's IO queue.
     pub(super) queue: NetworkQueueImpl,
 
-    // A crashed Node is one that stopped running:
+    // A paused Node is one that stopped running, keeping the state it held:
     // - sends nothing
     // - receives nothing
     // - election timer never fires
-    pub(super) crashed: bool,
+    pub(super) paused: bool,
 }
 
 impl Node {
@@ -34,7 +34,7 @@ impl Node {
         self.server.server_id.into_id()
     }
 
-    pub(super) fn has_crashed(&self) -> bool {
-        self.crashed
+    pub(super) fn is_paused(&self) -> bool {
+        self.paused
     }
 }

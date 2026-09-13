@@ -23,7 +23,7 @@ pub enum SingleStepOutcome {
 
     /// No in-flight packets and no running server holds a timer.
     ///
-    /// Only happens when every server has been crashed since a running Raft cluster always has a
+    /// Only happens when every server has been paused since a running Raft cluster always has a
     /// timer armed somewhere.
     Stalled,
 }
@@ -51,7 +51,7 @@ impl Cluster {
 
         // Every running server agrees on the new Leader, the Leader included: it names itself.
         self.idxs()
-            .filter(|idx| !self.has_crashed(*idx))
+            .filter(|idx| !self.is_paused(*idx))
             .all(|idx| self.known_leader(idx) == Some(leader_id))
     }
 
@@ -145,7 +145,7 @@ impl Cluster {
 
         // An instant already in the past means the event is due now, e.g.
         // - a time_horizon the clock has landed on
-        // - a restarted server whose deadline expired while it was down
+        // - a resumed server whose deadline expired while it was down
         if instant > now {
             tokio::time::advance(instant - now).await;
         }

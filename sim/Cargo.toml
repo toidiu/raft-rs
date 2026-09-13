@@ -10,6 +10,7 @@ rand_pcg = "0.3"
 s2n-codec = "0.51"
 tokio = { version = "1", features = ["time", "test-util", "macros", "rt"] }
 futures-test = "0.3"
+bolero = "0.13"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }

@@ -27,7 +27,7 @@ pub struct NetworkOutcome {
     /// Packets handed to a running server's ingress.
     pub delivered_packets: usize,
 
-    /// Packets addressed to a crashed server, dropped on the floor.
+    /// Packets addressed to a paused server, dropped on the floor.
     pub dropped_packets: usize,
 
     /// Packets still on the wire when the pass ended.
@@ -72,7 +72,7 @@ impl Cluster {
                 panic!("packet addressed to an unknown server");
             };
 
-            if node.has_crashed() {
+            if node.is_paused() {
                 // Silently dropped. Raft makes no distinction between an unreachable peer and a
                 // lost packet, so there is nothing to report back to the sender.
                 outcome.dropped_packets += 1;

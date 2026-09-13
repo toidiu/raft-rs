@@ -70,7 +70,7 @@ async fn commit_multiple_entries_in_order() {
 //% Leader Completeness: if a log entry is committed in a given term, then that entry will be
 //% present in the logs of the leaders for all higher-numbered terms
 #[tokio::test]
-async fn committed_entries_survive_leader_crash() {
+async fn committed_entries_survive_leader_pause() {
     let mut cluster = Cluster::new(3);
     let old_leader = cluster.elect().await;
     let old_term = cluster.current_term(old_leader);
@@ -89,7 +89,7 @@ async fn committed_entries_survive_leader_crash() {
     );
 
     // Lose the Leader. The survivors elect a new one in a higher term.
-    cluster.crash(old_leader);
+    cluster.pause(old_leader);
     let new_leader = cluster.elect().await;
     assert!(cluster.current_term(new_leader) > old_term);
 
@@ -131,7 +131,7 @@ async fn no_commit_without_quorum() {
     // Take down both Followers. The Leader is 1 of 3, short of the quorum of 2.
     let followers: Vec<_> = cluster.idxs().filter(|idx| *idx != leader).collect();
     for idx in followers {
-        cluster.crash(idx);
+        cluster.pause(idx);
     }
 
     // The Leader keeps heartbeating into the void for a long stretch of simulated time. If it were
@@ -157,12 +157,12 @@ async fn no_commit_without_quorum() {
 /// The repair has to be complete rather than partial. The Follower must end up holding every entry
 /// it missed, applied in the same order as everyone else, not just the newest one.
 #[tokio::test]
-async fn crashed_follower_catches_up() {
+async fn paused_follower_catches_up() {
     let mut cluster = Cluster::new(3);
     let leader = cluster.elect().await;
     let lagging = cluster.idxs().find(|idx| *idx != leader).unwrap();
 
-    cluster.crash(lagging);
+    cluster.pause(lagging);
 
     // With one Follower left the Leader still has a quorum of 2, so these commit while the third
     // server knows nothing about them.
@@ -181,12 +181,12 @@ async fn crashed_follower_catches_up() {
 
     // Bring it back. Its election timeout expired while it was down, so it campaigns immediately.
     // The Leader's higher term puts it back to Follower and the repair follows.
-    cluster.restart(lagging);
+    cluster.resume(lagging);
     assert!(
         cluster
             .run_until_condition(|c| c.commit_idx(lagging) == last_idx)
             .await,
-        "restarted Follower never caught up"
+        "resumed Follower never caught up"
     );
 
     assert_eq!(cluster.applied_commands(lagging), commands.to_vec());
@@ -210,7 +210,7 @@ async fn divergent_follower_log_is_repaired() {
     // Accept a command, then lose the Leader before a single AppendEntries leaves it. The entry
     // exists only here, uncommitted, and no other server has any idea it was written.
     cluster.client_request(old_leader, 111);
-    cluster.crash(old_leader);
+    cluster.pause(old_leader);
     assert_eq!(cluster.log_entries(old_leader).len(), 1);
 
     // The survivors elect among themselves and commit a different command at the same index.
@@ -225,7 +225,7 @@ async fn divergent_follower_log_is_repaired() {
 
     // Bring the old Leader back. Index 1 now disagrees. It holds 111 from the old term, while the
     // rest of the cluster holds the committed 222 from the new one.
-    cluster.restart(old_leader);
+    cluster.resume(old_leader);
     assert!(
         cluster
             .run_until_condition(

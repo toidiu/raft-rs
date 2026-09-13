@@ -20,9 +20,10 @@ use std::collections::HashMap;
 mod faults;
 mod inspect;
 mod network;
-mod node;
 mod sim;
 mod variables;
+
+pub mod node;
 
 /// Cluster of Server Nodes in this test.
 pub struct Cluster {
@@ -70,7 +71,7 @@ impl Cluster {
                     Node {
                         server,
                         queue,
-                        crashed: false,
+                        paused: false,
                     }
                 })
                 .collect()
@@ -101,12 +102,12 @@ impl Cluster {
 
     /// Healthy nodes in the system.
     fn healthy_nodes(&self) -> impl Iterator<Item = &Node> {
-        self.nodes.iter().filter(|node| !node.has_crashed())
+        self.nodes.iter().filter(|node| !node.is_paused())
     }
 
     /// Healthy nodes in the system.
     fn healthy_nodes_mut(&mut self) -> impl Iterator<Item = &mut Node> {
-        self.nodes.iter_mut().filter(|node| !node.has_crashed())
+        self.nodes.iter_mut().filter(|node| !node.is_paused())
     }
 
     /// 16 distinct bytes per server position. Servers are addressed by a 16 byte Id and seeded

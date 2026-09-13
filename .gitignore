@@ -1,2 +1,3 @@
 Cargo.lock
 target/
+**/__fuzz__/*/corpus/
