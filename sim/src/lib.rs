@@ -9,6 +9,8 @@ pub mod cluster;
 #[cfg(test)]
 mod election;
 #[cfg(test)]
+mod large_cluster;
+#[cfg(test)]
 mod replication;
 #[cfg(test)]
 mod router;

@@ -1,0 +1,20 @@
+# Watch jobs for this project. Bacon's built-in jobs stay available, this file only adds to them.
+
+# The deterministic cluster simulation.
+[jobs.sim]
+command = ["cargo", "test", "-p", "sim", "--color", "always"]
+need_stdout = true
+
+# Ignore the large_cluster tests
+[jobs.test-fast]
+command = [
+    "cargo",
+    "test",
+    "--workspace",
+    "--color",
+    "always",
+    "--",
+    "--skip",
+    "large_cluster",
+]
+need_stdout = true

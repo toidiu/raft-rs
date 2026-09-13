@@ -10,11 +10,12 @@
 use network::InFlightPacket;
 use node::{Node, ServerIdx};
 use raft_rs::{
-    server::{PeerId, Server, ServerId},
+    server::{Id, PeerId, Server, ServerId},
     timeout::Timeout,
 };
 use rand::SeedableRng;
 use rand_pcg::Pcg32;
+use std::collections::HashMap;
 
 mod faults;
 mod inspect;
@@ -29,6 +30,9 @@ pub struct Cluster {
 
     // Packets that have left a sender and not yet arrived. This is the network itself.
     in_flight_packets: Vec<InFlightPacket>,
+
+    // Destination Id to position in `nodes`.
+    routing_table: HashMap<Id, usize>,
 }
 
 impl Cluster {
@@ -37,10 +41,10 @@ impl Cluster {
         // Freeze the clock. From here time only moves when the simulation moves it.
         tokio::time::pause();
 
-        let nodes = {
+        let nodes: Vec<Node> = {
             // Server Ids for all nodes in this test.
             let server_ids: Vec<ServerId> = (0..n)
-                .map(|idx| ServerId::new([idx as u8 + 1; 16]))
+                .map(|idx| ServerId::new(Self::unique_bytes(idx)))
                 .collect();
 
             server_ids
@@ -59,7 +63,7 @@ impl Cluster {
 
                     // A distinct seed per server is what staggers the election timeouts. Give them all
                     // the same seed and every server campaigns on the same tick, forever.
-                    let prng = Pcg32::from_seed([server_idx as u8; 16]);
+                    let prng = Pcg32::from_seed(Self::unique_bytes(server_idx));
 
                     let (server, queue) = Server::new(*server_id, peer_list, Timeout::new(prng));
 
@@ -72,9 +76,16 @@ impl Cluster {
                 .collect()
         };
 
+        let routing_table = nodes
+            .iter()
+            .enumerate()
+            .map(|(idx, node): (usize, &Node)| (node.id(), idx))
+            .collect();
+
         Cluster {
             nodes,
             in_flight_packets: Vec::new(),
+            routing_table,
         }
     }
 
@@ -96,5 +107,14 @@ impl Cluster {
     /// Healthy nodes in the system.
     fn healthy_nodes_mut(&mut self) -> impl Iterator<Item = &mut Node> {
         self.nodes.iter_mut().filter(|node| !node.has_crashed())
+    }
+
+    /// 16 distinct bytes per server position. Servers are addressed by a 16 byte Id and seeded
+    /// from 16 bytes.
+    fn unique_bytes(idx: usize) -> [u8; 16] {
+        let mut bytes = [0; 16];
+        // Offset by 1 so no server holds the all-zero pattern, which is the natural "unset" value.
+        bytes[..8].copy_from_slice(&(idx as u64 + 1).to_be_bytes());
+        bytes
     }
 }
