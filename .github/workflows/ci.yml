@@ -85,3 +85,25 @@ jobs:
         run: |
           cargo test -p sim
 
+
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rust toolchain
+        id: toolchain
+        run: |
+          rustup toolchain install stable
+          rustup override set stable
+
+      - name: Install bolero
+        id: bolero
+        run: |
+          cargo install cargo-bolero --no-default-features -f
+
+      - name: Run fuzz testing
+        run: |
+          make fuzz
+

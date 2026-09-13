@@ -4,6 +4,24 @@ use crate::fuzz::{
     Operation,
 };
 
+// Fuzz discovered panic.
+//
+// thread 'fuzz::tests::bla' (510311) panicked at sim/src/cluster/network.rs:114:45:
+// server should send valid Packets: UnexpectedEof(1)
+// note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+#[test]
+fn bug_panics_on_decoding_partial_packets() {
+    let operations = vec![
+        Operation::RunUntil(RunMillis(MAX_RUN_MILLIS)),
+        Operation::ClientRequest(ServerPick(1), 26),
+        Operation::ClientRequest(ServerPick(1), 26),
+        Operation::ClientRequest(ServerPick(1), 91),
+        Operation::RunUntil(RunMillis(0)),
+    ];
+
+    execute(&operations);
+}
+
 // Fuzz discovered assertion failure. It was the oracle that was wrong, not Raft.
 //
 // assertion `left == right` failed: logs diverge between server 0 and server 1

@@ -1,12 +1,11 @@
 use crate::{
     packet::{Packet, Rpc},
-    queue::IO_BUF_LEN,
+    queue::{BoundedQueue, IO_BUF_LEN},
     server::{PeerId, ServerId},
 };
 use core::task::Waker;
 use s2n_codec::{EncoderBuffer, EncoderValue};
 use std::{
-    collections::VecDeque,
     ops::Deref,
     sync::{Arc, Mutex},
 };
@@ -16,7 +15,7 @@ use std::{
 pub struct ServerEgressImpl {
     pub server_id: ServerId,
     pub buf: [u8; IO_BUF_LEN],
-    pub egress_queue: Arc<Mutex<VecDeque<u8>>>,
+    pub egress_queue: Arc<Mutex<BoundedQueue>>,
     pub egress_waker: Arc<Mutex<Option<Waker>>>,
 }
 
@@ -34,7 +33,9 @@ impl ServerEgress for ServerEgressImpl {
     fn send_raw(&mut self, data: &[u8]) {
         dbg!("  server ---> {:?}", &data);
 
-        self.egress_queue.lock().unwrap().extend(data);
+        if !self.egress_queue.lock().unwrap().try_extend(data) {
+            return;
+        }
 
         if let Some(waker) = self.egress_waker.lock().unwrap().deref() {
             waker.wake_by_ref();
@@ -48,7 +49,11 @@ impl ServerEgress for ServerEgressImpl {
 
         let data = buf.as_mut_slice();
 
-        self.egress_queue.lock().unwrap().extend(data.iter());
+        // A refused packet is dropped outright. The Leader retries on its next heartbeat, so this
+        // costs a round trip and nothing else.
+        if !self.egress_queue.lock().unwrap().try_extend(data) {
+            return;
+        }
 
         if let Some(waker) = self.egress_waker.lock().unwrap().deref() {
             waker.wake_by_ref();

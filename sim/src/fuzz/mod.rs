@@ -13,7 +13,6 @@ use crate::{
 mod crashes;
 mod operation;
 
-#[ignore = "currently discovers packet fragment bugs very quickly"]
 #[test]
 fn raft() {
     bolero::check!()
