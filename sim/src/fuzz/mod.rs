@@ -9,6 +9,8 @@ use crate::{
     fuzz::operation::{Operation, CLUSTER_SIZE},
 };
 
+#[cfg(test)]
+mod crashes;
 mod operation;
 
 #[ignore = "currently discovers packet fragment bugs very quickly"]
@@ -36,8 +38,9 @@ pub fn execute(operations: &[Operation]) {
             operation.apply(&mut cluster).await;
         }
 
-        // Log Matching holds no matter which operations ran. Servers are allowed to be
-        // behind, never to disagree at an index they both hold.
+        // Both hold no matter which operations ran. Servers are allowed to be behind, and to hold
+        // conflicting uncommitted entries, but never to disagree about what was committed.
         cluster.assert_logs_match();
+        cluster.assert_committed_entries_agree();
     });
 }

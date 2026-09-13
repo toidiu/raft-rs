@@ -45,7 +45,7 @@ async fn client_request_redirects_to_leader() {
     let any = cluster.idxs().next().unwrap();
     assert_eq!(
         cluster.client_request(any, 7),
-        ClientResponse::Redirect(None)
+        Some(ClientResponse::Redirect(None))
     );
 
     let leader = cluster.elect().await;
@@ -54,7 +54,7 @@ async fn client_request_redirects_to_leader() {
     // The heartbeat taught the Followers who leads.
     assert_eq!(
         cluster.client_request(follower, 7),
-        ClientResponse::Redirect(Some(cluster.as_peer_id(leader)))
+        Some(ClientResponse::Redirect(Some(cluster.as_peer_id(leader))))
     );
 }
 
