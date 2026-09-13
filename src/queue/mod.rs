@@ -1,13 +1,13 @@
 use crate::server::ServerId;
 use core::future::Future;
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
+mod bounded;
 mod network;
 mod server_egress;
 mod server_ingress;
+
+pub use bounded::BoundedQueue;
 
 #[cfg(test)]
 pub mod testing;
@@ -73,10 +73,10 @@ pub struct BufferIo;
 
 impl BufferIo {
     pub fn split(server_id: ServerId) -> (ServerIngressImpl, ServerEgressImpl, NetworkQueueImpl) {
-        let ingress_queue = Arc::new(Mutex::new(VecDeque::with_capacity(IO_BUF_LEN)));
+        let ingress_queue = Arc::new(Mutex::new(BoundedQueue::new(IO_BUF_LEN)));
         let ingress_waker = Arc::new(Mutex::new(None));
 
-        let egress_queue = Arc::new(Mutex::new(VecDeque::with_capacity(IO_BUF_LEN)));
+        let egress_queue = Arc::new(Mutex::new(BoundedQueue::new(IO_BUF_LEN)));
         let egress_waker = Arc::new(Mutex::new(None));
 
         let network_queue_handle = NetworkQueueImpl {
