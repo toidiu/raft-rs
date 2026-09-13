@@ -1,3 +1,5 @@
+#[cfg(any(test, feature = "testing"))]
+use crate::state::entry::Command;
 use crate::{
     server::{Id, PeerId, ServerId},
     state::{
@@ -69,6 +71,11 @@ impl RaftState {
         self.state_machine.applied_entries()
     }
 
+    #[cfg(any(test, feature = "testing"))]
+    pub fn applied_commands(&self) -> Vec<Command> {
+        self.state_machine.applied_commands()
+    }
+
     /// Commit Entries in the StateMachine up to the commit_up_to_idx. Use `last_log_term_idx` to
     /// figure out the last idx that was committed.
     pub fn update_commit_idx(
@@ -81,17 +88,15 @@ impl RaftState {
             commit_up_to_idx >= self.commit_idx,
             "commitIdx is monotonically increasing"
         );
-        if commit_up_to_idx > self.commit_idx {
-            // TODO: (replace with metrics)
-            // Detect if we are actually every sending more than 1 Entry.
-            // Sending 1 Entry per RPC was meant to be a simplification for the POC.
-            assert!(
-                commit_up_to_idx == self.commit_idx + 1,
-                "Comitting more than 1 entry!! its not wrong but understand this path."
-            );
-        }
 
         // Commit the entries to the StateMachine.
+        //
+        // commitIdx routinely jumps by more than one: a peer can acknowledge several entries in a
+        // single AppendEntriesResp, and a Follower catching up computes
+        // min(leaderCommit, last_idx), which can be well ahead of its own commitIdx.
+        //
+        // The loop below is what guarantees no entry is skipped. It walks one Idx at a time no
+        // matter how far commitIdx moved, so every entry in between reaches the StateMachine.
         while &commit_up_to_idx > self.last_applied() {
             //% Compliance:
             //% If commitIndex > lastApplied: increment lastApplied
