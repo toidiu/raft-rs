@@ -29,3 +29,26 @@ fn sim_bug_divergence_between_uncommitted_entries() {
 
     execute(&operations);
 }
+
+// Fuzz discovered panic.
+//
+// panicked at src/mode/leader.rs:217:17:
+// assertion failed: rpc.term() != &raft_state.current_term
+#[test]
+fn bug_two_leaders_in_one_term() {
+    let operations = vec![
+        Operation::Pause(ServerPick(2)),
+        Operation::Pause(ServerPick(5)),
+        Operation::Pause(ServerPick(4)),
+        Operation::RunUntil(RunMillis(496)),
+        Operation::Resume(ServerPick(5)),
+        Operation::Pause(ServerPick(1)),
+        Operation::Resume(ServerPick(2)),
+        Operation::RunUntil(RunMillis(698)),
+        Operation::Resume(ServerPick(4)),
+        Operation::Resume(ServerPick(1)),
+        Operation::RunUntil(RunMillis(0)),
+    ];
+
+    execute(&operations);
+}
