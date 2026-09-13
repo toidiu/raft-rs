@@ -33,6 +33,14 @@ impl Log {
             .unwrap_or_default()
     }
 
+    // Append entries to the end of the Log.
+    //
+    // Only a Leader appends to its own Log; a Follower must go through
+    // `update_to_match_leaders_log`, which resolves conflicts.
+    pub(crate) fn leader_push_entry(&mut self, entries: Vec<Entry>) {
+        self.entries.extend(entries);
+    }
+
     // Return the Idx of the last entry in the Log.
     pub(crate) fn last_idx(&self) -> Idx {
         if self.entries.is_empty() {
