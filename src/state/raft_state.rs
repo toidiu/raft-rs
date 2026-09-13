@@ -64,6 +64,11 @@ impl RaftState {
         &self.commit_idx
     }
 
+    /// The entries that have been committed to the StateMachine.
+    pub fn applied_entries(&self) -> Vec<Idx> {
+        self.state_machine.applied_entries()
+    }
+
     /// Commit Entries in the StateMachine up to the commit_up_to_idx. Use `last_log_term_idx` to
     /// figure out the last idx that was committed.
     pub fn update_commit_idx(

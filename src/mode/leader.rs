@@ -4,6 +4,7 @@ use crate::{
     queue::ServerEgress,
     server::{PeerId, ServerId},
     state::{
+        entry::{Command, Entry},
         log::{Idx, TermIdx},
         raft_state::RaftState,
         state_machine::CurrentMode,
@@ -84,6 +85,32 @@ impl Leader {
         //% Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server; repeat
         //% during idle periods to prevent election timeouts (§5.2)
         self.broadcast_send_append_entries(server_id, peer_list, raft_state, io_egress);
+    }
+
+    /// Append a client command to the Log and replicate it.
+    ///
+    /// Returns the Idx the command landed at, which a client can poll against `last_applied` to
+    /// learn that its request committed.
+    //
+    //% Compliance:
+    //% If command received from client: append entry to local log, respond after entry applied to
+    //% state machine (§5.3)
+    pub fn on_client_request<E: ServerEgress>(
+        &mut self,
+        server_id: &ServerId,
+        peer_list: &[PeerId],
+        command: Command,
+        raft_state: &mut RaftState,
+        io_egress: &mut E,
+    ) -> Idx {
+        raft_state
+            .log
+            .leader_push_entry(vec![Entry::new(raft_state.current_term, command)]);
+
+        // Replicate now rather than waiting for the next heartbeat.
+        self.broadcast_send_append_entries(server_id, peer_list, raft_state, io_egress);
+
+        raft_state.log.last_idx()
     }
 
     /// Send Append entry to all peer servers.

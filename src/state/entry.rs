@@ -1,7 +1,7 @@
 use crate::state::log::term::Term;
 use s2n_codec::{DecoderBufferResult, DecoderValue, EncoderValue};
 
-type Command = u8;
+pub(crate) type Command = u8;
 
 //% Compliance:
 //% each log entry stores
