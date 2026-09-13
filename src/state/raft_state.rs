@@ -116,6 +116,23 @@ impl RaftState {
         }
     }
 
+    /// Adopt a newer term seen on the wire.
+    ///
+    //% Compliance:
+    //% If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to
+    //% follower (§5.1)
+    pub fn update_current_term(&mut self, term: Term) {
+        assert!(
+            term > self.current_term,
+            "currentTerm increases monotonically"
+        );
+        self.current_term = term;
+
+        //% Compliance:
+        //% `votedFor` candidateId that received vote in current term (or null if none)
+        self.voted_for = None;
+    }
+
     // Retrieve the last log TermIdx and increment the currentTerm
     pub fn on_start_election(&mut self) -> TermIdx {
         //% Compliance:
@@ -126,6 +143,9 @@ impl RaftState {
         //% Compliance:
         //% Increment currentTerm
         self.current_term.increment();
+
+        // A new term starts with no vote cast. The Candidate votes for itself right after.
+        self.voted_for = None;
 
         last_log_term_idx
     }
