@@ -70,9 +70,13 @@ impl PeerId {
 }
 
 impl Id {
+    /// Reinterpret an untyped Id as a peer's Id.
+    ///
     /// # Safety
     ///
-    /// Caller is responsible for checking that conversion to a PeerId type is appropriate.
+    /// The caller must know this Id names a peer and not this server. The two are the same 16
+    /// bytes, so nothing here can check it; getting it wrong means a server treats itself as a
+    /// peer, which breaks quorum counting.
     pub unsafe fn as_peer_id(self) -> PeerId {
         PeerId(self.0)
     }

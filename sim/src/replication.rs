@@ -4,8 +4,12 @@ use std::time::Duration;
 
 /// Several commands commit, and every server applies them in the same order.
 ///
-/// Test that commitIdx jumping by more than one still works correctly. All 4 commands are
-/// submitted before any of them replicate, so a Follower learns about all 4 commands.
+/// All four commands are submitted before any of them replicate, so they travel together. One
+/// AppendEntriesResp then acknowledges several entries at once and commitIdx moves by more than
+/// one in a single call.
+///
+/// The jump is legal. What must still hold is that every index in between reaches the StateMachine
+/// exactly once, in order.
 #[tokio::test]
 async fn commit_multiple_entries_in_order() {
     let mut cluster = Cluster::new(3);
@@ -48,8 +52,8 @@ async fn commit_multiple_entries_in_order() {
             "server {idx} applied commands"
         );
 
-        // A contiguous 1..=4 says nothing was skipped or applied twice, which is what commitIdx
-        // jumping by more than one puts at risk.
+        // A contiguous 1..=4 says nothing was skipped or applied twice. That is the risk when
+        // commitIdx jumps, because a single call has to walk every index in between.
         let expected: Vec<Idx> = (1..=commands.len() as u64).map(Idx::from).collect();
         assert_eq!(
             cluster.query_state_machine(idx),
@@ -60,6 +64,10 @@ async fn commit_multiple_entries_in_order() {
 }
 
 /// Committed entries survive the Leader that created them.
+///
+/// Entries are committed, the Leader is stopped, and the survivors elect a new Leader in a higher
+/// term. The committed prefix must still be there afterwards, and the new Leader must be able to
+/// append on top of entries it never created.
 ///
 //% Compliance:
 //% Leader Completeness: if a log entry is committed in a given term, then that entry will be
