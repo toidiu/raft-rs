@@ -13,6 +13,12 @@ pub struct Log {
     entries: Vec<Entry>,
 }
 
+impl Default for Log {
+    fn default() -> Self {
+        Log::new()
+    }
+}
+
 impl Log {
     pub fn new() -> Self {
         Log { entries: vec![] }
@@ -158,25 +164,25 @@ impl Log {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn test_append_entries(&mut self, entries: Vec<Entry>) {
         for entry in entries.into_iter() {
             self.entries.push(entry);
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn test_is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn test_get_unchecked(&self, idx: u64) -> Entry {
         let idx = Idx::from(idx);
         self.entries.get(idx.as_log_idx()).unwrap().clone()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn test_len(&self) -> usize {
         self.entries.len()
     }

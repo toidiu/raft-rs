@@ -1,22 +1,16 @@
-[workspace]
-members = [".", "sim"]
-
 [package]
-name = "raft-rs"
+name = "sim"
 version = "0.1.0"
 edition = "2021"
 
-[features]
-testing = []
-
 [dependencies]
-pin-project-lite = "0.2.14"
+raft-rs = { path = "..", features = ["testing"] }
 rand = "0.8"
 rand_pcg = "0.3"
 s2n-codec = "0.51"
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1", features = ["time", "test-util", "macros", "rt"] }
+futures-test = "0.3"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
 futures-test = "0.3"
-

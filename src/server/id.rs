@@ -70,7 +70,9 @@ impl PeerId {
 }
 
 impl Id {
-    // Caller is responsible for checking that conversion to a PeerId type is appropriate.
+    /// # Safety
+    ///
+    /// Caller is responsible for checking that conversion to a PeerId type is appropriate.
     pub unsafe fn as_peer_id(self) -> PeerId {
         PeerId(self.0)
     }

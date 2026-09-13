@@ -1,0 +1,58 @@
+use crate::cluster::Cluster;
+use raft_rs::server::ClientResponse;
+
+/// 3 nodes, empty logs. Left alone, one wins the timeout race.
+#[tokio::test]
+async fn leader_emerges() {
+    let mut cluster = Cluster::new(3);
+
+    // Nobody starts as Leader.
+    assert_eq!(cluster.leader(), None);
+
+    let leader = cluster.elect().await;
+
+    //% Compliance:
+    //% wins election: receives majority of votes in cluster (ensures a single winner)
+    for idx in cluster.idxs() {
+        if idx != leader {
+            assert!(
+                cluster.is_follower(idx),
+                "server {idx} should be a Follower"
+            );
+        }
+    }
+
+    // The heartbeat carried the winning term to everyone.
+    let term = cluster.current_term(leader);
+    for idx in cluster.idxs() {
+        assert_eq!(cluster.current_term(idx), term, "server {idx} term");
+    }
+
+    // Nothing was appended, so every log is still empty.
+    for idx in cluster.idxs() {
+        assert!(cluster.log_entries(idx).is_empty(), "server {idx} log");
+    }
+    cluster.assert_logs_match();
+}
+
+/// Only a Leader accepts commands. Everyone else points the client elsewhere.
+#[tokio::test]
+async fn client_request_redirects_to_leader() {
+    let mut cluster = Cluster::new(3);
+
+    // Before any election a Follower has never heard from a Leader.
+    let any = cluster.idxs().next().unwrap();
+    assert_eq!(
+        cluster.client_request(any, 7),
+        ClientResponse::Redirect(None)
+    );
+
+    let leader = cluster.elect().await;
+    let follower = cluster.idxs().find(|idx| *idx != leader).unwrap();
+
+    // The heartbeat taught the Followers who leads.
+    assert_eq!(
+        cluster.client_request(follower, 7),
+        ClientResponse::Redirect(Some(cluster.as_peer_id(leader)))
+    );
+}
