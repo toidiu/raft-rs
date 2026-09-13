@@ -49,9 +49,38 @@ pub enum Mode {
     Leader(Leader),
 }
 
+impl Default for Mode {
+    /// A Server starts as a Follower.
+    fn default() -> Self {
+        Mode::new()
+    }
+}
+
 impl Mode {
     pub fn new() -> Self {
         Mode::Follower(Follower::default())
+    }
+
+    /// Is the Server a Leader.
+    pub fn is_leader(&self) -> bool {
+        matches!(self, Mode::Leader(_))
+    }
+
+    /// Is the Server a Follower.
+    pub fn is_follower(&self) -> bool {
+        matches!(self, Mode::Follower(_))
+    }
+
+    /// The Leader this Server would send a client to.
+    ///
+    /// A Leader is its own answer. A Follower reports the Leader it last accepted an AppendEntries
+    /// from. A Candidate is mid-election, so there is nowhere to send anyone.
+    pub fn current_leader(&self, server_id: &ServerId) -> Option<PeerId> {
+        match self {
+            Mode::Leader(_) => Some(PeerId::new(*server_id.as_bytes())),
+            Mode::Follower(follower) => follower.current_leader(),
+            Mode::Candidate(_) => None,
+        }
     }
 
     pub fn on_timeout<E: ServerEgress>(

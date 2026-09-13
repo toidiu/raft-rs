@@ -22,6 +22,12 @@ pub struct StateMachine {
     entries: Vec<CommitEntry>,
 }
 
+impl Default for StateMachine {
+    fn default() -> Self {
+        StateMachine::new()
+    }
+}
+
 impl StateMachine {
     pub fn new() -> Self {
         StateMachine { entries: vec![] }
