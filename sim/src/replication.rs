@@ -184,3 +184,50 @@ async fn paused_follower_catches_up() {
     assert_eq!(cluster.applied_commands(lagging), commands.to_vec());
     cluster.assert_logs_match();
 }
+
+/// A Follower holding a conflicting entry has it overwritten, not merged.
+///
+/// A Leader accepts a command and stops before replicating it. The rest of the cluster elects a new
+/// Leader and commits a different command at that same index. Two servers now disagree about what
+/// index 1 holds.
+///
+/// Raft resolves this in one direction only. The Leader's log wins and the Follower truncates from
+/// the first disagreement. Anything else leaves two servers permanently claiming different values
+/// at the same index.
+#[tokio::test]
+async fn divergent_follower_log_is_repaired() {
+    let mut cluster = Cluster::new(3);
+    let old_leader = cluster.elect().await;
+
+    // Accept a command, then lose the Leader before a single AppendEntries leaves it. The entry
+    // exists only here, uncommitted, and no other server has any idea it was written.
+    cluster.client_request(old_leader, 111);
+    cluster.pause(old_leader);
+    assert_eq!(cluster.log_entries(old_leader).len(), 1);
+
+    // The survivors elect among themselves and commit a different command at the same index.
+    let new_leader = cluster.elect().await;
+    cluster.client_request(new_leader, 222);
+    assert!(
+        cluster
+            .run_until_condition(|c| c.commit_idx(new_leader) == Idx::from(1))
+            .await,
+        "new Leader could not commit"
+    );
+
+    // Bring the old Leader back. Index 1 now disagrees. It holds 111 from the old term, while the
+    // rest of the cluster holds the committed 222 from the new one.
+    cluster.resume(old_leader);
+    assert!(
+        cluster
+            .run_until_condition(
+                |c| c.log_entries(old_leader).first().map(|e| e.command) == Some(222)
+            )
+            .await,
+        "conflicting entry was never replaced"
+    );
+
+    // The conflicting entry is gone rather than appended after, so the log did not grow.
+    assert_eq!(cluster.log_entries(old_leader).len(), 1);
+    cluster.assert_logs_match();
+}
