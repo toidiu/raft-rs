@@ -1,3 +1,5 @@
+#[cfg(any(test, feature = "testing"))]
+use crate::state::entry::Command;
 use crate::{
     server::PeerId,
     state::{entry::Entry, log::Idx},
@@ -48,6 +50,14 @@ impl StateMachine {
             .iter()
             .map(|e| e.log_last_applied_idx)
             .collect()
+    }
+
+    /// The commands applied to the StateMachine, in apply order.
+    ///
+    /// The Idx alone cannot catch an Entry applied at the right index with the wrong payload.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn applied_commands(&self) -> Vec<Command> {
+        self.entries.iter().map(|e| e.entry.command).collect()
     }
 }
 
