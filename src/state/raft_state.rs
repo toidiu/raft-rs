@@ -37,11 +37,11 @@ pub struct RaftState {
     // The permanent storage which stored Entries replicated on majority of Raft servers.
     state_machine: StateMachine,
 
-    pub election_timer: Timeout,
+    pub timeout: Timeout,
 }
 
 impl RaftState {
-    pub fn new(election_timer: Timeout) -> Self {
+    pub fn new(timeout: Timeout) -> Self {
         let log = Log::new();
         let state_machine = StateMachine::new();
 
@@ -51,7 +51,7 @@ impl RaftState {
             log,
             commit_idx: Idx::initial(),
             last_applied: Idx::initial(),
-            election_timer,
+            timeout,
             state_machine,
         }
     }
