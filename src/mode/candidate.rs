@@ -156,6 +156,10 @@ impl Candidate {
         let last_log_term_idx = raft_state.on_start_election();
 
         //% Compliance:
+        //% a server can only vote once for a given term (first-come basis)
+        self.votes_received.clear();
+
+        //% Compliance:
         //% Reset election timer
         raft_state.timeout.reset_timeout();
 
@@ -284,6 +288,69 @@ mod tests {
 
         // No RPC sent. Unable to inspect E since there are no peers
         assert!(peer_list.is_empty());
+    }
+
+    /// A new election starts the vote tally from scratch.
+    ///
+    /// A Candidate in a 5 server cluster banks one peer vote, then times out and campaigns again
+    /// in the next term. The tally is checked before and after that second election starts.
+    ///
+    /// Votes are cast per term, so a vote from an earlier term must not count toward this one.
+    /// Keeping the tally would let votes granted across several terms add up to a quorum that no
+    /// single term ever gave. The Candidate would then win a term another server had already won,
+    /// putting two Leaders in one term and breaking Election Safety (§5.2).
+    #[tokio::test]
+    async fn votes_do_not_carry_across_elections() {
+        let prng = Pcg32::from_seed([0; 16]);
+        let timeout = Timeout::new(prng.clone());
+        let mut state = RaftState::new(timeout);
+
+        let self_id = ServerId::new([1; 16]);
+        let peer_list = vec![
+            PeerId::new([11; 16]),
+            PeerId::new([12; 16]),
+            PeerId::new([13; 16]),
+            PeerId::new([14; 16]),
+        ];
+        let mut io = MockIo::new(self_id);
+
+        // Quorum is 3 of 5, so a self vote plus one peer is not enough to win.
+        assert_eq!(Mode::quorum(&peer_list), Quorum(3));
+
+        // First election. Vote for self, then bank a single peer vote.
+        let mut candidate = Candidate::default();
+        assert!(matches!(
+            candidate.start_election(&self_id, &peer_list, &mut state, &mut io),
+            ModeTransition::Noop
+        ));
+        assert!(matches!(
+            candidate.on_vote_received(&peer_list[0], &peer_list),
+            ElectionResult::Pending
+        ));
+        assert_eq!(candidate.votes_received.len(), 2);
+
+        // The election times out and the Candidate campaigns again in a higher term.
+        let first_term = state.current_term;
+        assert!(matches!(
+            candidate.start_election(&self_id, &peer_list, &mut state, &mut io),
+            ModeTransition::Noop
+        ));
+        assert!(state.current_term > first_term);
+
+        // Only the self vote survives. The peer vote belonged to the previous term.
+
+        // One peer voting in this term is two of five, short of quorum. Had the earlier vote
+        // carried over this would already be three and the Candidate would take the term.
+        assert!(matches!(
+            candidate.on_vote_received(&peer_list[1], &peer_list),
+            ElectionResult::Pending
+        ));
+
+        // A quorum granted inside this term still elects, so the reset costs nothing real.
+        assert!(matches!(
+            candidate.on_vote_received(&peer_list[2], &peer_list),
+            ElectionResult::Elected
+        ));
     }
 
     #[tokio::test]
