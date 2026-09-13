@@ -6,7 +6,7 @@ use std::fmt;
 
 /// Which server in the Cluster, by position.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ServerIdx(pub(super) usize);
+pub struct ServerIdx(pub usize);
 
 impl fmt::Display for ServerIdx {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

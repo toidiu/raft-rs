@@ -20,9 +20,10 @@ use std::collections::HashMap;
 mod faults;
 mod inspect;
 mod network;
-mod node;
 mod sim;
 mod variables;
+
+pub mod node;
 
 /// Cluster of Server Nodes in this test.
 pub struct Cluster {

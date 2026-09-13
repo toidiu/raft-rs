@@ -20,6 +20,11 @@ impl Cluster {
         (0..self.nodes.len()).map(ServerIdx)
     }
 
+    /// How many servers the cluster was built with.
+    pub fn server_count(&self) -> usize {
+        self.nodes.len()
+    }
+
     /// The current Leader, if exactly one running server thinks it leads.
     ///
     /// None while an election is in flight, and also when two servers each believe they lead —

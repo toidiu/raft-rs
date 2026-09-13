@@ -5,16 +5,25 @@
 command = ["cargo", "test", "-p", "sim", "--color", "always"]
 need_stdout = true
 
+[jobs.bugs]
+command = ["sh", "-c", "RUST_BACKTRACE=1 cargo test -p sim --color always -- bug"]
+need_stdout = true
+
+# # Ignore the large_cluster tests
+# [jobs.test-fast]
+# command = [
+#     "cargo",
+#     "test",
+#     "--workspace",
+#     "--color",
+#     "always",
+#     "--",
+#     "--skip",
+#     "large_cluster",
+# ]
+# need_stdout = true
+
 # Ignore the large_cluster tests
-[jobs.test-fast]
-command = [
-    "cargo",
-    "test",
-    "--workspace",
-    "--color",
-    "always",
-    "--",
-    "--skip",
-    "large_cluster",
-]
+[jobs.fuzz]
+command = ["make", "fuzz"]
 need_stdout = true
