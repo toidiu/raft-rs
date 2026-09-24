@@ -21,5 +21,6 @@ testing_visible! {
     timeout;
 }
 
+mod clock;
 mod error;
 mod macros;
