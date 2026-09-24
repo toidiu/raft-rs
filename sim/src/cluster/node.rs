@@ -1,4 +1,4 @@
-use raft_rs::{
+use dew_core::{
     queue::NetworkQueueImpl,
     server::{Id, Server},
 };

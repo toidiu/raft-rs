@@ -1,5 +1,5 @@
 use crate::cluster::Cluster;
-use raft_rs::{server::ClientResponse, state::log::Idx};
+use dew_core::{server::ClientResponse, state::log::Idx};
 use std::time::Duration;
 
 /// Several commands commit, and every server applies them in the same order.

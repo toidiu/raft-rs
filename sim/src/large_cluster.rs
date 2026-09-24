@@ -1,7 +1,7 @@
 //! Raft at a cluster size where one round outgrows a single read of the IO buffer.
 
 use crate::cluster::Cluster;
-use raft_rs::state::log::Idx;
+use dew_core::state::log::Idx;
 
 // Large enough that one broadcast exceeds the byte cap on a single queue read. Below this a whole
 // round fits in one read, and the framing between a server and the network is never exercised.

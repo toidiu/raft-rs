@@ -5,7 +5,7 @@
 //! the fuzzer on inputs nobody wrote by hand.
 
 use crate::cluster::{node::ServerIdx, Cluster};
-use raft_rs::state::entry::Entry;
+use dew_core::state::entry::Entry;
 
 impl Cluster {
     /// How many entries this server considers committed.

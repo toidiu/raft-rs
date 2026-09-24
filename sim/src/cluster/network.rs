@@ -1,7 +1,7 @@
 //! The packet router: one server's egress becomes another's ingress.
 
 use crate::cluster::Cluster;
-use raft_rs::{
+use dew_core::{
     packet::Packet,
     queue::{NetEgress, NetIngress},
     server::Id,

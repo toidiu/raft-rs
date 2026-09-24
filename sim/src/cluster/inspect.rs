@@ -1,7 +1,7 @@
 //! Read-only views into the cluster, for test assertions.
 
 use crate::cluster::{node::ServerIdx, Cluster};
-use raft_rs::{
+use dew_core::{
     server::{ClientResponse, PeerId},
     state::{
         entry::Entry,

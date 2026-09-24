@@ -1,5 +1,5 @@
 use crate::cluster::Cluster;
-use raft_rs::server::ClientResponse;
+use dew_core::server::ClientResponse;
 use std::time::Duration;
 
 /// 3 nodes, empty logs. Left alone, one wins the timeout race.

@@ -7,12 +7,12 @@
 //! 2. **The earliest election timeout.** With the network quiet, jump the clock straight to the
 //!    next deadline and let that server fire.
 
-use network::InFlightPacket;
-use node::{Node, ServerIdx};
-use raft_rs::{
+use dew_core::{
     server::{Id, PeerId, Server, ServerId},
     timeout::Timeout,
 };
+use network::InFlightPacket;
+use node::{Node, ServerIdx};
 use rand::SeedableRng;
 use rand_pcg::Pcg32;
 use std::collections::HashMap;

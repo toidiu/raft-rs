@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-raft-rs = { path = "..", features = ["testing"] }
+dew-core = { path = "../dew/dew-core", features = ["testing"] }
 rand = "0.8"
 rand_pcg = "0.3"
 s2n-codec = "0.51"
