@@ -23,4 +23,5 @@ testing_visible! {
 
 mod clock;
 mod error;
+mod heartbeat;
 mod macros;

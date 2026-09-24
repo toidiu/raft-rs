@@ -1,4 +1,6 @@
 use crate::{
+    clock::Clock,
+    heartbeat::Heartbeat,
     mode::Mode,
     queue::{BufferIo, NetworkQueueImpl, ServerEgressImpl, ServerIngress, ServerIngressImpl},
     state::{entry::Command, log::Idx, raft_state::RaftState},
@@ -8,7 +10,7 @@ use pin_project_lite::pin_project;
 use std::{
     future::Future,
     pin::Pin,
-    task::{ready, Poll},
+    task::{Poll, ready},
 };
 
 mod id;
@@ -28,6 +30,12 @@ pub struct Server {
     // The list of peers participating in the Raft quorum.
     peer_list: Vec<PeerId>,
 
+    // The clock for this process.
+    clock: Clock,
+
+    // Heartbeat used to make progress in Raft.
+    heartbeat: Heartbeat,
+
     // Timeout for making progress.
     timer: Timeout,
 
@@ -44,6 +52,13 @@ impl Server {
         peer_list: Vec<PeerId>,
         election_timeout: Timeout,
     ) -> (Server, NetworkQueueImpl) {
+        // TODO: pass into new
+        use rand::SeedableRng;
+        use rand_pcg::Pcg32;
+        let clock = Clock::new();
+        let tmp_prng = Pcg32::from_seed([0; 16]);
+        let heartbeat = Heartbeat::new(tmp_prng);
+
         let (server_io_ingress, server_io_egress, network_queue) = BufferIo::split(server_id);
         let mode = Mode::new();
         let state = RaftState::new(election_timeout.clone());
@@ -52,6 +67,8 @@ impl Server {
             mode,
             state,
             peer_list,
+            clock,
+            heartbeat,
             timer: election_timeout,
             io_ingress: server_io_ingress,
             io_egress: server_io_egress,
@@ -249,6 +266,7 @@ mod tests {
     #[tokio::test]
     async fn send_recv() {
         let prng = Pcg32::from_seed([0; 16]);
+
         let timeout = Timeout::new(prng);
         let server_id = ServerId::new([1; 16]);
         let peer2_id = PeerId::new([11; 16]);
