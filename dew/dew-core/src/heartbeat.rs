@@ -96,27 +96,21 @@ enum CurrentMode {
     Leader,
 }
 
-trait Timeout {
+pub trait CanTimeout {
     /// The Duration from now that this timeout will expire in.
-    fn deadline(&self) -> Duration;
+    fn deadline(&self) -> Instant;
 
     /// Has the timeout expired.
     fn has_expired(&self) -> bool;
 }
 
-impl Timeout for Heartbeat {
-    fn deadline(&self) -> Duration {
-        let now = Instant::now();
-
-        if now >= self.deadline {
-            Duration::ZERO
-        } else {
-            now - self.deadline
-        }
+impl CanTimeout for Heartbeat {
+    fn deadline(&self) -> Instant {
+        self.deadline
     }
 
     fn has_expired(&self) -> bool {
-        if self.deadline() == Duration::ZERO {
+        if Instant::now() >= self.deadline {
             true
         } else {
             false

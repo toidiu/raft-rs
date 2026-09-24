@@ -8,7 +8,7 @@ use pin_project_lite::pin_project;
 use rand::{Rng, RngCore};
 use rand_pcg::Pcg32;
 use std::sync::{Arc, Mutex};
-use tokio::time::{sleep_until, Instant, Sleep};
+use tokio::time::{Instant, Sleep, sleep_until};
 
 //% Compliance
 //% Election timeout is chosen randomly between 150-300ms

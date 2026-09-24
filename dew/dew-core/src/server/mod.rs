@@ -7,11 +7,13 @@ use crate::{
     timeout::Timeout,
 };
 use pin_project_lite::pin_project;
+use rand_pcg::Pcg32;
 use std::{
     future::Future,
     pin::Pin,
     task::{Poll, ready},
 };
+use tokio::time::Instant;
 
 mod id;
 
@@ -37,7 +39,7 @@ pub struct Server {
     heartbeat: Heartbeat,
 
     // Timeout for making progress.
-    timer: Timeout,
+    timeout: Timeout,
 
     // IO ingress handle.
     io_ingress: ServerIngressImpl,
@@ -50,14 +52,14 @@ impl Server {
     pub fn new(
         server_id: ServerId,
         peer_list: Vec<PeerId>,
-        election_timeout: Timeout,
+        rand: Pcg32,
+        // election_timeout: Timeout,
     ) -> (Server, NetworkQueueImpl) {
         // TODO: pass into new
-        use rand::SeedableRng;
-        use rand_pcg::Pcg32;
         let clock = Clock::new();
-        let tmp_prng = Pcg32::from_seed([0; 16]);
-        let heartbeat = Heartbeat::new(tmp_prng);
+        let heartbeat = Heartbeat::new(rand.clone());
+
+        let election_timeout = Timeout::new(rand);
 
         let (server_io_ingress, server_io_egress, network_queue) = BufferIo::split(server_id);
         let mode = Mode::new();
@@ -69,7 +71,7 @@ impl Server {
             peer_list,
             clock,
             heartbeat,
-            timer: election_timeout,
+            timeout: election_timeout,
             io_ingress: server_io_ingress,
             io_egress: server_io_egress,
         };
@@ -106,7 +108,8 @@ impl Server {
     /// Polls the recv and timeout future to see if progress can be made.
     pub fn poll_progress(&mut self, cx: &mut std::task::Context<'_>) -> Poll<()> {
         let mut fut = ServerFut {
-            timeout: &mut self.timer.timeout_ready(),
+            heartbeat: &mut self.heartbeat.heartbeat_ready(),
+            timeout: &mut self.timeout.timeout_ready(),
             recv: self.io_ingress.rx_ready(),
         };
 
@@ -114,17 +117,19 @@ impl Server {
         let outcome = ready!(fut.as_mut().poll(cx));
 
         let Outcome {
+            heartbeat_rdy,
             timeout_rdy,
             recv_rdy,
         } = outcome;
 
         dbg!(
-            "============== timeout_fut: {} recv_fut: {}",
+            "============== heartbeat_fut: {} timeout_fut: {} recv_fut: {}",
+            heartbeat_rdy,
             timeout_rdy,
             recv_rdy
         );
 
-        if timeout_rdy {
+        if timeout_rdy || heartbeat_rdy {
             self.on_timeout();
         }
         if recv_rdy {
@@ -141,8 +146,9 @@ impl Server {
 
     /// The Instant this Timeout next expires. Required to support a discrete event simulator.
     #[cfg(any(test, feature = "testing"))]
-    pub fn timeout_deadline(&self) -> tokio::time::Instant {
-        self.timer.deadline()
+    pub fn timeout_deadline(&self) -> Instant {
+        // self.heartbeat.deadline()
+        self.timeout.deadline()
     }
 
     /// Fire the election timeout if it has expired, and re-arm it. Returns whether it fired.
@@ -152,7 +158,7 @@ impl Server {
     /// clock can drive a server without an async runtime scheduling its tasks.
     #[cfg(any(test, feature = "testing"))]
     pub fn poll_timeout(&mut self, cx: &mut std::task::Context<'_>) -> bool {
-        let fired = Pin::new(&mut self.timer.timeout_ready())
+        let fired = Pin::new(&mut self.timeout.timeout_ready())
             .poll(cx)
             .is_ready();
         if fired {
@@ -203,7 +209,9 @@ pub enum ClientResponse {
 }
 
 pin_project! {
-    struct ServerFut<S, R> {
+    struct ServerFut<H, S, R> {
+        #[pin]
+        heartbeat: H,
         #[pin]
         timeout: S,
         #[pin]
@@ -212,12 +220,14 @@ pin_project! {
 }
 
 struct Outcome {
+    heartbeat_rdy: bool,
     timeout_rdy: bool,
     recv_rdy: bool,
 }
 
-impl<S, R> Future for ServerFut<S, R>
+impl<H, S, R> Future for ServerFut<H, S, R>
 where
+    H: Future,
     S: Future,
     R: Future,
 {
@@ -228,11 +238,13 @@ where
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         let mut this = self.project();
+        let heartbeat_rdy = this.heartbeat.as_mut().poll(cx).is_ready();
         let timeout_rdy = this.timeout.as_mut().poll(cx).is_ready();
         let recv_rdy = this.recv.as_mut().poll(cx).is_ready();
 
         if timeout_rdy || recv_rdy {
             Poll::Ready(Outcome {
+                heartbeat_rdy,
                 timeout_rdy,
                 recv_rdy,
             })
@@ -267,12 +279,11 @@ mod tests {
     async fn send_recv() {
         let prng = Pcg32::from_seed([0; 16]);
 
-        let timeout = Timeout::new(prng);
         let server_id = ServerId::new([1; 16]);
         let peer2_id = PeerId::new([11; 16]);
         let peer3_id = PeerId::new([12; 16]);
         let peer_list = vec![peer2_id, peer3_id];
-        let (mut server, mut rx_network_queue) = Server::new(server_id, peer_list.clone(), timeout);
+        let (mut server, mut rx_network_queue) = Server::new(server_id, peer_list.clone(), prng);
         let mut tx_network_queue = rx_network_queue.clone();
 
         let term_initial = Term::initial();
@@ -343,12 +354,11 @@ mod tests {
 
         tokio::time::pause();
         let prng = Pcg32::from_seed([0; 16]);
-        let timeout = Timeout::new(prng);
         let server_id = ServerId::new([1; 16]);
         let peer2_id = PeerId::new([11; 16]);
         let peer3_id = PeerId::new([12; 16]);
         let peer_list = vec![peer2_id, peer3_id];
-        let (mut server, mut rx_network_queue) = Server::new(server_id, peer_list.clone(), timeout);
+        let (mut server, mut rx_network_queue) = Server::new(server_id, peer_list.clone(), prng);
         let mut tx_network_queue = rx_network_queue.clone();
 
         // network egress:
