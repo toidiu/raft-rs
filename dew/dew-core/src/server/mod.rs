@@ -52,11 +52,10 @@ impl Server {
     pub fn new(
         server_id: ServerId,
         peer_list: Vec<PeerId>,
+        clock: Clock,
         rand: Pcg32,
-        // election_timeout: Timeout,
     ) -> (Server, NetworkQueueImpl) {
         // TODO: pass into new
-        let clock = Clock::new();
         let heartbeat = Heartbeat::new(rand.clone());
 
         let election_timeout = Timeout::new(rand);
@@ -108,7 +107,7 @@ impl Server {
     /// Polls the recv and timeout future to see if progress can be made.
     pub fn poll_progress(&mut self, cx: &mut std::task::Context<'_>) -> Poll<()> {
         let mut fut = ServerFut {
-            heartbeat: &mut self.heartbeat.heartbeat_ready(),
+            heartbeat: &mut self.heartbeat.heartbeat_ready(&self.clock),
             timeout: &mut self.timeout.timeout_ready(),
             recv: self.io_ingress.rx_ready(),
         };
@@ -277,13 +276,15 @@ mod tests {
     // - send messages on network egress
     #[tokio::test]
     async fn send_recv() {
+        let clock = Clock::new();
         let prng = Pcg32::from_seed([0; 16]);
 
         let server_id = ServerId::new([1; 16]);
         let peer2_id = PeerId::new([11; 16]);
         let peer3_id = PeerId::new([12; 16]);
         let peer_list = vec![peer2_id, peer3_id];
-        let (mut server, mut rx_network_queue) = Server::new(server_id, peer_list.clone(), prng);
+        let (mut server, mut rx_network_queue) =
+            Server::new(server_id, peer_list.clone(), clock, prng);
         let mut tx_network_queue = rx_network_queue.clone();
 
         let term_initial = Term::initial();
@@ -353,12 +354,14 @@ mod tests {
         const NUMER_OF_MESSAGES: u64 = NUMER_OF_SENDS * 2;
 
         tokio::time::pause();
+        let clock = Clock::new();
         let prng = Pcg32::from_seed([0; 16]);
         let server_id = ServerId::new([1; 16]);
         let peer2_id = PeerId::new([11; 16]);
         let peer3_id = PeerId::new([12; 16]);
         let peer_list = vec![peer2_id, peer3_id];
-        let (mut server, mut rx_network_queue) = Server::new(server_id, peer_list.clone(), prng);
+        let (mut server, mut rx_network_queue) =
+            Server::new(server_id, peer_list.clone(), clock, prng);
         let mut tx_network_queue = rx_network_queue.clone();
 
         // network egress:

@@ -7,7 +7,10 @@
 //! 2. **The earliest election timeout.** With the network quiet, jump the clock straight to the
 //!    next deadline and let that server fire.
 
-use dew_core::server::{Id, PeerId, Server, ServerId};
+use dew_core::{
+    clock::Clock,
+    server::{Id, PeerId, Server, ServerId},
+};
 use network::InFlightPacket;
 use node::{Node, ServerIdx};
 use rand::SeedableRng;
@@ -64,7 +67,8 @@ impl Cluster {
                     // the same seed and every server campaigns on the same tick, forever.
                     let prng = Pcg32::from_seed(Self::unique_bytes(server_idx));
 
-                    let (server, queue) = Server::new(*server_id, peer_list, prng);
+                    let clock = Clock::new();
+                    let (server, queue) = Server::new(*server_id, peer_list, clock, prng);
 
                     Node {
                         server,

@@ -1,3 +1,4 @@
+use crate::clock::Clock;
 use core::time::Duration;
 use pin_project_lite::pin_project;
 use rand::{Rng, RngCore};
@@ -32,7 +33,7 @@ pub(crate) struct Heartbeat {
     current_mode: CurrentMode,
 }
 
-impl Heartbeat {
+impl<'a> Heartbeat {
     pub(crate) fn new(mut prng: Pcg32) -> Self {
         let current_mode = CurrentMode::FollowerCandidate;
 
@@ -48,8 +49,11 @@ impl Heartbeat {
     }
 
     /// Returns a Future which can be polled to check if the Heartbeat has expired.
-    pub(crate) fn heartbeat_ready(&mut self) -> HeartbeatReady<'_> {
-        HeartbeatReady { heartbeat: self }
+    pub(crate) fn heartbeat_ready(&'a mut self, clock: &'a Clock) -> HeartbeatReady<'a> {
+        HeartbeatReady {
+            heartbeat: self,
+            clock,
+        }
     }
 
     /// Reset and set a new deadline.
@@ -101,7 +105,7 @@ pub trait CanTimeout {
     fn deadline(&self) -> Instant;
 
     /// Has the timeout expired.
-    fn has_expired(&self) -> bool;
+    fn has_expired(&self, clock: &Clock) -> bool;
 }
 
 impl CanTimeout for Heartbeat {
@@ -109,8 +113,8 @@ impl CanTimeout for Heartbeat {
         self.deadline
     }
 
-    fn has_expired(&self) -> bool {
-        if Instant::now() >= self.deadline {
+    fn has_expired(&self, clock: &Clock) -> bool {
+        if clock.now() >= self.deadline {
             true
         } else {
             false
@@ -123,6 +127,8 @@ pin_project! {
     pub(crate) struct HeartbeatReady<'a> {
         #[pin]
         heartbeat: &'a mut Heartbeat,
+
+        clock: &'a Clock,
     }
 }
 
@@ -132,7 +138,7 @@ impl Future for HeartbeatReady<'_> {
     fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut this = self.project();
 
-        if this.heartbeat.has_expired() {
+        if this.heartbeat.has_expired(this.clock) {
             this.heartbeat.reset_timeout();
             return Poll::Ready(());
         } else {

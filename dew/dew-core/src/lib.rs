@@ -13,6 +13,7 @@ macro_rules! testing_visible {
 }
 
 testing_visible! {
+    clock;
     mode;
     packet;
     queue;
@@ -21,7 +22,6 @@ testing_visible! {
     timeout;
 }
 
-mod clock;
 mod error;
 mod heartbeat;
 mod macros;
